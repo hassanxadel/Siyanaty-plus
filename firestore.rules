@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // DEVELOPMENT MODE - Simplified rules for testing
+    // TODO: Tighten security for production
+    
+    // Allow authenticated users to read/write authorized_users
+    // This is needed for user registration and profile creation
+    match /authorized_users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow authenticated users to read/write users collection
+    match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow authenticated users to manage cars
+    match /cars/{carId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow authenticated users to manage maintenance records
+    match /maintenance_records/{recordId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow authenticated users to manage reminders
+    match /reminders/{reminderId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow authenticated users to manage fuel logs
+    match /fuel_logs/{logId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow authenticated users to access service centers
+    match /service_centers/{centerId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow authenticated users to access app settings
+    match /app_settings/{settingId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // OBD data access
+    match /obd_data/{dataId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

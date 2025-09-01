@@ -1,0 +1,25 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "siyana-plus-87080",
+          "appId": "1:157060583440:android:82af4c67bc75b775b43a95",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "siyana-plus-87080",
+          "configurations": {
+            "android": "1:157060583440:android:82af4c67bc75b775b43a95"
+          }
+        }
+      }
+    }
+  }
+}

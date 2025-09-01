@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Professional splash screen for Siyana+ -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background gradient -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#1B4332"
+                android:centerColor="#2D5A47"
+                android:endColor="#40916C"
+                android:angle="135"
+                android:type="linear" />
+        </shape>
+    </item>
+
+    <!-- Logo -->
+    <item android:gravity="center">
+        <bitmap
+            android:gravity="center"
+            android:src="@mipmap/ic_launcher" />
+    </item>
+</layer-list>

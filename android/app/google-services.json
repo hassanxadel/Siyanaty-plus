@@ -1,0 +1,90 @@
+{
+  "project_info": {
+    "project_number": "157060583440",
+    "project_id": "siyana-plus-87080",
+    "storage_bucket": "siyana-plus-87080.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:157060583440:android:82af4c67bc75b775b43a95",
+        "android_client_info": {
+          "package_name": "com.example.syanatak"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "157060583440-csrv5479e2fgesk52d85b3s4hnn7vvba.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWj3NOyMtuxTlGiNKIH8mt9iMq8f0OdxU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "157060583440-csrv5479e2fgesk52d85b3s4hnn7vvba.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "157060583440-ff8d6puv95u6ijsigloeflhk4fktv8d7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.syanatak"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:157060583440:android:8f96aa56469eefd6b43a95",
+        "android_client_info": {
+          "package_name": "com.example.siyanaty"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "157060583440-87vh2mgn3lottamtn61bpsaahh78o4nv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.siyanaty",
+            "certificate_hash": "f029e744546d6d524d2caadba76f15346aad06b0"
+          }
+        },
+        {
+          "client_id": "157060583440-csrv5479e2fgesk52d85b3s4hnn7vvba.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWj3NOyMtuxTlGiNKIH8mt9iMq8f0OdxU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "157060583440-csrv5479e2fgesk52d85b3s4hnn7vvba.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "157060583440-ff8d6puv95u6ijsigloeflhk4fktv8d7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.syanatak"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
