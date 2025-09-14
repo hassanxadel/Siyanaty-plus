@@ -6,8 +6,10 @@ class HelpScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: AppTheme.backgroundGreen,
+      backgroundColor: AppTheme.getThemeAwareBackground(context),
       appBar: AppBar(
         title: const Text(
           'Help & Support',
@@ -17,7 +19,7 @@ class HelpScreen extends StatelessWidget {
             color: Colors.white,
           ),
         ),
-        backgroundColor: AppTheme.backgroundGreen,
+        backgroundColor: AppTheme.primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -32,12 +34,12 @@ class HelpScreen extends StatelessWidget {
             const SizedBox(height: 32),
             
             // FAQ Section
-            _buildFAQSection(),
+            _buildFAQSection(context),
             
             const SizedBox(height: 32),
             
             // Contact Support
-            _buildContactSupport(),
+            _buildContactSupport(context),
           ],
         ),
       ),
@@ -45,6 +47,8 @@ class HelpScreen extends StatelessWidget {
   }
 
   Widget _buildQuickActions(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -60,6 +64,7 @@ class HelpScreen extends StatelessWidget {
         const SizedBox(height: 16),
         
         _buildActionCard(
+          context,
           'Getting Started Guide',
           'Learn how to set up your car profile and start tracking maintenance',
           Icons.play_circle_outline,
@@ -69,6 +74,7 @@ class HelpScreen extends StatelessWidget {
         const SizedBox(height: 12),
         
         _buildActionCard(
+          context,
           'Reset Account Data',
           'Clear all your data and start fresh',
           Icons.refresh,
@@ -78,6 +84,7 @@ class HelpScreen extends StatelessWidget {
         const SizedBox(height: 12),
         
         _buildActionCard(
+          context,
           'Export Data',
           'Download your maintenance records and data',
           Icons.download,
@@ -87,14 +94,16 @@ class HelpScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActionCard(String title, String subtitle, IconData icon, VoidCallback onTap) {
+  Widget _buildActionCard(BuildContext context, String title, String subtitle, IconData icon, VoidCallback onTap) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppTheme.darkGray.withOpacity(0.3),
+          color: isDarkMode ? AppTheme.darkModeCardBackground : AppTheme.lightModeCardBackground,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: AppTheme.primaryGreen.withOpacity(0.2),
@@ -123,10 +132,10 @@ class HelpScreen extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.lightBackground,
+                      color: AppTheme.getThemeAwareTextColor(context),
                       fontFamily: 'Orbitron',
                     ),
                   ),
@@ -135,16 +144,16 @@ class HelpScreen extends StatelessWidget {
                     subtitle,
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppTheme.darkAccentGreen.withOpacity(0.8),
+                      color: isDarkMode ? AppTheme.lightBackground.withOpacity(0.8) : AppTheme.darkAccentGreen.withOpacity(0.8),
                       fontFamily: 'Orbitron',
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.arrow_forward_ios,
-              color: AppTheme.darkAccentGreen,
+              color: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
               size: 16,
             ),
           ],
@@ -153,7 +162,9 @@ class HelpScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFAQSection() {
+  Widget _buildFAQSection(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -169,26 +180,31 @@ class HelpScreen extends StatelessWidget {
         const SizedBox(height: 16),
         
         _buildFAQItem(
+          context,
           'How do I add my first car?',
           'Go to the Home screen and tap the "+" button. Enter your car details including make, model, year, and mileage. The app will automatically set up maintenance schedules based on your vehicle.',
         ),
         
         _buildFAQItem(
+          context,
           'How accurate are the maintenance reminders?',
           'Our AI analyzes your driving patterns, manufacturer recommendations, and real-world data to provide highly accurate reminders. You can also customize intervals based on your preferences.',
         ),
         
         _buildFAQItem(
+          context,
           'Can I use the app without an internet connection?',
           'Yes! Most features work offline. Your data syncs automatically when you reconnect to the internet. Only real-time features like service center locations require an internet connection.',
         ),
         
         _buildFAQItem(
+          context,
           'How do I connect my OBD device?',
           'Go to the OBD Dashboard and tap "Connect Device". Make sure your OBD adapter is plugged into your car and Bluetooth is enabled on your phone.',
         ),
         
         _buildFAQItem(
+          context,
           'Is my data secure?',
           'Absolutely. All data is encrypted and stored securely. We never share your personal information with third parties. You can delete your account and all data at any time.',
         ),
@@ -196,19 +212,21 @@ class HelpScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFAQItem(String question, String answer) {
+  Widget _buildFAQItem(BuildContext context, String question, String answer) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return ExpansionTile(
       title: Text(
         question,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: AppTheme.lightBackground,
+          color: AppTheme.getThemeAwareTextColor(context),
           fontFamily: 'Orbitron',
         ),
       ),
       iconColor: AppTheme.primaryGreen,
-      collapsedIconColor: AppTheme.darkAccentGreen,
+      collapsedIconColor: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -217,7 +235,7 @@ class HelpScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               height: 1.5,
-              color: AppTheme.darkAccentGreen.withOpacity(0.9),
+              color: isDarkMode ? AppTheme.lightBackground.withOpacity(0.9) : AppTheme.darkAccentGreen.withOpacity(0.9),
               fontFamily: 'Orbitron',
             ),
           ),
@@ -226,11 +244,13 @@ class HelpScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildContactSupport() {
+  Widget _buildContactSupport(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.primaryGreen.withOpacity(0.1),
+        color: isDarkMode ? AppTheme.darkModeCardBackground : AppTheme.lightModeCardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: AppTheme.primaryGreen.withOpacity(0.3),
@@ -250,11 +270,11 @@ class HelpScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Our support team is here to help you get the most out of Siyana+.',
             style: TextStyle(
               fontSize: 14,
-              color: AppTheme.lightBackground,
+              color: AppTheme.getThemeAwareTextColor(context),
               fontFamily: 'Orbitron',
             ),
           ),
@@ -270,7 +290,7 @@ class HelpScreen extends StatelessWidget {
                   icon: const Icon(Icons.email, size: 18),
                   label: const Text(
                     'Email Support',
-                    style: TextStyle(fontFamily: 'Orbitron'),
+                    style: TextStyle(fontFamily: 'Orbitron', fontSize: 14),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryGreen,
@@ -311,21 +331,23 @@ class HelpScreen extends StatelessWidget {
   }
 
   void _showGettingStarted(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
+        backgroundColor: AppTheme.getThemeAwareBackground(context),
         title: const Text(
           'Getting Started',
           style: TextStyle(color: AppTheme.primaryGreen, fontFamily: 'Orbitron'),
         ),
-        content: const Text(
+        content: Text(
           '1. Add your car details in the Home screen\n'
           '2. Set up maintenance reminders\n'
           '3. Connect your OBD device (optional)\n'
           '4. Start tracking your car\'s health!\n\n'
           'Need more help? Check our full tutorial in the app.',
-          style: TextStyle(color: AppTheme.lightBackground, fontFamily: 'Orbitron'),
+          style: TextStyle(color: AppTheme.getThemeAwareTextColor(context), fontFamily: 'Orbitron'),
         ),
         actions: [
           TextButton(
@@ -341,17 +363,19 @@ class HelpScreen extends StatelessWidget {
   }
 
   void _showResetDialog(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
+        backgroundColor: AppTheme.getThemeAwareBackground(context),
         title: const Text(
           'Reset Account Data',
           style: TextStyle(color: AppTheme.errorColor, fontFamily: 'Orbitron'),
         ),
-        content: const Text(
+        content: Text(
           'This will permanently delete all your cars, maintenance records, and settings. This action cannot be undone.',
-          style: TextStyle(color: AppTheme.lightBackground, fontFamily: 'Orbitron'),
+          style: TextStyle(color: AppTheme.getThemeAwareTextColor(context), fontFamily: 'Orbitron'),
         ),
         actions: [
           TextButton(

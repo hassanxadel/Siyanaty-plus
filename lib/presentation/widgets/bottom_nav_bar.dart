@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../shared/constants/app_theme.dart';
+ 
 
 /// Custom bottom navigation bar with animated tab items and curved design
 /// Provides navigation between main app sections with visual feedback
@@ -26,7 +26,7 @@ class _BottomNavBarState extends State<BottomNavBar>
   /// Controller for tab tap animations
   late AnimationController _animationController;
   /// Scale animation for tab press feedback
-  late Animation<double> _scaleAnimation;
+  
 
   @override
   void initState() {
@@ -35,13 +35,7 @@ class _BottomNavBarState extends State<BottomNavBar>
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.8,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
+    
   }
 
   @override
@@ -53,11 +47,11 @@ class _BottomNavBarState extends State<BottomNavBar>
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+    Color color = isDarkMode ? Colors.transparent : Colors.transparent;
     return Container(
       height: 80,
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF062117) : Colors.white,
+      color: isDarkMode ? const Color(0xFF062117) : Colors.transparent,
       ),
       child: SafeArea(
         child: Stack(
@@ -66,7 +60,8 @@ class _BottomNavBarState extends State<BottomNavBar>
             // Two-tone background with curved separator
             Positioned.fill(
               child: CustomPaint(
-                painter: _CurvedBackgroundPainter(isDarkMode: isDarkMode),
+                painter: _CurvedBackgroundPainter(isDarkMode: isDarkMode ),
+                
               ),
             ),
             // Navigation items
@@ -135,23 +130,6 @@ class _BottomNavBarState extends State<BottomNavBar>
     _animationController.forward().then((_) {
       _animationController.reverse();
       widget.onTap(index);
-      switch (index) {
-        case 0:
-          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-          break;
-        case 1:
-          Navigator.of(context).pushNamed('/reminders');
-          break;
-        case 2:
-          Navigator.of(context).pushNamed('/obd');
-          break;
-        case 3:
-          Navigator.of(context).pushNamed('/location');
-          break;
-        case 4:
-          Navigator.of(context).pushNamed('/settings');
-          break;
-      }
     });
   }
 }
@@ -168,6 +146,7 @@ class _NavBarItem extends StatefulWidget {
     required this.label,
     required this.isActive,
     required this.onTap,
+    this.isBlue = false,
   });
 
   @override
@@ -234,7 +213,7 @@ class _NavBarItemState extends State<_NavBarItem>
                    color: widget.isBlue 
                        ? Colors.blue 
                        : (Theme.of(context).brightness == Brightness.dark 
-                           ? const Color(0xFF0c3c24)  // Dark green when dark mode ON
+                           ? const Color(0xFF062117)  // Dark green when dark mode ON
                            : Colors.white),            // White when dark mode OFF
                    size: 24,
                  ),
@@ -247,7 +226,7 @@ class _NavBarItemState extends State<_NavBarItem>
                      color: widget.isBlue 
                          ? Colors.blue 
                          : (Theme.of(context).brightness == Brightness.dark 
-                             ? const Color(0xFF0c3c24)  // Dark green when dark mode ON
+                             ? const Color(0xFF062117)  // Dark green when dark mode ON
                              : Colors.white),            // White when dark mode OFF
                    ),
                  ),
@@ -269,8 +248,8 @@ class _CurvedBackgroundPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = isDarkMode 
-          ? Colors.white              // White when dark mode is ON
-          : const Color(0xFF0c3c24)  // Dark green when dark mode is OFF
+          ? Colors.white           // White when dark mode is ON
+          : const Color(0xFF062117)  // Dark green when dark mode is OFF
       ..style = PaintingStyle.fill;
 
     final path = Path();

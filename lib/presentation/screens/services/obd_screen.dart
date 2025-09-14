@@ -241,13 +241,13 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 28),
+          Icon(icon, color: color, size: 22),
           const SizedBox(height: 8),
           Text(
             title,
             style: TextStyle(
               fontFamily: 'Orbitron',
-              fontSize: 12,
+              fontSize: 10,
               fontWeight: FontWeight.w500,
               color: Colors.grey[600],
             ),
@@ -258,7 +258,7 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
             value,
             style: TextStyle(
               fontFamily: 'Orbitron',
-              fontSize: 18,
+              fontSize: 14,
               fontWeight: FontWeight.w700,
               color: color,
             ),
@@ -268,7 +268,7 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
             unit,
             style: TextStyle(
               fontFamily: 'Orbitron',
-              fontSize: 10,
+              fontSize: 8,
               color: Colors.grey[500],
             ),
             textAlign: TextAlign.center,

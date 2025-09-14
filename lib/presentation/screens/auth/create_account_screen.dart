@@ -283,7 +283,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         controller: _fullNameController,
         keyboardType: TextInputType.name,
         style: const TextStyle(
-          color: AppTheme.backgroundGreen,
+          color: AppTheme.lightBackground,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           fontFamily: 'Orbitron',
@@ -291,7 +291,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         decoration: const InputDecoration(
           hintText: 'Enter your full name',
           hintStyle: TextStyle(
-            color: AppTheme.darkAccentGreen,
+            color: AppTheme.lightBackground,
             fontSize: 16,
             fontFamily: 'Orbitron',
           ),
@@ -365,7 +365,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
               controller: _mobileController,
               keyboardType: TextInputType.phone,
               style: const TextStyle(
-                color: AppTheme.backgroundGreen,
+                color: AppTheme.lightBackground,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 fontFamily: 'Orbitron',
@@ -373,7 +373,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
               decoration: const InputDecoration(
                 hintText: 'Mobile number',
                 hintStyle: TextStyle(
-                  color: AppTheme.darkAccentGreen,
+                  color: AppTheme.lightBackground,
                   fontSize: 16,
                   fontFamily: 'Orbitron',
                 ),
@@ -410,7 +410,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         controller: _emailController,
         keyboardType: TextInputType.emailAddress,
         style: const TextStyle(
-          color: AppTheme.backgroundGreen,
+          color: AppTheme.lightBackground,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           fontFamily: 'Orbitron',
@@ -418,7 +418,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         decoration: const InputDecoration(
           hintText: 'Email address',
           hintStyle: TextStyle(
-            color: AppTheme.darkAccentGreen,
+            color: AppTheme.lightBackground,
             fontSize: 16,
             fontFamily: 'Orbitron',
           ),
@@ -452,7 +452,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         controller: _passwordController,
         obscureText: !_isPasswordVisible,
         style: const TextStyle(
-          color: AppTheme.backgroundGreen,
+          color: AppTheme.lightBackground,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           fontFamily: 'Orbitron',
@@ -460,7 +460,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         decoration: InputDecoration(
           hintText: 'Password',
           hintStyle: const TextStyle(
-            color: AppTheme.darkAccentGreen,
+            color: AppTheme.lightBackground,
             fontSize: 16,
             fontFamily: 'Orbitron',
           ),
@@ -505,7 +505,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         controller: _confirmPasswordController,
         obscureText: !_isConfirmPasswordVisible,
         style: const TextStyle(
-          color: AppTheme.backgroundGreen,
+          color: AppTheme.lightBackground,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           fontFamily: 'Orbitron',
@@ -513,7 +513,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         decoration: InputDecoration(
           hintText: 'Confirm password',
           hintStyle: const TextStyle(
-            color: AppTheme.darkAccentGreen,
+            color: AppTheme.lightBackground,
             fontSize: 16,
             fontFamily: 'Orbitron',
           ),
@@ -561,7 +561,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             controller: _emergencyContactNameController,
             keyboardType: TextInputType.name,
             style: const TextStyle(
-              color: AppTheme.backgroundGreen,
+              color: AppTheme.lightBackground,
               fontSize: 16,
               fontWeight: FontWeight.w600,
               fontFamily: 'Orbitron',
@@ -569,7 +569,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             decoration: const InputDecoration(
               hintText: 'Emergency contact name',
               hintStyle: TextStyle(
-                color: AppTheme.darkAccentGreen,
+                color: AppTheme.lightBackground,
                 fontSize: 16,
                 fontFamily: 'Orbitron',
               ),
@@ -642,7 +642,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                   controller: _emergencyContactPhoneController,
                   keyboardType: TextInputType.phone,
                   style: const TextStyle(
-                    color: AppTheme.backgroundGreen,
+                    color: AppTheme.lightBackground,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     fontFamily: 'Orbitron',
@@ -650,7 +650,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                   decoration: const InputDecoration(
                     hintText: 'Emergency contact phone',
                     hintStyle: TextStyle(
-                      color: AppTheme.darkAccentGreen,
+                      color: AppTheme.lightBackground,
                       fontSize: 16,
                       fontFamily: 'Orbitron',
                     ),
@@ -710,7 +710,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.backgroundGreen,
+                      color: AppTheme.lightBackground,
                       fontFamily: 'Orbitron',
                     ),
                   ),

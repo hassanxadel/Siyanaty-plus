@@ -20,9 +20,9 @@ class AppTheme {
   
   // Light Mode Surface Colors (when dark mode is OFF)
   static const Color lightModeBackground = Colors.white; // White background for light mode
-  static const Color lightModeCardBackground = Color(0xFFF5F5F5); // Light gray for cards
+  static const Color lightModeCardBackground = Color(0xFF0c3c24); // Dark green for cards
   static const Color lightModeSurfaceColor = Colors.white;
-  static const Color lightModeTextColor = backgroundGreen; // Dark green text
+  static const Color lightModeTextColor = Colors.white; // White text for dark green cards
   
   // Dark Mode Surface Colors (when dark mode is ON)
   static const Color darkModeBackground = backgroundGreen; // Dark green background

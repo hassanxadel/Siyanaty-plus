@@ -13,6 +13,7 @@ import 'presentation/screens/services/reminders_screen.dart';
 import 'presentation/screens/services/obd_screen.dart';
 import 'presentation/screens/services/services_screen.dart';
 import 'presentation/screens/settings/settings_screen.dart';
+import 'database/database_helper.dart';
 
 /// Main entry point for the Siyanaty+ car maintenance application
 /// Initializes services, providers, and launches the app
@@ -31,6 +32,9 @@ void main() async {
     
     /// Initialize local database for offline functionality
     await DatabaseService.database;
+    
+    /// Initialize backup database helper
+    await DatabaseHelper.instance.database;
     
     AppLogger.info('App initialization completed successfully');
   } catch (e) {

@@ -1,593 +1,468 @@
-# Siyanaty+ Car Maintenance App - Technical Documentation
+# Siyanaty+ - Smart Car Maintenance App
 
-## Table of Contents
-1. [Project Overview](#project-overview)
-2. [Architecture Overview](#architecture-overview)
-3. [Presentation Layer Deep Dive](#presentation-layer-deep-dive)
-4. [Screen Components & Implementation](#screen-components--implementation)
-5. [Future Technologies & Implementation](#future-technologies--implementation)
-6. [Code Structure Analysis](#code-structure-analysis)
-7. [Development Guidelines](#development-guidelines)
+[![Flutter](https://img.shields.io/badge/Flutter-3.5.3+-blue.svg)](https://flutter.dev/)
+[![Dart](https://img.shields.io/badge/Dart-3.5.3+-blue.svg)](https://dart.dev/)
+[![Firebase](https://img.shields.io/badge/Firebase-Enabled-green.svg)](https://firebase.google.com/)
+[![License](https://img.shields.io/badge/License-Private-red.svg)]()
 
-## Project Overview
+## 📋 Overview
 
-**Siyanaty+** is a comprehensive car maintenance and management application built with Flutter. The app provides users with tools to track vehicle maintenance, manage service reminders, monitor OBD-II diagnostics, and locate service centers.
+**Siyanaty+** is a comprehensive Flutter-based car maintenance application that revolutionizes vehicle maintenance management through digital transformation. The app transitions vehicle care from reactive to proactive management using real-time diagnostics, smart reminders, and intelligent service integration.
 
-**Key Features:**
-- Multi-car management system
-- Maintenance record tracking
-- Smart service reminders
-- OBD-II diagnostics dashboard
-- Service center locator
-- User authentication and profiles
-- Dark/Light theme support
+### 🚀 Key Features
 
-## Architecture Overview
+- **Multi-Vehicle Management** - Manage multiple cars with individual profiles
+- **Real-Time OBD-II Diagnostics** - Live vehicle health monitoring and diagnostics
+- **Smart Maintenance Reminders** - AI-powered scheduling and priority-based alerts
+- **Service Center Locator** - Find nearby service centers with filtering capabilities
+- **VIN Lookup & Scanner** - Vehicle information retrieval and barcode scanning
+- **OCR Document Scanner** - Extract data from service reports and documents
+- **Voice Notes** - Quick maintenance notes with speech recognition
+- **Mileage Tracking** - Predictive maintenance based on usage patterns
+- **Maintenance Records** - Comprehensive service history and cost tracking
+- **Dark/Light Theme Support** - Modern UI with customizable themes
+- **Offline Functionality** - Works without internet connection using local storage
 
-The app follows a **Clean Architecture** pattern with clear separation of concerns:
+---
+
+## 🏗️ Architecture
+
+### Clean Architecture Implementation
+
+The app follows Clean Architecture principles with three main layers:
+
+- **Domain Layer** (`lib/domain/`) - Business logic and entities
+- **Presentation Layer** (`lib/presentation/`) - UI components and state management
+- **Shared Layer** (`lib/shared/`) - Services, utilities, and constants
+
+### Technology Stack
+
+#### Frontend Technologies
+- **Flutter 3.5.3+** - Cross-platform mobile development
+- **Dart** - Primary programming language
+- **Material Design 3** - Modern UI/UX framework
+- **Provider Pattern** - State management architecture
+- **Orbitron Font Family** - Futuristic typography system
+
+#### Backend & Cloud Services
+- **Firebase Authentication** - User authentication and authorization
+- **Google Sign-In** - Social authentication integration
+- **Cloud Firestore** - NoSQL cloud database
+- **Firebase Storage** - File and document storage
+- **SQLite (sqflite)** - Local database for offline functionality
+- **Shared Preferences** - Application settings storage
+
+#### Hardware Integration (Planned)
+- **Bluetooth Communication** - OBD-II device connectivity
+- **GPS & Location Services** - Service center location and navigation
+- **Camera Integration** - Document and barcode scanning
+- **Voice Recognition** - Speech-to-text functionality
+
+---
+
+## 📱 Screenshots & Features
+
+### Main Dashboard
+- **Home Screen** - Welcome interface with quick actions and vehicle overview
+- **Quick Actions Grid** - 12 main features accessible from home
+- **Vehicle Health Cards** - Real-time status indicators
+- **Recent Activity Feed** - Latest maintenance activities
+
+### Core Features
+- **OBD Diagnostics** - Real-time vehicle data and health monitoring
+- **Smart Reminders** - Priority-based maintenance scheduling
+- **Service Centers** - Location-based service discovery
+- **Multi-Car Management** - Individual vehicle profiles
+- **Settings & Profile** - User customization and preferences
+
+### Advanced Tools
+- **VIN Lookup** - Vehicle information and maintenance recommendations
+- **OCR Scanner** - Extract data from service reports
+- **Barcode Scanner** - Part details and product information
+- **Voice Notes** - Quick maintenance notes with speech recognition
+- **Mileage Tracking** - Usage-based maintenance predictions
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Flutter SDK 3.5.3 or higher
+- Dart SDK 3.5.3 or higher
+- Android Studio / VS Code
+- Git
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/hassanxadel/Siyanaty-plus.git
+   cd Siyanaty-plus
+   ```
+
+2. **Install dependencies**
+   ```bash
+   flutter pub get
+   ```
+
+3. **Configure Firebase (Optional)**
+   - Add your `google-services.json` to `android/app/`
+   - Configure Firebase project settings
+   - Update `lib/firebase_options.dart` with your configuration
+
+4. **Run the application**
+   ```bash
+   flutter run
+   ```
+
+### Build for Production
+
+#### Android
+```bash
+flutter build apk --release
+```
+
+#### iOS
+```bash
+flutter build ios --release
+```
+
+---
+
+## 📊 Project Status
+
+### Current Progress: 65% Complete
+
+#### ✅ Completed Phases
+
+**Phase 1: Foundation Development (95% Complete)**
+- ✅ Authentication System with Firebase integration
+- ✅ User Interface Framework with custom themes
+- ✅ Clean Architecture implementation
+- ✅ Provider pattern for state management
+
+**Phase 2: Core Features Development (80% Complete)**
+- ✅ Main application screens (25+ screens)
+- ✅ Data models and local storage
+- ✅ Navigation system with bottom navigation
+- ✅ Theme switching (Dark/Light mode)
+
+**Phase 3: Backend Integration (85% Complete)**
+- ✅ Firebase Authentication configuration
+- ✅ Cloud Firestore database setup
+- ✅ Firebase Storage integration
+- ✅ Security rules and access control
+
+#### 🚧 In Progress
+
+**Phase 4: Hardware Integration (10% Complete)**
+- 🔄 OBD-II communication system
+- 🔄 Location services integration
+- 🔄 Camera and scanning features
+- 🔄 Bluetooth device connectivity
+
+#### 📋 Planned Features
+
+**Phase 5: Data Integration & APIs**
+- 📋 VIN lookup system with NHTSA API
+- 📋 Service center database population
+- 📋 Maintenance prediction algorithms
+- 📋 Real-time data synchronization
+
+**Phase 6: Advanced Features**
+- 📋 Notification system (local & push)
+- 📋 Voice commands and documentation
+- 📋 Analytics and reporting
+- 📋 Performance optimization
+
+---
+
+## 🛠️ Development
+
+### Project Structure
 
 ```
 lib/
-├── domain/           # Business logic & entities
-├── presentation/     # UI layer (screens, widgets, providers)
-├── shared/          # Shared utilities, constants, services
-└── main.dart        # App entry point
+├── domain/
+│   └── entities/          # Business logic entities
+├── presentation/
+│   ├── providers/         # State management
+│   ├── screens/           # UI screens (25+ screens)
+│   └── widgets/          # Reusable UI components
+├── shared/
+│   ├── constants/        # App constants and themes
+│   ├── services/         # Core services (Firebase, Database)
+│   └── utils/           # Utility functions and helpers
+└── main.dart            # App entry point
 ```
 
-**Architecture Benefits:**
-- **Testability**: Business logic separated from UI
-- **Maintainability**: Clear module boundaries
-- **Scalability**: Easy to add new features
-- **Platform Independence**: Core logic works across platforms
+### Key Dependencies
 
-## Presentation Layer Deep Dive
-
-The `presentation/` folder contains all UI-related code organized into logical modules:
-
-### Folder Structure
-```
-presentation/
-├── providers/        # State management (Provider pattern)
-├── screens/         # Full-screen UI components
-├── widgets/         # Reusable UI components
-└── main.dart        # App entry point
-```
-
-### State Management Architecture
-
-**Provider Pattern Implementation:**
-- **AuthProvider**: Manages user authentication state
-- **ThemeProvider**: Handles app theme switching
-- **Future Providers**: Will handle data fetching and caching
-
-**Benefits of Provider Pattern:**
-- **Reactive UI**: Automatic UI updates when state changes
-- **Performance**: Efficient rebuilds with minimal overhead
-- **Testing**: Easy to mock and test state changes
-- **Scalability**: Simple to add new providers as needed
-
-## Screen Components & Implementation
-
-### 1. Main Navigation Structure
-
-**Bottom Navigation Bar (`bottom_nav_bar.dart`)**
-```dart
-// 5 main navigation tabs
-- Home (Dashboard)
-- Reminders (Smart Reminders)
-- OBD (Diagnostics)
-- Services (Service Centers)
-- Settings
+```yaml
+dependencies:
+  flutter: sdk: flutter
+  provider: ^6.1.2                    # State management
+  sqflite: ^2.3.3+1                    # Local database
+  shared_preferences: ^2.3.2           # Settings storage
+  firebase_core: ^2.15.0              # Firebase core
+  firebase_auth: ^4.7.0               # Authentication
+  cloud_firestore: ^4.8.0             # Cloud database
+  firebase_storage: ^11.2.0           # File storage
+  google_sign_in: ^6.1.5             # Google authentication
+  image_picker: ^1.0.7                # Image selection
+  file_picker: ^8.0.0+1              # File selection
+  intl: ^0.18.1                       # Internationalization
 ```
 
-**Implementation Details:**
-- Custom animated navigation with scale and fade effects
-- Theme-aware styling using `AppTheme` constants
-- Haptic feedback for better user experience
-- Responsive design with proper spacing and typography
+### Code Quality
 
-### 2. Home Dashboard (`home_screen.dart`)
+- **Clean Architecture** - Separation of concerns
+- **Provider Pattern** - Reactive state management
+- **Comprehensive Documentation** - Inline code documentation
+- **Error Handling** - Graceful degradation and recovery
+- **Performance Optimization** - Efficient memory and battery usage
 
-**Core Components:**
-- **User Welcome Section**: Personalized greeting with user's first name
-- **Quick Actions Grid**: 12 main service shortcuts
-- **Recent Activity**: Last maintenance records and reminders
-- **Vehicle Status**: Current car information and health indicators
+---
 
-**Technical Implementation:**
-```dart
-class HomeDashboard extends StatefulWidget {
-  // Uses TickerProviderStateMixin for animations
-  // Implements haptic feedback for interactions
-  // Responsive grid layout with proper spacing
+## 🎯 Success Metrics
+
+### Technical Performance
+- **Application Startup Time**: < 2 seconds
+- **Memory Usage**: < 100MB average
+- **Battery Consumption**: < 5% per hour
+- **Crash Rate**: < 0.1%
+
+### User Experience
+- **User Retention**: > 80% after 30 days
+- **Feature Adoption**: > 60% for core features
+- **User Satisfaction**: > 4.5/5 rating
+- **Support Requests**: < 5% of users
+
+### Business Metrics
+- **Monthly Active Users**: Target 10,000+
+- **Premium Feature Conversion**: > 15%
+- **User Engagement**: > 20 minutes daily
+- **App Store Rating**: Target > 4.5 stars
+
+---
+
+## 🔧 Configuration
+
+### Environment Setup
+
+1. **Flutter Environment**
+   ```bash
+   flutter doctor
+   flutter config --enable-web
+   ```
+
+2. **Firebase Configuration**
+   - Create Firebase project
+   - Enable Authentication, Firestore, and Storage
+   - Download configuration files
+   - Update `lib/firebase_options.dart`
+
+3. **Development Tools**
+   - Enable developer options on device
+   - Configure USB debugging (Android)
+   - Install Flutter extensions in IDE
+
+### Build Configuration
+
+#### Android (`android/app/build.gradle`)
+```gradle
+android {
+    compileSdkVersion 34
+    defaultConfig {
+        applicationId "com.example.siyanaty_plus"
+        minSdkVersion 21
+        targetSdkVersion 34
+        versionCode 1
+        versionName "1.0.0"
+    }
 }
 ```
 
-**Key Features:**
-- **Animated Entry**: Fade-in and slide-up animations
-- **Haptic Feedback**: Tactile response for all interactions
-- **Dynamic Content**: Real-time updates from providers
-- **Responsive Design**: Adapts to different screen sizes
-
-**Future Enhancements:**
-- Real-time vehicle status updates
-- Predictive maintenance suggestions
-- Integration with vehicle APIs
-- Push notifications for critical alerts
-
-### 3. Smart Reminders Screen (`reminders_screen.dart`)
-
-**Core Components:**
-- **Tabbed Interface**: Upcoming, Overdue, and Completed reminders
-- **Reminder Cards**: Detailed information with priority indicators
-- **Action Menu**: Mark complete, snooze, edit, delete options
-- **Add Reminder**: Floating action button for new reminders
-
-**Technical Implementation:**
-```dart
-class SmartRemindersScreen extends StatefulWidget {
-  // TabController for managing multiple reminder views
-  // Mock data structure for demonstration
-  // Priority-based color coding system
-}
+#### iOS (`ios/Runner/Info.plist`)
+```xml
+<key>CFBundleDisplayName</key>
+<string>Siyanaty+</string>
+<key>CFBundleIdentifier</key>
+<string>com.example.siyanatyPlus</string>
 ```
 
-**Current Features:**
-- **Priority System**: High, Medium, Low priority levels
-- **Status Tracking**: Active, Completed, Snoozed states
-- **Category Management**: Oil change, brake service, etc.
-- **Due Date Tracking**: Automatic overdue detection
+---
 
-**Future Technologies:**
-- **Machine Learning**: Predictive reminder scheduling
-- **IoT Integration**: Automatic mileage tracking
-- **Smart Notifications**: Context-aware alert timing
-- **Voice Commands**: "Hey Siri, remind me to change oil"
+## 🧪 Testing
 
-### 4. OBD Dashboard Screen (`obd_screen.dart`)
+### Running Tests
 
-**Core Components:**
-- **Connection Status**: Bluetooth/WiFi connection indicators
-- **Real-time Data**: Engine RPM, speed, temperature, fuel level
-- **Diagnostic Codes**: DTC reading and interpretation
-- **Health Score**: Overall vehicle health assessment
+```bash
+# Unit tests
+flutter test
 
-**Technical Implementation:**
-```dart
-class OBDDashboardScreen extends StatefulWidget {
-  // Connection state management
-  // Real-time data streaming
-  // Diagnostic code interpretation
-  // Health scoring algorithm
-}
+# Integration tests
+flutter test integration_test/
+
+# Widget tests
+flutter test test/widget_test.dart
 ```
 
-**Current Features:**
-- **Connection Management**: Device pairing and status
-- **Data Display**: Real-time sensor readings
-- **Code Reading**: OBD-II diagnostic trouble codes
-- **Health Monitoring**: Vehicle condition assessment
+### Test Coverage
 
-**Future Technologies:**
-- **Bluetooth LE**: Low-power device communication
-- **WiFi Direct**: High-speed data transfer
-- **Cloud Diagnostics**: Remote expert analysis
-- **AI Interpretation**: Smart code explanation and solutions
-- **Predictive Analytics**: Failure prediction algorithms
+- **Unit Tests** - Service and utility testing
+- **Widget Tests** - UI component functionality
+- **Integration Tests** - End-to-end workflow validation
+- **Performance Tests** - Load and stress testing
 
-### 5. Service Centers Screen (`services_screen.dart`)
+---
 
-**Core Components:**
-- **Map Integration**: Interactive service center locations
-- **Filtering System**: Service type and distance filters
-- **Center Cards**: Detailed service center information
-- **Navigation**: Directions and contact information
+## 🚨 Troubleshooting
 
-**Technical Implementation:**
-```dart
-class ServiceCentersScreen extends StatefulWidget {
-  // Google Maps integration
-  // Location services
-  // Filtering and sorting
-  // Real-time distance calculation
-}
+### Common Issues
+
+1. **Firebase Connection Issues**
+   ```bash
+   # Check Firebase configuration
+   flutter clean
+   flutter pub get
+   ```
+
+2. **Build Errors**
+   ```bash
+   # Clean and rebuild
+   flutter clean
+   flutter pub get
+   flutter build apk
+   ```
+
+3. **Dependency Conflicts**
+   ```bash
+   # Update dependencies
+   flutter pub upgrade
+   flutter pub deps
+   ```
+
+### Debug Mode
+
+```bash
+# Enable debug logging
+flutter run --debug
+
+# Check device logs
+flutter logs
 ```
 
-**Current Features:**
-- **Location Services**: GPS-based center discovery
-- **Service Filtering**: Oil change, brake service, etc.
-- **Rating System**: User reviews and ratings
-- **Contact Information**: Phone, website, hours
+---
 
-**Future Technologies:**
-- **Google Maps API**: Interactive map interface
-- **Geolocation Services**: Precise location tracking
-- **Real-time Availability**: Live appointment booking
-- **AR Navigation**: Augmented reality directions
-- **Blockchain Reviews**: Tamper-proof review system
+## 🤝 Contributing
 
-### 6. Settings Screen (`settings_screen.dart`)
+### Development Guidelines
 
-**Core Components:**
-- **User Profile**: Personal information management
-- **App Preferences**: Theme, notifications, language
-- **Account Settings**: Password, email, privacy
-- **Debug Tools**: Development and troubleshooting
+1. **Code Style**
+   - Follow Dart/Flutter conventions
+   - Use meaningful variable names
+   - Add comprehensive comments
+   - Maintain consistent formatting
 
-**Technical Implementation:**
-```dart
-class SettingsScreen extends StatefulWidget {
-  // Form validation
-  // Provider integration
-  // Navigation to sub-screens
-  // Debug utilities
-}
-```
+2. **Architecture**
+   - Follow Clean Architecture principles
+   - Use Provider pattern for state management
+   - Implement proper error handling
+   - Write unit tests for new features
 
-**Current Features:**
-- **Theme Switching**: Light/Dark mode toggle
-- **Notification Settings**: Customizable alert preferences
-- **Privacy Controls**: Data sharing and visibility options
-- **Debug Tools**: Firebase and authentication debugging
+3. **Git Workflow**
+   ```bash
+   # Create feature branch
+   git checkout -b feature/new-feature
+   
+   # Commit changes
+   git add .
+   git commit -m "Add new feature"
+   
+   # Push and create PR
+   git push origin feature/new-feature
+   ```
 
-**Future Technologies:**
-- **Biometric Authentication**: Fingerprint/Face ID
-- **Voice Commands**: "Hey Siri, change theme"
-- **AI Personalization**: Smart setting recommendations
-- **Blockchain Identity**: Decentralized user management
+### Pull Request Process
 
-### 7. Authentication Screens
+1. Fork the repository
+2. Create feature branch
+3. Implement changes with tests
+4. Update documentation
+5. Submit pull request
+6. Address review feedback
 
-**Login Screen (`login_screen.dart`)**
-- **Modern UI Design**: Clean, professional interface
-- **Form Validation**: Real-time input validation
-- **Social Login**: Google Sign-In integration
-- **Error Handling**: User-friendly error messages
+---
 
-**Technical Implementation:**
-```dart
-class ModernLoginScreen extends StatefulWidget {
-  // Form state management
-  // Firebase authentication
-  // Social login integration
-  // Animation controllers
-}
-```
+## 📄 License
 
-**Future Technologies:**
-- **OAuth 2.0**: Secure authentication protocols
-- **JWT Tokens**: Stateless authentication
-- **Biometric Auth**: Touch ID, Face ID
-- **Zero-Knowledge Proofs**: Privacy-preserving authentication
+This project is private and proprietary. All rights reserved.
 
-## Future Technologies & Implementation
+---
 
-### 1. Machine Learning & AI
+## 📞 Contact & Support
 
-**Predictive Maintenance:**
-```dart
-// Future implementation
-class MaintenancePredictor {
-  Future<MaintenancePrediction> predictNextService(
-    VehicleData data,
-    MaintenanceHistory history,
-  ) async {
-    // ML model integration
-    // Historical pattern analysis
-    // Predictive algorithms
-  }
-}
-```
+### Project Information
+- **Repository**: https://github.com/hassanxadel/Siyanaty-plus
+- **Documentation**: See `/docs` folder for detailed documentation
+- **Issues**: Use GitHub Issues for bug reports and feature requests
 
-**Technologies:**
-- **TensorFlow Lite**: On-device ML inference
-- **Cloud ML APIs**: Google Cloud ML, AWS SageMaker
-- **Edge Computing**: Local ML processing
-- **Federated Learning**: Privacy-preserving model training
+### Development Team
+- **Lead Developer**: Hassan Adel
+- **Project Status**: Active Development
+- **Last Updated**: December 2024
 
-### 2. Internet of Things (IoT)
+### Getting Help
 
-**Vehicle Integration:**
-```dart
-// Future implementation
-class VehicleIoTManager {
-  Future<void> connectToVehicle(String vehicleId) async {
-    // OBD-II device connection
-    // CAN bus communication
-    // Real-time data streaming
-  }
-}
-```
+1. **Documentation** - Check this README and inline code comments
+2. **Issues** - Search existing GitHub issues
+3. **Discussions** - Use GitHub Discussions for questions
+4. **Email** - Contact project maintainer for urgent issues
 
-**Technologies:**
-- **Bluetooth LE**: Low-power device communication
-- **WiFi Direct**: High-speed data transfer
-- **5G Networks**: Ultra-low latency communication
-- **Edge Computing**: Local data processing
+---
 
-### 3. Blockchain & Web3
+## 🗺️ Roadmap
 
-**Decentralized Features:**
-```dart
-// Future implementation
-class BlockchainService {
-  Future<String> storeMaintenanceRecord(
-    MaintenanceRecord record,
-    String privateKey,
-  ) async {
-    // Smart contract interaction
-    // IPFS storage
-    // NFT generation
-  }
-}
-```
+### Short Term (Next 3 months)
+- Complete OBD-II hardware integration
+- Implement real-time location services
+- Add comprehensive testing suite
+- Optimize performance and battery usage
 
-**Technologies:**
-- **Ethereum**: Smart contract platform
-- **IPFS**: Decentralized file storage
-- **MetaMask**: Web3 wallet integration
-- **Solidity**: Smart contract language
+### Medium Term (3-6 months)
+- Deploy to app stores (Google Play & App Store)
+- Implement advanced analytics
+- Add social features and community
+- Integrate with automotive APIs
 
-### 4. Augmented Reality (AR)
+### Long Term (6+ months)
+- Machine learning for predictive maintenance
+- IoT device integration
+- Enterprise features and partnerships
+- Multi-language support
 
-**AR Navigation & Diagnostics:**
-```dart
-// Future implementation
-class ARServiceManager {
-  Future<void> showARDiagnostics(
-    BuildContext context,
-    VehicleComponent component,
-  ) async {
-    // AR overlay rendering
-    // Component identification
-    // Interactive instructions
-  }
-}
-```
+---
 
-**Technologies:**
-- **ARKit/ARCore**: Native AR frameworks
-- **Unity/Unreal**: 3D rendering engines
-- **Computer Vision**: Object recognition
-- **Spatial Computing**: 3D environment mapping
+**Document Version**: 2.0 | **Last Updated**: December 2024 | **Project Status**: Active Development
 
-### 5. Cloud & Edge Computing
+## 🔑 API Keys & New Features Setup
 
-**Data Processing:**
-```dart
-// Future implementation
-class CloudDataProcessor {
-  Future<ProcessedData> processVehicleData(
-    List<SensorReading> readings,
-  ) async {
-    // Cloud ML processing
-    // Real-time analytics
-    // Data aggregation
-  }
-}
-```
+1. Configure keys in `lib/shared/constants/app_constants.dart`:
+   - `zpkApiKey`: set your RapidAPI key for VIN decoding
+   - `googleMapsApiKey`: set your Google Maps API key
 
-**Technologies:**
-- **AWS IoT**: Device management and data processing
-- **Google Cloud ML**: Machine learning services
-- **Azure Edge**: Edge computing platform
-- **Kubernetes**: Container orchestration
+2. VIN Lookup Usage:
+   - Open `VIN Lookup` screen, enter a 17-character VIN, tap "Lookup VIN"
+   - The app fetches Make, Model, Year, Engine, Transmission, Body Style, Fuel Type
+   - Tap "Save to My Cars" to add a minimal car record using `CarService`
 
-## Code Structure Analysis
+3. Service Centers (backend available):
+   - Get current coordinates with `LocationService.getCurrentPosition()`
+   - Fetch nearby centers with `ServiceCenterService.findNearbyServiceCenters(latitude, longitude)`
+   - Integrate results into a UI list as desired (e.g., map or list view)
 
-### 1. Provider Pattern Implementation
-
-**AuthProvider Example:**
-```dart
-class AuthProvider extends ChangeNotifier {
-  User? _firebaseUser;
-  AppUser? _appUser;
-  
-  // Getters for reactive UI updates
-  bool get isAuthenticated => _firebaseUser != null && _appUser != null;
-  
-  // Methods that trigger UI updates
-  Future<void> signIn({required String email, required String password}) async {
-    // Authentication logic
-    notifyListeners(); // Triggers UI rebuild
-  }
-}
-```
-
-**Benefits:**
-- **Reactive Updates**: UI automatically rebuilds when state changes
-- **Performance**: Only affected widgets rebuild
-- **Testing**: Easy to mock and test state changes
-- **Maintainability**: Clear state management patterns
-
-### 2. Theme System
-
-**AppTheme Implementation:**
-```dart
-class AppTheme {
-  static const Color primaryGreen = Color(0xFF4CAF50);
-  static const Color backgroundGreen = Color(0xFF2E7D32);
-  
-  static ThemeData get lightTheme => ThemeData(
-    primaryColor: primaryGreen,
-    scaffoldBackgroundColor: Colors.white,
-    // Theme configuration
-  );
-}
-```
-
-**Features:**
-- **Consistent Colors**: Centralized color management
-- **Dark/Light Support**: Automatic theme switching
-- **Custom Components**: Themed buttons, cards, etc.
-- **Accessibility**: High contrast and readable colors
-
-### 3. Navigation System
-
-**Route Management:**
-```dart
-// Main navigation structure
-final List<Widget> _mainScreens = [
-  const HomeDashboard(),
-  const SmartRemindersScreen(),
-  const OBDDashboardScreen(),
-  const ServiceCentersScreen(),
-  const SettingsScreen(),
-];
-```
-
-**Benefits:**
-- **Tab-based Navigation**: Easy access to main features
-- **State Preservation**: Each tab maintains its state
-- **Smooth Transitions**: Animated tab switching
-- **Consistent UX**: Familiar navigation pattern
-
-### 4. Error Handling
-
-**Comprehensive Error Management:**
-```dart
-try {
-  await FirebaseService.initialize();
-  AppLogger.info('Firebase initialized successfully');
-} catch (e) {
-  AppLogger.warning('Firebase not configured - app will work with local storage only');
-  AppLogger.error('Firebase initialization failed', error: e);
-}
-```
-
-**Features:**
-- **Graceful Degradation**: App works without external services
-- **User Feedback**: Clear error messages and status updates
-- **Logging**: Comprehensive error tracking and debugging
-- **Fallback Mechanisms**: Alternative functionality when services fail
-
-## Development Guidelines
-
-### 1. Code Organization
-
-**File Naming Conventions:**
-- **Screens**: `snake_case_screen.dart`
-- **Widgets**: `snake_case_widget.dart`
-- **Providers**: `snake_case_provider.dart`
-- **Services**: `snake_case_service.dart`
-
-**Folder Structure:**
-```
-presentation/
-├── screens/
-│   ├── auth/           # Authentication screens
-│   ├── home/           # Main dashboard
-│   ├── services/       # Feature screens
-│   ├── settings/       # Configuration screens
-│   └── info/           # Information screens
-├── widgets/            # Reusable components
-└── providers/          # State management
-```
-
-### 2. State Management Best Practices
-
-**Provider Usage:**
-```dart
-// ✅ Good: Minimal rebuilds
-Consumer<AuthProvider>(
-  builder: (context, auth, child) {
-    return auth.isAuthenticated ? HomeScreen() : LoginScreen();
-  },
-);
-
-// ❌ Bad: Unnecessary rebuilds
-Provider.of<AuthProvider>(context, listen: true);
-```
-
-**State Updates:**
-```dart
-// ✅ Good: Batch updates
-void updateUserProfile(Map<String, dynamic> updates) async {
-  _isLoading = true;
-  notifyListeners();
-  
-  try {
-    await _authService.updateProfile(updates);
-    await _loadUserProfile();
-  } finally {
-    _isLoading = false;
-    notifyListeners();
-  }
-}
-```
-
-### 3. Performance Optimization
-
-**Widget Optimization:**
-```dart
-// ✅ Good: Const constructors
-const Text('Hello World');
-
-// ✅ Good: Repaint boundaries
-class OptimizedWidget extends StatelessWidget {
-  const OptimizedWidget({super.key});
-  
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: ExpensiveWidget(),
-    );
-  }
-}
-```
-
-**Memory Management:**
-```dart
-// ✅ Good: Proper disposal
-@override
-void dispose() {
-  _controller.dispose();
-  _animationController.dispose();
-  super.dispose();
-}
-```
-
-### 4. Testing Strategy
-
-**Unit Tests:**
-```dart
-// Provider testing
-test('AuthProvider should update state on sign in', () {
-  final provider = AuthProvider();
-  expect(provider.isAuthenticated, false);
-  
-  provider.signIn(email: 'test@test.com', password: 'password');
-  expect(provider.isAuthenticated, true);
-});
-```
-
-**Widget Tests:**
-```dart
-// Screen testing
-testWidgets('Login screen should show form fields', (tester) async {
-  await tester.pumpWidget(ModernLoginScreen());
-  
-  expect(find.byType(TextFormField), findsNWidgets(2));
-  expect(find.byType(ElevatedButton), findsOneWidget);
-});
-```
-
-## Conclusion
-
-The Siyanaty+ app presents a robust foundation for a comprehensive car maintenance platform. The current implementation provides essential functionality while the architecture supports significant future enhancements.
-
-**Key Strengths:**
-- Clean, maintainable codebase
-- Scalable architecture
-- Comprehensive error handling
-- Performance-optimized UI
-- Future-ready technology stack
-
-**Next Steps:**
-1. Implement core ML features for predictive maintenance
-2. Add IoT device integration capabilities
-3. Develop AR navigation and diagnostics
-4. Integrate blockchain for decentralized features
-5. Expand cloud services for advanced analytics
-
-The app is designed to evolve with emerging technologies while maintaining the high-quality user experience that users expect from modern mobile applications.
+4. Permissions (Android):
+   - Location permission is requested by `geolocator` at runtime
+   - Ensure Google Places API is enabled for your key in Google Cloud Console

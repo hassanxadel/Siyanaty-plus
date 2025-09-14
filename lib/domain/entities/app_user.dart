@@ -34,10 +34,19 @@ class AppUser {
   });
 
   factory AppUser.fromFirestore(Map<String, dynamic> data) {
+    // Handle missing required fields gracefully
+    final uid = data['uid'] as String?;
+    final email = data['email'] as String?;
+    final fullName = data['fullName'] as String?;
+    
+    if (uid == null || email == null || fullName == null) {
+      throw FormatException('Missing required user fields: uid=$uid, email=$email, fullName=$fullName');
+    }
+    
     return AppUser(
-      uid: data['uid'] as String,
-      email: data['email'] as String,
-      fullName: data['fullName'] as String,
+      uid: uid,
+      email: email,
+      fullName: fullName,
       phoneNumber: data['phoneNumber'] as String?,
       emergencyContactName: data['emergencyContactName'] as String?,
       emergencyContactPhone: data['emergencyContactPhone'] as String?,

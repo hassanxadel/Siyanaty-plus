@@ -243,7 +243,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
         style: const TextStyle(
-          color: AppTheme.backgroundGreen,
+          color: AppTheme.lightBackground,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           fontFamily: 'Orbitron',
@@ -251,7 +251,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
         decoration: const InputDecoration(
           hintText: 'Email address',
           hintStyle: TextStyle(
-            color: AppTheme.darkAccentGreen,
+            color: AppTheme.lightBackground,
             fontSize: 16,
             fontFamily: 'Orbitron',
           ),
@@ -285,7 +285,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
         controller: _passwordController,
         obscureText: !_isPasswordVisible,
         style: const TextStyle(
-          color: AppTheme.backgroundGreen,
+          color: AppTheme.lightBackground,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           fontFamily: 'Orbitron',
@@ -293,7 +293,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
         decoration: InputDecoration(
           hintText: 'Password',
           hintStyle: const TextStyle(
-            color: AppTheme.darkAccentGreen,
+            color: AppTheme.lightBackground,
             fontSize: 16,
             fontFamily: 'Orbitron',
           ),

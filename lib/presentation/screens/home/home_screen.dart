@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../providers/auth_provider.dart';
@@ -16,6 +18,13 @@ import '../services/services_screen.dart';
 import '../services/maintenance_screen.dart';
 import '../profile/profile_screen.dart';
 import '../notifications/notifications_screen.dart';
+import 'license_screen.dart';
+import '../../../services/car_service.dart';
+import '../../../models/backup_car.dart';
+import '../../../services/reminder_service.dart';
+import '../../../services/maintenance_service.dart';
+import '../../../models/backup_reminder.dart';
+import '../../../models/backup_maintenance.dart';
 
 /// Main dashboard screen that serves as the home page
 /// Displays user welcome, quick actions, and vehicle overview
@@ -40,6 +49,24 @@ class _HomeDashboardState extends State<HomeDashboard>
   final PageController _carPageController = PageController();
   /// Index of currently selected vehicle
   int _currentCarIndex = 0;
+  /// Car service for fetching real car data
+  final CarService _carService = CarService();
+  /// Reminder service for fetching reminders data
+  final ReminderService _reminderService = ReminderService();
+  /// Maintenance service for fetching maintenance data
+  final MaintenanceService _maintenanceService = MaintenanceService();
+  /// List of user's cars (max 5 for swipe)
+  List<BackupCar> _userCars = [];
+  /// Loading state for cars
+  bool _carsLoading = true;
+  /// List of upcoming reminders (max 3)
+  List<ReminderWithCarInfo> _upcomingReminders = [];
+  /// Loading state for reminders
+  bool _remindersLoading = true;
+  /// List of latest maintenance records (max 3)
+  List<MaintenanceWithInfo> _latestMaintenance = [];
+  /// Loading state for maintenance
+  bool _maintenanceLoading = true;
 
   /// Initialize animation controllers and start entrance animations
   @override
@@ -71,6 +98,12 @@ class _HomeDashboardState extends State<HomeDashboard>
 
     /// Start the entrance animations
     _animationController.forward();
+    /// Load user's cars
+    _loadUserCars();
+    /// Load upcoming reminders
+    _loadUpcomingReminders();
+    /// Load latest maintenance
+    _loadLatestMaintenance();
   }
 
   /// Clean up animation controllers and page controller
@@ -79,6 +112,73 @@ class _HomeDashboardState extends State<HomeDashboard>
     _animationController.dispose();
     _carPageController.dispose();
     super.dispose();
+  }
+
+  /// Load user's cars from database (max 5 for swipe functionality)
+  Future<void> _loadUserCars() async {
+    try {
+      final cars = await _carService.getAllCars();
+      if (mounted) {
+        setState(() {
+          // Take maximum 5 cars for swipe functionality
+          _userCars = cars.take(5).toList();
+          _carsLoading = false;
+          // Reset current index if needed
+          if (_currentCarIndex >= _userCars.length && _userCars.isNotEmpty) {
+            _currentCarIndex = 0;
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _carsLoading = false;
+        });
+      }
+    }
+  }
+
+  /// Load upcoming reminders from database (max 3)
+  Future<void> _loadUpcomingReminders() async {
+    try {
+      final reminders = await _reminderService.getAllRemindersWithCarInfo();
+      if (mounted) {
+        setState(() {
+          // Filter upcoming reminders and take max 3
+          _upcomingReminders = reminders
+              .where((r) => r.reminder.status == ReminderStatus.upcoming)
+              .take(3)
+              .toList();
+          _remindersLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _remindersLoading = false;
+        });
+      }
+    }
+  }
+
+  /// Load latest maintenance records from database (max 3)
+  Future<void> _loadLatestMaintenance() async {
+    try {
+      final maintenance = await _maintenanceService.getAllMaintenanceWithInfo();
+      if (mounted) {
+        setState(() {
+          // Take latest 3 maintenance records
+          _latestMaintenance = maintenance.take(3).toList();
+          _maintenanceLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _maintenanceLoading = false;
+        });
+      }
+    }
   }
 
   /// Get time-based greeting message (Morning, Afternoon, Evening)
@@ -322,10 +422,10 @@ class _HomeDashboardState extends State<HomeDashboard>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
+        color: AppTheme.primaryGreen.withOpacity(0.3),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
+          color: const Color.fromARGB(255, 255, 255, 255).withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -340,9 +440,11 @@ class _HomeDashboardState extends State<HomeDashboard>
               borderRadius: BorderRadius.circular(16),
 
             ),
-            child: const Icon(
-              IconData(0xe800, fontFamily: 'MyFlutterApp'),
-              color: Color.fromARGB(255, 3, 27, 86),
+            child: Icon(
+              const IconData(0xe800, fontFamily: 'MyFlutterApp'),
+              color: Theme.of(context).brightness == Brightness.dark 
+                  ? Colors.white 
+                  : Colors.black,
               size: 32,
             ),
           ),
@@ -419,7 +521,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                 _currentCarIndex = index;
               });
             },
-            itemCount: 3, // Sample cars
+            itemCount: _userCars.isEmpty ? 1 : _userCars.length,
             itemBuilder: (context, index) {
               return _buildCarCard(index);
             },
@@ -431,7 +533,7 @@ class _HomeDashboardState extends State<HomeDashboard>
         // Page indicator dots
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(3, (index) {
+          children: List.generate(_userCars.isEmpty ? 1 : _userCars.length, (index) {
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 4),
               width: _currentCarIndex == index ? 12 : 8,
@@ -455,13 +557,87 @@ class _HomeDashboardState extends State<HomeDashboard>
   }
 
   Widget _buildCarCard(int index) {
-    final cars = [
-      {'name': 'Toyota Camry 2020', 'mileage': '45,230 km', 'health': 0.82},
-      {'name': 'Honda Civic 2019', 'mileage': '32,100 km', 'health': 0.91},
-      {'name': 'BMW 320i 2021', 'mileage': '15,670 km', 'health': 0.95},
-    ];
+    if (_carsLoading) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.darkGray.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppTheme.primaryGreen.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryGreen),
+        ),
+      );
+    }
 
-    final car = cars[index];
+    if (_userCars.isEmpty) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.darkGray.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppTheme.primaryGreen.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.directions_car_outlined,
+              size: 48,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No Cars Added',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[600],
+                fontFamily: 'Orbitron',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add your first car to get started',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _navigateToCarsList(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Add Car'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final car = _userCars[index];
+    final carName = '${car.brand} ${car.model} ${car.year}';
+    final mileage = '${car.mileage.toStringAsFixed(0)} km';
+    // Calculate health based on mileage and age (simple heuristic)
+    final currentYear = DateTime.now().year;
+    final age = currentYear - car.year;
+    final health = (1.0 - (age * 0.05) - (car.mileage / 200000)).clamp(0.0, 1.0);
 
     return ClipRect(
       child: Container(
@@ -483,17 +659,44 @@ class _HomeDashboardState extends State<HomeDashboard>
           Row(
             children: [
               Container(
-                width: 90,
-                height: 50,
-                padding: const EdgeInsets.all(10),
+                width: 120,
+                height: 80,
                 decoration: BoxDecoration(
                   color: AppTheme.getThemeAwareIconColor(context).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                  color: Color.fromARGB(255, 0, 0, 0),
-                  size: 28,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: car.imagePath != null && car.imagePath!.isNotEmpty
+                      ? Image.file(
+                          File(car.imagePath!),
+                          fit: BoxFit.cover,
+                          width: 120,
+                          height: 80,
+                          errorBuilder: (context, error, stackTrace) {
+                            // Show default icon if image fails to load
+                            return Container(
+                              padding: const EdgeInsets.all(10),
+                              child: Icon(
+                                const IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                color: Theme.of(context).brightness == Brightness.dark 
+                                    ? Colors.white 
+                                    : Colors.black,
+                                size: 28,
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          padding: const EdgeInsets.all(10),
+                          child: Icon(
+                            const IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                            color: Theme.of(context).brightness == Brightness.dark 
+                                ? Colors.white 
+                                : Colors.black,
+                            size: 28,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(width: 18),
@@ -502,7 +705,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      car['name'] as String,
+                      carName,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -510,9 +713,9 @@ class _HomeDashboardState extends State<HomeDashboard>
                         fontFamily: 'Orbitron',
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 12),
                     Text(
-                      car['mileage'] as String,
+                      mileage,
                       style: TextStyle(
                         fontSize: 11,
                         color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
@@ -525,7 +728,7 @@ class _HomeDashboardState extends State<HomeDashboard>
             ],
           ),
           
-          const SizedBox(height: 14), // Reduced spacing between car details and health status
+          const SizedBox(height: 14), 
 
           // Health Status
           Column(
@@ -544,7 +747,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                     ),
                   ),
                   Text(
-                    '${((car['health'] as double) * 100).toInt()}% Good',
+                    '${(health * 100).toInt()}% Good',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -558,7 +761,7 @@ class _HomeDashboardState extends State<HomeDashboard>
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: LinearProgressIndicator(
-                  value: car['health'] as double,
+                  value: health,
                   backgroundColor: AppTheme.getThemeAwareCardBackground(context).withOpacity(0.3),
                   valueColor: const AlwaysStoppedAnimation<Color>(Color.fromARGB(255, 21, 219, 84)),
                   minHeight: 6,
@@ -573,9 +776,9 @@ class _HomeDashboardState extends State<HomeDashboard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildCircularActionButton('Repairs', Icons.get_app_rounded, const Color.fromARGB(255, 10, 37, 105)),
+              _buildCircularActionButton('Repairs', Icons.get_app_rounded, const Color.fromARGB(255, 185, 109, 2)),
               _buildCircularActionButton('Fuel Log', Icons.local_gas_station, const Color.fromARGB(255, 185, 109, 2)),
-              _buildCircularActionButton('License', Icons.credit_card, const Color.fromARGB(255, 82, 16, 126)),
+              _buildCircularActionButton('License', Icons.credit_card, const Color.fromARGB(255, 185, 109, 2)),
             ],
           ),
           
@@ -690,7 +893,7 @@ class _HomeDashboardState extends State<HomeDashboard>
     {'label': 'Barcode Scanner', 'icon': Icons.qr_code_scanner, 'color': const Color(0xFF8E44AD)}, // Purple
     {'label': 'Voice Notes', 'icon': Icons.mic, 'color': const Color(0xFFE74C3C)}, // Red
     {'label': 'Mileage Track', 'icon': Icons.track_changes, 'color': const Color(0xFF10B981)}, // Emerald
-    {'label': 'Multi-Car', 'icon': Icons.dashboard, 'color': const Color(0xFF3B82F6)}, // Blue
+    {'label': 'Maintenance', 'icon': Icons.home_repair_service_rounded, 'color': const Color(0xFF3B82F6)}, // Blue
   ];
 
   Widget _buildActionCard(String label, IconData icon, Color color) {
@@ -778,11 +981,74 @@ class _HomeDashboardState extends State<HomeDashboard>
         ),
         const SizedBox(height: 16),
 
-        _buildReminderItem('Oil Change', 'Due in 5 days', Icons.oil_barrel, const Color(0xFFFF6B35)),
-        const SizedBox(height: 12),
-        _buildReminderItem('Tire Rotation', 'Due in 22 days', Icons.tire_repair, AppTheme.primaryGreen),
-        const SizedBox(height: 12),
-        _buildReminderItem('Brake Inspection', 'Due in 45 days', Icons.disc_full, const Color(0xFF7B2CBF)),
+        if (_remindersLoading)
+          const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
+        else if (_upcomingReminders.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.darkGray.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.notification_important_outlined,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No Upcoming Reminders',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[600],
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Add reminders to stay on top of your car maintenance',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          )
+        else
+          ..._upcomingReminders.asMap().entries.map((entry) {
+            final index = entry.key;
+            final reminderWithCar = entry.value;
+            final reminder = reminderWithCar.reminder;
+            
+            // Calculate days until due
+            final daysUntil = reminder.targetDate?.difference(DateTime.now()).inDays ?? 0;
+            final dueDateText = daysUntil <= 0 
+                ? 'Overdue' 
+                : daysUntil == 1 
+                    ? 'Due tomorrow'
+                    : 'Due in $daysUntil days';
+            
+            // Get icon and color based on reminder type
+            final iconData = _getReminderIcon(reminder.type);
+            final color = _getReminderColor(reminder.type);
+            
+            return Column(
+              children: [
+                _buildReminderItem(
+                  reminder.title,
+                  dueDateText,
+                  iconData,
+                  color,
+                ),
+                if (index < _upcomingReminders.length - 1) const SizedBox(height: 12),
+              ],
+            );
+          }),
       ],
     );
   }
@@ -882,11 +1148,75 @@ class _HomeDashboardState extends State<HomeDashboard>
         ),
         const SizedBox(height: 16),
 
-        _buildRepairItem('Brake Pad Replacement', '15 Aug 2025', 'EGP 1450', Icons.disc_full, const Color(0xFFFF6B35), 'Successful'),
-        const SizedBox(height: 12),
-        _buildRepairItem('Oil Change Service', '10 Aug 2025', 'EGP 1185', Icons.oil_barrel, AppTheme.primaryGreen, 'Successful'),
-        const SizedBox(height: 12),
-        _buildRepairItem('Tire Alignment', '05 Aug 2025', 'EGP 120', Icons.tire_repair, const Color(0xFF7B2CBF), 'Successful'),
+        if (_maintenanceLoading)
+          const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
+        else if (_latestMaintenance.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.darkGray.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.build_circle_outlined,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No Maintenance Records',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[600],
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Start tracking your vehicle maintenance history',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          )
+        else
+          ..._latestMaintenance.asMap().entries.map((entry) {
+            final index = entry.key;
+            final maintenanceWithInfo = entry.value;
+            final maintenance = maintenanceWithInfo.maintenance;
+            
+            // Format date
+            final dateFormat = DateFormat('dd MMM yyyy');
+            final dateText = dateFormat.format(maintenance.maintenanceDate);
+            
+            // Format cost
+            final costText = 'EGP ${maintenance.cost.toStringAsFixed(0)}';
+            
+            // Get icon and color based on maintenance type
+            final iconData = _getMaintenanceIcon(maintenance.type);
+            final color = _getMaintenanceColor(maintenance.type);
+            
+            return Column(
+              children: [
+                _buildRepairItem(
+                  maintenance.title,
+                  dateText,
+                  costText,
+                  iconData,
+                  color,
+                  'Successful',
+                ),
+                if (index < _latestMaintenance.length - 1) const SizedBox(height: 12),
+              ],
+            );
+          }),
       ],
     );
   }
@@ -1117,10 +1447,10 @@ class _HomeDashboardState extends State<HomeDashboard>
 
     // Navigate to specific screens for fully implemented features
     switch (action.toLowerCase()) {
-      case 'multi-car':
+      case 'maintenance':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const MyCarsScreen()),
+          MaterialPageRoute(builder: (context) => const MaintenanceRecordsScreen()),
         );
         break;
       case 'vin lookup':
@@ -1151,6 +1481,12 @@ class _HomeDashboardState extends State<HomeDashboard>
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const MileageTrackScreen()),
+        );
+        break;
+      case 'license':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const LicenseScreen()),
         );
         break;
       
@@ -1226,6 +1562,78 @@ class _HomeDashboardState extends State<HomeDashboard>
       context,
       MaterialPageRoute(builder: (context) => const MyCarsScreen()),
     );
+  }
+
+  /// Get icon for reminder type
+  IconData _getReminderIcon(ReminderType type) {
+    switch (type) {
+      case ReminderType.oilChange:
+        return Icons.oil_barrel;
+      case ReminderType.tireRotation:
+        return Icons.tire_repair;
+      case ReminderType.brakeService:
+        return Icons.disc_full;
+      case ReminderType.maintenance:
+        return Icons.build;
+      case ReminderType.inspection:
+        return Icons.search;
+      case ReminderType.insurance:
+        return Icons.shield;
+      case ReminderType.registration:
+        return Icons.assignment;
+      case ReminderType.custom:
+        return Icons.event;
+    }
+  }
+
+  /// Get color for reminder type
+  Color _getReminderColor(ReminderType type) {
+    switch (type) {
+      case ReminderType.oilChange:
+        return const Color(0xFFFF6B35);
+      case ReminderType.tireRotation:
+        return AppTheme.primaryGreen;
+      case ReminderType.brakeService:
+        return const Color(0xFF7B2CBF);
+      case ReminderType.maintenance:
+        return const Color(0xFFFF9800);
+      case ReminderType.inspection:
+        return const Color(0xFF2196F3);
+      case ReminderType.insurance:
+        return const Color(0xFFFFD23F);
+      case ReminderType.registration:
+        return const Color(0xFF795548);
+      case ReminderType.custom:
+        return const Color(0xFF9E9E9E);
+    }
+  }
+
+  /// Get icon for maintenance type
+  IconData _getMaintenanceIcon(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return Icons.build;
+      case MaintenanceType.electrical:
+        return Icons.electrical_services;
+      case MaintenanceType.suspension:
+        return Icons.car_repair;
+      case MaintenanceType.others:
+        return Icons.more_vert;
+    }
+  }
+
+  /// Get color for maintenance type
+  Color _getMaintenanceColor(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return Colors.orange;
+      case MaintenanceType.electrical:
+        return Colors.red;
+      case MaintenanceType.suspension:
+        return Colors.purple;
+      case MaintenanceType.others:
+        return Colors.green;
+    }
   }
 
   void _showMessage(String message) {

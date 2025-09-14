@@ -132,7 +132,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 child: FadeTransition(
                   opacity: _textAnimation,
                   child: Container(
-                    width: 60,
+                    width: 80,
                     height: 60,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(15),
@@ -284,7 +284,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                                                 _buildFeatureIcon(const IconData(0xe800, fontFamily: 'MyFlutterApp'), 'Maintenance'),
+                                _buildFeatureIcon(Icons.car_repair_rounded, 'Maintenance'),
                                 _buildFeatureIcon(Icons.location_on_rounded, 'Location'),
                                 _buildFeatureIcon(Icons.scanner_rounded, 'Scan'),
                                 _buildFeatureIcon(Icons.schedule_rounded, 'Reminders'),
@@ -339,8 +339,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                   ),
                                 ),
                                                                  Container(
-                                   width: 40,
-                                   height: 40,
+                                   width: 50,
+                                   height: 50,
                                    decoration: BoxDecoration(
                                      color: AppTheme.secondaryGreen,
                                      borderRadius: BorderRadius.circular(20),
@@ -354,7 +354,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                    ),
                                    child: Icon(
                                      const IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                                     size: 24,
+                                     size: 20,
                                      color: AppTheme.getThemeAwareBackground(context),
                                    ),
                                  ),

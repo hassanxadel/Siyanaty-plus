@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../shared/constants/app_theme.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../../../shared/services/location_service.dart';
 
 class ServiceCentersScreen extends StatefulWidget {
   const ServiceCentersScreen({super.key});
@@ -13,6 +14,12 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
   String _selectedFilter = 'All';
+  
+  // Google Maps related
+  GoogleMapController? _mapController;
+  LatLng? _currentLocation;
+  Set<Marker> _markers = {};
+  bool _isLoadingLocation = false;
 
   final List<String> _filters = [
     'All',
@@ -28,6 +35,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _getCurrentLocation();
   }
 
   @override
@@ -245,6 +253,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                       setState(() {
                         _selectedFilter = filter;
                       });
+                      _updateMarkers();
                     },
                     backgroundColor: AppTheme.getThemeAwareCardBackground(context).withOpacity(0.3),
                     selectedColor: AppTheme.primaryGreen,
@@ -260,80 +269,139 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
   }
 
   Widget _buildMapView() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            AppTheme.lightBackground.withOpacity(0.3),
-            AppTheme.primaryGreen.withOpacity(0.1),
+    if (_isLoadingLocation) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Loading your location...',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 16,
+                color: AppTheme.primaryGreen,
+              ),
+            ),
           ],
         ),
-      ),
-      child: Stack(
-        children: [
-          // Simulated map background
-          Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              color: AppTheme.lightBackground.withOpacity(0.5),
+      );
+    }
+
+    if (_currentLocation == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.location_off,
+              size: 80,
+              color: AppTheme.primaryGreen,
             ),
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.map,
-                    size: 80,
-                    color: AppTheme.primaryGreen,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Interactive Map View',
-                    style: TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.backgroundGreen,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Google Maps integration will be\nimplemented here',
-                    style: TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontSize: 14,
-                      color: AppTheme.darkAccentGreen,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+            const SizedBox(height: 16),
+            const Text(
+              'Location Access Required',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.backgroundGreen,
               ),
             ),
-          ),
-          // Floating service center cards
-          Positioned(
-            bottom: 20,
-            left: 16,
-            right: 16,
-            child: SizedBox(
-              height: 180,
-              child: PageView.builder(
-                itemCount: _getFilteredServiceCenters().length,
-                itemBuilder: (context, index) {
-                  final center = _getFilteredServiceCenters()[index];
-                  return Container(
-                    margin: const EdgeInsets.only(right: 16),
-                    child: _buildServiceCenterCard(center, compact: true),
-                  );
-                },
+            const SizedBox(height: 8),
+            const Text(
+              'Please enable location services to\nview nearby service centers',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 14,
+                color: AppTheme.darkAccentGreen,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _getCurrentLocation,
+              icon: const Icon(Icons.refresh),
+              label: const Text(
+                'Retry',
+                style: TextStyle(fontFamily: 'Orbitron'),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryGreen,
+                foregroundColor: Colors.white,
               ),
             ),
+          ],
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        // Google Maps
+        GoogleMap(
+          onMapCreated: (GoogleMapController controller) {
+            _mapController = controller;
+            _updateMarkers();
+          },
+          initialCameraPosition: CameraPosition(
+            target: _currentLocation!,
+            zoom: 14.0,
           ),
-        ],
-      ),
+          markers: _markers,
+          myLocationEnabled: true,
+          myLocationButtonEnabled: false,
+          mapType: MapType.normal,
+          onTap: (LatLng position) {
+            // Hide any open info windows by rebuilding markers
+            setState(() {
+              _updateMarkers();
+            });
+          },
+          onCameraMove: (CameraPosition position) {
+            // Optional: Handle camera movement
+          },
+          onCameraIdle: () {
+            // Optional: Handle when camera stops moving
+          },
+        ),
+        
+        // Current location button
+        Positioned(
+          top: 16,
+          right: 16,
+          child: FloatingActionButton(
+            mini: true,
+            onPressed: _goToCurrentLocation,
+            backgroundColor: Colors.white,
+            foregroundColor: AppTheme.primaryGreen,
+            child: const Icon(Icons.my_location),
+          ),
+        ),
+        
+        // Floating service center cards
+        Positioned(
+          bottom: 20,
+          left: 16,
+          right: 16,
+          child: SizedBox(
+            height: 180,
+            child: PageView.builder(
+              itemCount: _getFilteredServiceCenters().length,
+              itemBuilder: (context, index) {
+                final center = _getFilteredServiceCenters()[index];
+                return Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  child: _buildServiceCenterCard(center, compact: true),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -554,6 +622,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         'address': '123 Main St, Downtown',
         'phone': '(555) 123-4567',
         'services': ['Oil Change', 'Filter Replacement', 'Fluid Check'],
+        'coordinates': const LatLng(40.7128, -74.0060), // NYC coordinates
       },
       {
         'name': 'AutoCare Plus',
@@ -565,6 +634,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         'address': '456 Oak Ave, Midtown',
         'phone': '(555) 234-5678',
         'services': ['Engine Repair', 'Transmission', 'Brake Service', 'Diagnostics'],
+        'coordinates': const LatLng(40.7589, -73.9851), // NYC coordinates
       },
       {
         'name': 'Tire Kingdom',
@@ -576,6 +646,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         'address': '789 Pine Rd, East Side',
         'phone': '(555) 345-6789',
         'services': ['Tire Installation', 'Wheel Alignment', 'Balancing'],
+        'coordinates': const LatLng(40.7505, -73.9934), // NYC coordinates
       },
       {
         'name': 'Battery World',
@@ -587,6 +658,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         'address': '321 Elm St, West End',
         'phone': '(555) 456-7890',
         'services': ['Battery Replacement', 'Electrical Repair', 'Alternator Service'],
+        'coordinates': const LatLng(40.7614, -73.9776), // NYC coordinates
       },
       {
         'name': 'Brake Masters',
@@ -598,6 +670,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         'address': '654 Maple Dr, South Side',
         'phone': '(555) 567-8901',
         'services': ['Brake Repair', 'Pad Replacement', 'Rotor Service'],
+        'coordinates': const LatLng(40.7282, -74.0776), // NYC coordinates
       },
     ];
 
@@ -631,16 +704,99 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
     }
   }
 
-  void _getCurrentLocation() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Getting your current location...',
-          style: TextStyle(fontFamily: 'Orbitron'),
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isLoadingLocation = true;
+    });
+
+    try {
+      final locationService = LocationService();
+      final position = await locationService.getCurrentPosition();
+      
+      setState(() {
+        _currentLocation = LatLng(position.latitude, position.longitude);
+        _isLoadingLocation = false;
+      });
+      
+      _updateMarkers();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Location found!',
+              style: TextStyle(fontFamily: 'Orbitron'),
+            ),
+            backgroundColor: AppTheme.primaryGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingLocation = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to get location: $e',
+              style: const TextStyle(fontFamily: 'Orbitron'),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _goToCurrentLocation() {
+    if (_currentLocation != null && _mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLng(_currentLocation!),
+      );
+    }
+  }
+
+  void _updateMarkers() {
+    final filteredCenters = _getFilteredServiceCenters();
+    _markers = filteredCenters.map((center) {
+      final coordinates = center['coordinates'] as LatLng;
+      return Marker(
+        markerId: MarkerId(center['name']),
+        position: coordinates,
+        infoWindow: InfoWindow(
+          title: center['name'],
+          snippet: '${center['rating']} ⭐ • ${center['distance']} mi away',
         ),
-        backgroundColor: AppTheme.primaryGreen,
-      ),
-    );
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          _getMarkerColor(center['category']),
+        ),
+        onTap: () {
+          // Show service center details
+          _showServiceCenterDetails(center);
+        },
+      );
+    }).toSet();
+  }
+
+  double _getMarkerColor(String category) {
+    switch (category) {
+      case 'Oil Change':
+        return BitmapDescriptor.hueBlue;
+      case 'Tire Service':
+        return BitmapDescriptor.hueOrange;
+      case 'Brake Repair':
+        return BitmapDescriptor.hueRed;
+      case 'Engine Repair':
+        return BitmapDescriptor.hueGreen;
+      case 'Battery Service':
+        return BitmapDescriptor.hueYellow;
+      case 'Transmission':
+        return BitmapDescriptor.hueViolet;
+      default:
+        return BitmapDescriptor.hueBlue;
+    }
   }
 
   void _showServiceCenterDetails(Map<String, dynamic> center) {

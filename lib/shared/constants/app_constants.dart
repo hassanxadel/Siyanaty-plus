@@ -22,6 +22,12 @@ class AppConstants {
   // API Endpoints (if needed later)
   static const String baseUrl = 'https://api.siyana.com';
   
+  // External API Keys (placeholders; override securely at runtime if possible)
+  static const String zpkBaseUrl  = 'https://zpk.systems/api';
+  static const String zpkApiKey  = 'QGSnX7CFtNtbWe5WLsMWdqQscNMM5ebn5sJCq1szq42PHOcL8w';
+  static const String zpkApplicationId  = 'u398i132nMyYNd';
+  static const String googleMapsApiKey = 'AIzaSyCtDx-w7cQCYMCS-xEKRcOVzp_l5wk_A7A';
+  
   // Animation Durations
   static const Duration shortDuration = Duration(milliseconds: 300);
   static const Duration mediumDuration = Duration(milliseconds: 500);

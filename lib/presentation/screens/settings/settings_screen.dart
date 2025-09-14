@@ -11,6 +11,7 @@ import '../info/about_screen.dart';
 import '../info/help_screen.dart';
 import '../info/privacy_screen.dart';
 import '../info/terms_screen.dart';
+import '../../../widgets/backup_button_widget.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -22,7 +23,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notifications = true;
   bool _maintenanceReminders = true;
-  bool _fuelTracking = true;
+  final bool _fuelTracking = true;
   bool _obdAlerts = true;
 
   @override
@@ -44,7 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 24),
                   _buildNotificationsSection(),
                   const SizedBox(height: 24),
-                  _buildDataBackupSection(),
+                  const BackupButtonWidget(),
                   const SizedBox(height: 24),
                   _buildAppAppearanceSection(),
                   const SizedBox(height: 24),
@@ -306,14 +307,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _maintenanceReminders,
             (value) => setState(() => _maintenanceReminders = value),
           ),
-          
-          _buildSwitchTile(
-            'Fuel Tracking',
-            'Track fuel consumption and efficiency',
-            _fuelTracking,
-            (value) => setState(() => _fuelTracking = value),
-          ),
-          
+        
           _buildSwitchTile(
             'OBD Alerts',
             'Real-time diagnostic alerts',
@@ -325,65 +319,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildDataBackupSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Data & Backup',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.primaryGreen
-                  : AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          const SizedBox(height: 16),
-          
-          _buildActionTile(
-            'Export Data',
-            'Download your maintenance records',
-            Icons.download,
-            _exportData,
-          ),
-          
-          _buildActionTile(
-            'Backup to Cloud',
-            'Backup your data to cloud storage',
-            Icons.cloud_upload,
-            _backupData,
-          ),
-          
-          _buildActionTile(
-            'Clear Cache',
-            'Free up storage space',
-            Icons.cleaning_services,
-            _clearCache,
-          ),
-          
-          _buildActionTile(
-            'Delete All Data',
-            'Permanently delete all your data',
-            Icons.delete_forever,
-            _deleteAllData,
-            isDestructive: true,
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildAboutSupportSection() {
     return Container(
@@ -689,68 +624,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _exportData() {
-    HapticFeedback.lightImpact();
-    _showMessage('Exporting your data...');
-  }
 
-  void _backupData() {
-    HapticFeedback.lightImpact();
-    _showMessage('Backing up data to cloud...');
-  }
-
-  void _clearCache() {
-    HapticFeedback.lightImpact();
-    _showMessage('Cache cleared successfully!');
-  }
-
-  void _deleteAllData() {
-    HapticFeedback.lightImpact();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Delete All Data',
-          style: TextStyle(
-            color: AppTheme.errorColor,
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        content: const Text(
-          'This will permanently delete all your cars, maintenance records, and settings. This action cannot be undone.',
-          style: TextStyle(
-            color: AppTheme.lightBackground,
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(
-                color: AppTheme.darkAccentGreen,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _showMessage('All data deleted successfully');
-            },
-            child: const Text(
-              'Delete',
-              style: TextStyle(
-                color: AppTheme.errorColor,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _contactSupport() {
     HapticFeedback.lightImpact();

@@ -6,18 +6,20 @@ class AboutScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: AppTheme.backgroundGreen,
+      backgroundColor: AppTheme.getThemeAwareBackground(context),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'About Siyana+',
           style: TextStyle(
             fontFamily: 'Orbitron',
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: isDarkMode ? Colors.white : Colors.white,
           ),
         ),
-        backgroundColor: AppTheme.backgroundGreen,
+        backgroundColor: AppTheme.primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -31,7 +33,7 @@ class AboutScreen extends StatelessWidget {
               child: Column(
                 children: [
                   Container(
-                    width: 120,
+                    width: 160,
                     height: 120,
                     decoration: BoxDecoration(
                       color: AppTheme.primaryGreen,
@@ -53,23 +55,23 @@ class AboutScreen extends StatelessWidget {
                   
                   const SizedBox(height: 16),
                   
-                  const Text(
+                  Text(
                     'Siyana+',
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.lightBackground,
+                      color: AppTheme.getThemeAwareTextColor(context),
                       fontFamily: 'Orbitron',
                     ),
                   ),
                   
                   const SizedBox(height: 8),
                   
-                  const Text(
+                  Text(
                     'Smart Car Maintenance Companion',
                     style: TextStyle(
                       fontSize: 16,
-                      color: AppTheme.darkAccentGreen,
+                      color: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
                       fontFamily: 'Orbitron',
                     ),
                     textAlign: TextAlign.center,
@@ -77,11 +79,11 @@ class AboutScreen extends StatelessWidget {
                   
                   const SizedBox(height: 8),
                   
-                  const Text(
+                  Text(
                     'Version 1.0.0',
                     style: TextStyle(
                       fontSize: 14,
-                      color: AppTheme.darkAccentGreen,
+                      color: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
                       fontFamily: 'Orbitron',
                     ),
                   ),
@@ -93,6 +95,7 @@ class AboutScreen extends StatelessWidget {
             
             // Mission Section
             _buildSection(
+              context,
               'Our Mission',
               'Siyana+ revolutionizes car maintenance by providing intelligent, personalized solutions that keep your vehicle running at peak performance. We combine cutting-edge technology with practical insights to make car care simple and effective.',
             ),
@@ -101,6 +104,7 @@ class AboutScreen extends StatelessWidget {
             
             // Features Section
             _buildSection(
+              context,
               'Key Features',
               '• Smart maintenance reminders based on your driving patterns\n'
               '• Real-time OBD diagnostics and health monitoring\n'
@@ -114,6 +118,7 @@ class AboutScreen extends StatelessWidget {
             
             // Technology Section
             _buildSection(
+              context,
               'Technology',
               'Built with Flutter for seamless cross-platform performance, powered by Firebase for real-time data synchronization, and enhanced with AI-driven insights to provide the most accurate maintenance predictions.',
             ),
@@ -122,6 +127,7 @@ class AboutScreen extends StatelessWidget {
             
             // Contact Section
             _buildSection(
+              context,
               'Contact Us',
               'For questions, suggestions, or support:\n\n'
               'Email: support@siyanaplus.com\n'
@@ -137,7 +143,9 @@ class AboutScreen extends StatelessWidget {
                 '© 2025 Siyana+. All rights reserved.',
                 style: TextStyle(
                   fontSize: 12,
-                  color: AppTheme.darkAccentGreen.withOpacity(0.7),
+                  color: isDarkMode 
+                      ? AppTheme.lightBackground.withOpacity(0.7)
+                      : AppTheme.darkAccentGreen.withOpacity(0.7),
                   fontFamily: 'Orbitron',
                 ),
               ),
@@ -148,7 +156,9 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSection(String title, String content) {
+  Widget _buildSection(BuildContext context, String title, String content) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -164,10 +174,10 @@ class AboutScreen extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           content,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             height: 1.6,
-            color: AppTheme.lightBackground,
+            color: AppTheme.getThemeAwareTextColor(context),
             fontFamily: 'Orbitron',
           ),
         ),

@@ -5,44 +5,33 @@ import '../../domain/entities/app_user.dart';
 import '../../shared/utils/app_logger.dart';
 import '../../shared/utils/firebase_debug.dart';
 
-/// Provider for managing authentication state throughout the app
-/// Handles user login, logout, profile management, and authentication state
+// Main authentication manager for the entire app
 class AuthProvider extends ChangeNotifier {
-  /// Firebase user object for authentication
-  User? _firebaseUser;
-  /// Custom app user object with extended profile information
-  AppUser? _appUser;
-  /// Loading state indicator for async operations
-  bool _isLoading = false;
-  /// Error message for failed authentication operations
-  String? _errorMessage;
+  // Core authentication data
+  User? _firebaseUser;           // Firebase user object
+  AppUser? _appUser;             // Custom app user profile
+  bool _isLoading = false;       // Loading state for UI
+  String? _errorMessage;         // Error messages for user
   
-  /// Getter for Firebase user object
+  // Public getters for UI access
   User? get firebaseUser => _firebaseUser;
-  /// Getter for app user profile
   AppUser? get appUser => _appUser;
-  /// Getter for loading state
   bool get isLoading => _isLoading;
-  /// Getter for error messages
   String? get errorMessage => _errorMessage;
-  /// Getter for authentication status (both Firebase and app user must exist)
   bool get isAuthenticated => _firebaseUser != null && _appUser != null;
   
-  /// Constructor initializes authentication state listener
+  // Initialize authentication listener when provider is created
   AuthProvider() {
     _initializeAuthState();
   }
 
-  /// Initialize Firebase authentication state listener
-  /// Automatically handles user sign-in and sign-out events
+  // Listen for Firebase authentication changes and update app state
   void _initializeAuthState() {
     AuthService.authStateChanges.listen((User? user) async {
       if (user != null) {
-        /// User successfully signed in - load profile data
         _firebaseUser = user;
         await _loadUserProfile();
       } else {
-        /// User signed out - clear all user data
         _firebaseUser = null;
         _appUser = null;
       }
@@ -50,20 +39,32 @@ class AuthProvider extends ChangeNotifier {
     });
   }
 
-  /// Load user profile from Firestore
+  // Load user profile data from Firestore database
   Future<void> _loadUserProfile() async {
     try {
       if (_firebaseUser?.uid != null) {
-        // Debug current state
         await FirebaseDebugUtils.debugCurrentUserState();
         
         _appUser = await AuthService.getUserProfile(_firebaseUser!.uid);
         if (_appUser == null) {
           AppLogger.warning('User profile not found for uid: ${_firebaseUser!.uid}');
-          // For now, sign out the user if no profile exists
-          // This prevents the user from being stuck in a bad state
-          AppLogger.info('Signing out user due to missing profile');
-          await AuthService.signOut();
+          AppLogger.info('Attempting to recreate user profile from authorized_users');
+          
+          // Try to recreate the profile from authorized_users collection
+          try {
+            await AuthService.ensureUserProfileExists(_firebaseUser!);
+            _appUser = await AuthService.getUserProfile(_firebaseUser!.uid);
+            
+            if (_appUser != null) {
+              AppLogger.info('User profile successfully recreated');
+            } else {
+              AppLogger.warning('Failed to recreate user profile, signing out');
+              await AuthService.signOut();
+            }
+          } catch (e) {
+            AppLogger.error('Error recreating user profile', error: e);
+            await AuthService.signOut();
+          }
         }
       }
     } catch (e) {
@@ -72,7 +73,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Sign in with email and password
+  // Login user with email and password
   Future<bool> signIn({
     required String email,
     required String password,
@@ -103,7 +104,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Create account with email and password
+  // Create new user account with profile information
   Future<bool> createAccount({
     required String email,
     required String password,
@@ -142,7 +143,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Sign in with Google
+  // Login user with Google account
   Future<bool> signInWithGoogle() async {
     _setLoading(true);
     _clearError();
@@ -167,6 +168,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // Logout user and clear all authentication data
   Future<bool> signOut() async {
     _setLoading(true);
     _clearError();
@@ -193,7 +195,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Send password reset email
+  // Send password reset email to user
   Future<bool> sendPasswordResetEmail(String email) async {
     _setLoading(true);
     _clearError();
@@ -217,7 +219,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Send email verification
+  // Send email verification to current user
   Future<bool> sendEmailVerification() async {
     _setLoading(true);
     _clearError();
@@ -241,7 +243,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Reload user to check verification status
+  // Refresh user data and check verification status
   Future<bool> reloadUser() async {
     _setLoading(true);
     _clearError();
@@ -250,7 +252,6 @@ class AuthProvider extends ChangeNotifier {
       final result = await AuthService.reloadUser();
       
       if (result.isSuccess) {
-        // Reload the user profile after successful reload
         await _loadUserProfile();
         _clearError();
         return true;
@@ -267,7 +268,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Update user profile
+  // Update user profile information in database
   Future<bool> updateProfile(Map<String, dynamic> updates) async {
     _setLoading(true);
     _clearError();
@@ -276,7 +277,6 @@ class AuthProvider extends ChangeNotifier {
       final success = await AuthService.updateUserProfile(updates);
       
       if (success) {
-        // Reload user profile
         await _loadUserProfile();
         _clearError();
         return true;
@@ -293,7 +293,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Refresh user data
+  // Manually refresh user data from database
   Future<void> refreshUserData() async {
     if (_firebaseUser != null) {
       await _loadUserProfile();
@@ -301,7 +301,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Helper methods
+  // Helper methods for managing UI state
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();

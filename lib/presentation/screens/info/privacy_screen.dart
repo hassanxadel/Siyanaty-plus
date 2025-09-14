@@ -6,8 +6,10 @@ class PrivacyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: AppTheme.backgroundGreen,
+      backgroundColor: AppTheme.getThemeAwareBackground(context),
       appBar: AppBar(
         title: const Text(
           'Privacy Policy',
@@ -17,7 +19,7 @@ class PrivacyScreen extends StatelessWidget {
             color: Colors.white,
           ),
         ),
-        backgroundColor: AppTheme.backgroundGreen,
+        backgroundColor: AppTheme.primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -36,11 +38,11 @@ class PrivacyScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Last updated: January 2025',
               style: TextStyle(
                 fontSize: 12,
-                color: AppTheme.darkAccentGreen,
+                color: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
                 fontFamily: 'Orbitron',
               ),
             ),
@@ -48,6 +50,7 @@ class PrivacyScreen extends StatelessWidget {
             const SizedBox(height: 24),
             
             _buildSection(
+              context,
               '1. Information We Collect',
               'We collect information you provide directly to us, such as:\n\n'
               '• Vehicle information (make, model, year, mileage)\n'
@@ -58,6 +61,7 @@ class PrivacyScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '2. How We Use Your Information',
               'We use your information to:\n\n'
               '• Provide personalized maintenance reminders\n'
@@ -68,6 +72,7 @@ class PrivacyScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '3. Information Sharing',
               'We do not sell, trade, or share your personal information with third parties, except:\n\n'
               '• When required by law or legal process\n'
@@ -77,6 +82,7 @@ class PrivacyScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '4. Data Security',
               'We implement industry-standard security measures:\n\n'
               '• End-to-end encryption for sensitive data\n'
@@ -87,6 +93,7 @@ class PrivacyScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '5. Your Rights',
               'You have the right to:\n\n'
               '• Access your personal data\n'
@@ -97,16 +104,19 @@ class PrivacyScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '6. Data Retention',
               'We retain your information for as long as your account is active or as needed to provide services. You may delete your account at any time through the app settings.',
             ),
             
             _buildSection(
+              context,
               '7. Children\'s Privacy',
               'Our service is not intended for children under 13. We do not knowingly collect personal information from children under 13.',
             ),
             
             _buildSection(
+              context,
               '8. Changes to Privacy Policy',
               'We may update this privacy policy from time to time. We will notify you of any changes by posting the new policy in the app and updating the "Last updated" date.',
             ),
@@ -163,7 +173,8 @@ class PrivacyScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSection(String title, String content) {
+  Widget _buildSection(BuildContext context, String title, String content) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: Column(
@@ -171,10 +182,10 @@ class PrivacyScreen extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: AppTheme.lightBackground,
+              color: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
               fontFamily: 'Orbitron',
             ),
           ),
@@ -184,7 +195,7 @@ class PrivacyScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               height: 1.6,
-              color: AppTheme.darkAccentGreen.withOpacity(0.9),
+              color: isDarkMode ? AppTheme.lightBackground.withOpacity(0.9) : AppTheme.darkAccentGreen.withOpacity(0.9),
               fontFamily: 'Orbitron',
             ),
           ),

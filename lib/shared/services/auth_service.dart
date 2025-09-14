@@ -20,7 +20,7 @@ class AuthService {
   // Check if user is signed in
   static bool get isSignedIn => currentUser != null;
 
-  /// **SIGN IN PROCESS**
+  /// SIGN IN PROCESS
   /// 1. Authenticate with Firebase Auth
   /// 2. Check if user is in authorized users list
   /// 3. Update last login timestamp
@@ -31,7 +31,7 @@ class AuthService {
     try {
       AppLogger.info('Attempting sign in for email: $email');
       
-      // Step 1: Authenticate with Firebase
+      //  1: Authenticate with Firebase
       final UserCredential credential = await _auth.signInWithEmailAndPassword(
         email: email.trim().toLowerCase(),
         password: password,
@@ -41,10 +41,10 @@ class AuthService {
         return AuthResult.failure('Authentication failed - no user returned');
       }
 
-      // Step 2: Ensure user profile exists (creates if missing)
-      await _ensureUserProfileExists(credential.user!);
+      //  2: Ensure user profile exists (creates if missing)
+      await ensureUserProfileExists(credential.user!);
 
-      // Step 3: Check if user is authorized
+      //  3: Check if user is authorized
       final bool isAuthorized = await _checkUserAuthorization(credential.user!.uid);
       
       if (!isAuthorized) {
@@ -70,7 +70,7 @@ class AuthService {
         // The user is actually signed in, just continue
         if (_auth.currentUser != null) {
           // Check if user profile exists, create if missing
-          await _ensureUserProfileExists(_auth.currentUser!);
+          await ensureUserProfileExists(_auth.currentUser!);
           await _updateUserActivity(_auth.currentUser!.uid);
           return AuthResult.success('Welcome back!', _auth.currentUser);
         }
@@ -81,7 +81,7 @@ class AuthService {
     }
   }
 
-  /// **REGISTRATION PROCESS**
+  /// REGISTRATION PROCESS
   /// 1. Validate input requirements
   /// 2. Create Firebase Auth account
   /// 3. Add user to authorized users list
@@ -97,13 +97,13 @@ class AuthService {
     try {
       AppLogger.info('Attempting registration for email: $email');
       
-      // Step 1: Validate input
+      //  1: Validate input
       final validation = _validateRegistrationInput(email, password, fullName);
       if (!validation.isValid) {
         return AuthResult.failure(validation.errorMessage!);
       }
 
-      // Step 2: Create Firebase Auth account
+      //  2: Create Firebase Auth account
       final UserCredential credential = await _auth.createUserWithEmailAndPassword(
         email: email.trim().toLowerCase(),
         password: password,
@@ -113,10 +113,10 @@ class AuthService {
         return AuthResult.failure('Account creation failed');
       }
 
-      // Step 3: Update user profile
+      //  3: Update user profile
       await credential.user!.updateDisplayName(fullName);
 
-      // Step 4: Send email verification
+      //  4: Send email verification
       try {
         await credential.user!.sendEmailVerification();
         AppLogger.info('Email verification sent to: $email');
@@ -125,7 +125,7 @@ class AuthService {
         // Continue with registration even if verification email fails
       }
 
-      // Step 5: Add to authorized users and create profile
+      //  5: Add to authorized users and create profile
       try {
         await _createUserProfile(
           uid: credential.user!.uid,
@@ -208,7 +208,7 @@ class AuthService {
       }
 
       // Ensure user profile exists (creates if missing)
-      await _ensureUserProfileExists(userCredential.user!);
+      await ensureUserProfileExists(userCredential.user!);
 
       // Check if user is authorized
       final bool isAuthorized = await _checkUserAuthorization(userCredential.user!.uid);
@@ -393,14 +393,14 @@ class AuthService {
 
   /// **ENSURE USER PROFILE EXISTS**
   /// Creates missing user profile for existing Firebase Auth users
-  static Future<void> _ensureUserProfileExists(User user) async {
+  static Future<void> ensureUserProfileExists(User user) async {
     try {
       // Check if authorized_users document exists
       final authDoc = await _firestore.collection('authorized_users').doc(user.uid).get();
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       
-      if (!authDoc.exists || !userDoc.exists) {
-        AppLogger.info('Creating missing profile for existing user: ${user.email}');
+      if (!authDoc.exists) {
+        AppLogger.info('Creating missing authorized_users profile for: ${user.email}');
         
         // Extract name from email or use display name
         final fullName = user.displayName ?? 
@@ -416,11 +416,58 @@ class AuthService {
         );
         
         AppLogger.info('Missing profile created successfully for: ${user.email}');
+      } else if (!userDoc.exists || !_isUserDocComplete(userDoc.data())) {
+        AppLogger.info('Recreating incomplete users profile from authorized_users for: ${user.email}');
+        
+        // Get data from authorized_users
+        final authData = authDoc.data()!;
+        
+        // Create/update users document with complete data
+        final userData = {
+          'uid': user.uid,
+          'email': authData['email'] ?? user.email ?? '',
+          'fullName': authData['fullName'] ?? user.displayName ?? 'User',
+          'phoneNumber': authData['phoneNumber'] ?? user.phoneNumber,
+          'emergencyContactName': authData['emergencyContactName'],
+          'emergencyContactPhone': authData['emergencyContactPhone'],
+          'role': authData['role'] ?? 'user',
+          'isActive': authData['isActive'] ?? true,
+          'preferences': {
+            'theme': 'system',
+            'language': 'en',
+            'notifications': true,
+          },
+          'stats': {
+            'totalCars': 0,
+            'totalReminders': 0,
+            'completedReminders': 0,
+          },
+          'createdAt': authData['createdAt'] ?? FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'lastLoginAt': FieldValue.serverTimestamp(),
+        };
+        
+        await _firestore.collection('users').doc(user.uid).set(userData, SetOptions(merge: true));
+        AppLogger.info('Users profile recreated successfully for: ${user.email}');
       }
     } catch (e) {
       AppLogger.error('Error ensuring user profile exists', error: e);
       // Don't throw - allow sign-in to continue
     }
+  }
+  
+  /// Check if users document has all required fields
+  static bool _isUserDocComplete(Map<String, dynamic>? data) {
+    if (data == null) return false;
+    
+    final requiredFields = ['uid', 'email', 'fullName'];
+    for (final field in requiredFields) {
+      if (data[field] == null) {
+        AppLogger.info('Missing required field in users document: $field');
+        return false;
+      }
+    }
+    return true;
   }
 
   /// **UPDATE USER ACTIVITY**

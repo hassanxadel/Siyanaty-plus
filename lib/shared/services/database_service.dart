@@ -146,7 +146,7 @@ class DatabaseService {
     // Handle database upgrades here
   }
   
-  // Generic CRUD operations
+  //  CRUD operations
   static Future<int> insert(String table, Map<String, dynamic> values) async {
     try {
       final db = await database;

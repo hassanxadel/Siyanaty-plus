@@ -6,8 +6,10 @@ class TermsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: AppTheme.backgroundGreen,
+      backgroundColor: AppTheme.getThemeAwareBackground(context),
       appBar: AppBar(
         title: const Text(
           'Terms of Service',
@@ -17,7 +19,7 @@ class TermsScreen extends StatelessWidget {
             color: Colors.white,
           ),
         ),
-        backgroundColor: AppTheme.backgroundGreen,
+        backgroundColor: AppTheme.primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -36,11 +38,11 @@ class TermsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Last updated: January 2025',
               style: TextStyle(
                 fontSize: 12,
-                color: AppTheme.darkAccentGreen,
+                color: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
                 fontFamily: 'Orbitron',
               ),
             ),
@@ -48,11 +50,13 @@ class TermsScreen extends StatelessWidget {
             const SizedBox(height: 24),
             
             _buildSection(
+              context,
               '1. Acceptance of Terms',
               'By accessing and using Siyana+ ("the App"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.',
             ),
             
             _buildSection(
+              context,
               '2. Description of Service',
               'Siyana+ is a car maintenance management application that provides:\n\n'
               '• Maintenance tracking and reminders\n'
@@ -63,6 +67,7 @@ class TermsScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '3. User Account and Responsibilities',
               'You are responsible for:\n\n'
               '• Maintaining the confidentiality of your account\n'
@@ -73,6 +78,7 @@ class TermsScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '4. Acceptable Use',
               'You agree not to:\n\n'
               '• Use the service for any unlawful purpose\n'
@@ -84,11 +90,13 @@ class TermsScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '5. Data and Privacy',
               'Your privacy is important to us. Our collection and use of personal information is governed by our Privacy Policy, which is incorporated by reference into these Terms.',
             ),
             
             _buildSection(
+              context,
               '6. Disclaimer of Warranties',
               'The service is provided "as is" without warranties of any kind. We do not warrant that:\n\n'
               '• The service will be uninterrupted or error-free\n'
@@ -98,11 +106,13 @@ class TermsScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '7. Limitation of Liability',
               'In no event shall Siyana+ be liable for any indirect, incidental, special, consequential, or punitive damages, including without limitation, loss of profits, data, or other intangible losses.',
             ),
             
             _buildSection(
+              context,
               '8. Vehicle Safety',
               'Important: Siyana+ provides maintenance suggestions and reminders for informational purposes only. Always:\n\n'
               '• Consult qualified mechanics for vehicle issues\n'
@@ -112,21 +122,25 @@ class TermsScreen extends StatelessWidget {
             ),
             
             _buildSection(
+              context,
               '9. Subscription and Payments',
               'Some features may require subscription. Subscription fees are charged in advance and are non-refundable. You may cancel your subscription at any time through your account settings.',
             ),
             
             _buildSection(
+              context,
               '10. Termination',
               'We may terminate or suspend your account immediately, without prior notice, for conduct that we believe violates these Terms or is harmful to other users of the service, us, or third parties.',
             ),
             
             _buildSection(
+              context,
               '11. Changes to Terms',
               'We reserve the right to modify these terms at any time. We will notify users of any changes by posting the new terms in the app. Your continued use constitutes acceptance of the new terms.',
             ),
             
             _buildSection(
+              context,
               '12. Governing Law',
               'These Terms shall be interpreted and governed by the laws of the jurisdiction in which our company is incorporated, without regard to conflict of law provisions.',
             ),
@@ -183,7 +197,8 @@ class TermsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSection(String title, String content) {
+  Widget _buildSection(BuildContext context, String title, String content) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: Column(
@@ -204,7 +219,7 @@ class TermsScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               height: 1.6,
-              color: AppTheme.darkAccentGreen.withOpacity(0.9),
+              color: isDarkMode ? AppTheme.darkAccentGreen.withOpacity(0.9) : AppTheme.darkAccentGreen.withOpacity(0.9),
               fontFamily: 'Orbitron',
             ),
           ),

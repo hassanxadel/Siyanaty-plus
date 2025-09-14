@@ -192,7 +192,7 @@ class _ModernForgotPasswordScreenState extends State<ModernForgotPasswordScreen>
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             style: const TextStyle(
-              color: AppTheme.backgroundGreen,
+              color: AppTheme.lightBackground,
               fontSize: 16,
               fontWeight: FontWeight.w600,
               fontFamily: 'Orbitron',
@@ -200,7 +200,7 @@ class _ModernForgotPasswordScreenState extends State<ModernForgotPasswordScreen>
             decoration: const InputDecoration(
               hintText: 'Enter your email address',
               hintStyle: TextStyle(
-                color: AppTheme.darkAccentGreen,
+                color: AppTheme.lightBackground,
                 fontSize: 16,
                 fontFamily: 'Orbitron',
               ),

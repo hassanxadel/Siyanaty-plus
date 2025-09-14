@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import '../../../services/car_service.dart';
+import '../../../services/reminder_service.dart';
+import '../../../services/maintenance_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -19,11 +22,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   
   bool _isEditing = false;
   bool _isLoading = false;
+  
+  // Services for fetching real data
+  final CarService _carService = CarService();
+  final ReminderService _reminderService = ReminderService();
+  final MaintenanceService _maintenanceService = MaintenanceService();
+  
+  // Real data counts
+  int _vehicleCount = 0;
+  int _reminderCount = 0;
+  int _maintenanceCount = 0;
+  bool _countsLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadCounts();
   }
 
   @override
@@ -50,6 +65,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _emergencyContactController.text = '$emergencyName - $emergencyPhone';
       } else {
         _emergencyContactController.text = '';
+      }
+    }
+  }
+
+  Future<void> _loadCounts() async {
+    try {
+      final vehicleCount = await _carService.getCarsCount();
+      final reminderCount = await _reminderService.getRemindersCount();
+      final maintenanceCount = await _maintenanceService.getMaintenanceCount();
+      
+      if (mounted) {
+        setState(() {
+          _vehicleCount = vehicleCount;
+          _reminderCount = reminderCount;
+          _maintenanceCount = maintenanceCount;
+          _countsLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _countsLoading = false;
+        });
       }
     }
   }
@@ -188,16 +226,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       size: 28,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  const Text(
-                    'Profile',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
+                  const Expanded(
+                    child: Text(
+                      'Profile',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
+                  const SizedBox(width: 48), // Balance the back button
                 ],
               ),
               const SizedBox(height: 16),
@@ -277,9 +318,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildProfileStat('Vehicles', '3'),
-              _buildProfileStat('Maintenance', '12'),
-              _buildProfileStat('Reminders', '5'),
+              _buildProfileStat('Vehicles', _countsLoading ? '...' : _vehicleCount.toString()),
+              _buildProfileStat('Maintenance', _countsLoading ? '...' : _maintenanceCount.toString()),
+              _buildProfileStat('Reminders', _countsLoading ? '...' : _reminderCount.toString()),
             ],
           ),
         ],

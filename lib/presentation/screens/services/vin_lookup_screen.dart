@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../services/vin_decoder_service.dart';
+import '../../../services/car_service.dart' as car_logic;
 import '../../../shared/constants/app_theme.dart';
 import '../../widgets/bottom_nav_bar.dart';
 
@@ -14,6 +16,9 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
   final TextEditingController _vinController = TextEditingController();
   bool _isLoading = false;
   Map<String, dynamic>? _vehicleInfo;
+  String _loadingMessage = 'Looking up VIN...';
+  final VinDecoderService _vinService = VinDecoderService();
+  final car_logic.CarService _carService = car_logic.CarService();
 
   @override
   void dispose() {
@@ -309,13 +314,27 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
                 ),
               ),
               child: _isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _loadingMessage,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.white70,
+                            fontFamily: 'Orbitron',
+                          ),
+                        ),
+                      ],
                     )
                   : const Text(
                       'Lookup VIN',
@@ -376,29 +395,48 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
 
     setState(() {
       _isLoading = true;
+      _loadingMessage = 'Looking up VIN...';
     });
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 2));
-
-    // Mock vehicle data
-    setState(() {
-      _vehicleInfo = {
-        'make': 'Toyota',
-        'model': 'Camry',
-        'year': 2020,
-        'engine': '2.5L 4-Cylinder',
-        'transmission': '8-Speed Automatic',
-        'bodyStyle': 'Sedan',
-        'maintenanceTips': 'This vehicle requires oil changes every 5,000 km and tire rotations every 10,000 km. Check brake fluid and coolant levels monthly.',
-      };
-      _isLoading = false;
-    });
-
-    // Show vehicle info as popup
-    _showVehicleInfoDialog();
-
-    HapticFeedback.lightImpact();
+    try {
+      final decoded = await _vinService.decodeVin(vin);
+      setState(() {
+        _vehicleInfo = {
+          'vin': decoded.vin.isNotEmpty ? decoded.vin : vin,
+          'make': decoded.make,
+          'model': decoded.model,
+          'year': int.tryParse(decoded.year) ?? DateTime.now().year,
+          'engine': decoded.engine,
+          'transmission': decoded.transmission,
+          'bodyStyle': decoded.bodyStyle,
+          'fuelType': decoded.fuelType,
+        };
+        _isLoading = false;
+      });
+      _showVehicleInfoDialog();
+      HapticFeedback.lightImpact();
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      
+      String errorMessage = e.toString();
+      if (errorMessage.contains('429') || errorMessage.contains('Rate limit')) {
+        errorMessage = 'Rate limit exceeded. Please wait 5-10 minutes before trying again.';
+      } else if (errorMessage.contains('403')) {
+        errorMessage = 'API access denied. Please check your API configuration.';
+      } else if (errorMessage.contains('404')) {
+        errorMessage = 'VIN not found. Please verify the VIN number is correct.';
+      } else if (errorMessage.contains('TimeoutException') || errorMessage.contains('timeout')) {
+        errorMessage = 'Request timed out. Please check your internet connection and try again.';
+      } else if (errorMessage.contains('failed after')) {
+        errorMessage = 'VIN lookup service is temporarily unavailable. Please try again in a few minutes.';
+      } else if (errorMessage.contains('Invalid response format')) {
+        errorMessage = 'Unable to decode VIN information. Please verify the VIN is correct and try again.';
+      }
+      
+      _showMessage(errorMessage);
+    }
   }
 
   void _showVehicleInfoDialog() {
@@ -476,6 +514,7 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
                         _buildInfoRow('Engine', _vehicleInfo!['engine'] ?? 'N/A'),
                         _buildInfoRow('Transmission', _vehicleInfo!['transmission'] ?? 'N/A'),
                         _buildInfoRow('Body Style', _vehicleInfo!['bodyStyle'] ?? 'N/A'),
+                        _buildInfoRow('Fuel Type', _vehicleInfo!['fuelType'] ?? 'N/A'),
                         const SizedBox(height: 20),
                         Container(
                           padding: const EdgeInsets.all(16),
@@ -552,9 +591,31 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
   }
 
   void _saveVehicleToCars() {
-    // TODO: Implement saving to cars screen
-    // This will be connected to the cars screen when it's implemented
-    _showMessage('Vehicle saved to My Cars!');
+    final info = _vehicleInfo;
+    if (info == null) {
+      _showMessage('No vehicle info to save');
+      return;
+    }
+    _carService.addCar(
+      brand: (info['make'] ?? 'Unknown').toString(),
+      model: (info['model'] ?? 'Unknown').toString(),
+      year: (info['year'] as int?) ?? DateTime.now().year,
+      mileage: 0,
+      color: 'Not specified',
+      fuelType: (info['fuelType'] ?? 'Not specified').toString(),
+      engineCC: (info['engine'] ?? 'Not specified').toString(),
+      turbo: false,
+      licensePlate: 'Not specified',
+      vin: (info['vin'] ?? 'Not specified').toString(),
+    ).then((result) {
+      if (result.isSuccess) {
+        _showMessage('Car saved successfully');
+      } else {
+        _showMessage(result.message);
+      }
+    }).catchError((e) {
+      _showMessage('Failed to save car: ${e.toString()}');
+    });
   }
 
   void _showMessage(String message) {

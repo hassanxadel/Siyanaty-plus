@@ -24,7 +24,7 @@ class AllActionsScreen extends StatelessWidget {
       {'label': 'Barcode Scanner', 'subtitle': 'Part Details & Product Information', 'icon': Icons.qr_code_scanner, 'color': AppTheme.darkAccentGreen},
       {'label': 'Voice Notes', 'subtitle': 'Quick Maintenance Notes', 'icon': Icons.mic, 'color': const Color(0xFF7B2CBF)},
       {'label': 'Mileage Track', 'subtitle': 'Tracking & Predictive Alerts', 'icon': Icons.track_changes, 'color': const Color(0xFFFF6B35)},
-      {'label': 'Maintenance', 'subtitle': 'Service History & Records', 'icon': Icons.calendar_month, 'color': const Color(0xFF8B5CF6)},
+      {'label': 'Maintenance', 'subtitle': 'Service History & Records', 'icon': Icons.home_repair_service_rounded, 'color': const Color(0xFF8B5CF6)},
       {'label': 'OBD-II Diagnostics', 'subtitle': 'Real-time Vehicle Diagnostics', 'icon': Icons.cable, 'color': AppTheme.primaryGreen},
       {'label': 'Service Centers', 'subtitle': 'Nearby Service Centers & Last Parked Location', 'icon': Icons.location_on, 'color': const Color(0xFF10B981)},
       {'label': 'Service Reminders', 'subtitle': 'Maintenance Logs & Reminders', 'icon': Icons.schedule, 'color': const Color(0xFFF59E0B)},

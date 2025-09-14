@@ -1,32 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../shared/constants/app_theme.dart';
-// import '../home/home_screen.dart';
-// import 'add_reminder_screen.dart';
-
-// Reminder domain types (top-level to satisfy linter)
-enum ReminderStatus { upcoming, overdue, completed }
-
-class _Reminder {
-  _Reminder({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.priority,
-    required this.car,
-    required this.mileage,
-    required this.status,
-  });
-
-  final int id;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  String priority;
-  final String car;
-  final String mileage;
-  ReminderStatus status;
-}
+import '../../../services/reminder_service.dart';
+import '../../../models/backup_reminder.dart';
+import '../../../models/backup_car.dart';
 
 class SmartRemindersScreen extends StatefulWidget {
   const SmartRemindersScreen({super.key});
@@ -35,309 +11,125 @@ class SmartRemindersScreen extends StatefulWidget {
   State<SmartRemindersScreen> createState() => _SmartRemindersScreenState();
 }
 
-class _SmartRemindersScreenState extends State<SmartRemindersScreen>
-    with TickerProviderStateMixin {
-  late TabController _tabController;
-  // Selection and data state
-  bool _selectionMode = false;
-  final Set<int> _selectedIds = <int>{};
-
-  // Simple model and status handled at top-level above
-
-  // Selection helpers and bulk actions
-  void _enterSelection(_Reminder r) {
-    setState(() {
-      _selectionMode = true;
-      _selectedIds.add(r.id);
-    });
-  }
-
-  void _toggleSelect(_Reminder r) {
-    setState(() {
-      if (_selectedIds.contains(r.id)) {
-        _selectedIds.remove(r.id);
-        if (_selectedIds.isEmpty) _selectionMode = false;
-      } else {
-        _selectedIds.add(r.id);
-      }
-    });
-  }
-
-  List<_Reminder> _currentTabReminders() {
-    switch (_tabController.index) {
-      case 0:
-        return _reminders.where((r) => r.status == ReminderStatus.upcoming).toList();
-      case 1:
-        return _reminders.where((r) => r.status == ReminderStatus.overdue).toList();
-      case 2:
-        return _reminders.where((r) => r.status == ReminderStatus.completed).toList();
-      default:
-        return _reminders;
-    }
-  }
-
-  Widget _buildBulkActionsBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.getThemeAwareCardBackground(context).withOpacity(0.3),
-        border: Border.all(color: AppTheme.getThemeAwareBorderColor(context)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Row(
-        children: [
-          Text(
-            '${_selectedIds.length} selected',
-            style: TextStyle(
-              fontFamily: 'Orbitron',
-              color: AppTheme.getThemeAwareTextColor(context),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 12),
-          TextButton.icon(
-            onPressed: () {
-              final visible = _currentTabReminders();
-              final visibleIds = visible.map((e) => e.id).toSet();
-              setState(() {
-                if (visibleIds.difference(_selectedIds).isEmpty && _selectedIds.isNotEmpty) {
-                  // All visible already selected -> clear only visible
-                  _selectedIds.removeWhere((id) => visibleIds.contains(id));
-                  if (_selectedIds.isEmpty) _selectionMode = false;
-                } else {
-                  _selectionMode = true;
-                  _selectedIds.addAll(visibleIds);
-                }
-              });
-            },
-            icon: const Icon(Icons.done_all, size: 18),
-            label: const Text('Select All'),
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Mark Read',
-            icon: const Icon(Icons.check_circle, color: AppTheme.successColor),
-            onPressed: _selectedIds.isEmpty
-                ? null
-                : () {
-                    setState(() {
-                      for (final id in _selectedIds) {
-                        final r = _reminders.firstWhere((e) => e.id == id);
-                        r.status = ReminderStatus.completed;
-                        r.priority = 'Completed';
-                      }
-                      _selectionMode = false;
-                      _selectedIds.clear();
-                    });
-                  },
-          ),
-          IconButton(
-            tooltip: 'Delete',
-            icon: const Icon(Icons.delete, color: AppTheme.errorColor),
-            onPressed: _selectedIds.isEmpty
-                ? null
-                : () {
-                    setState(() {
-                      _reminders.removeWhere((e) => _selectedIds.contains(e.id));
-                      _selectionMode = false;
-                      _selectedIds.clear();
-                    });
-                  },
-          ),
-          IconButton(
-            tooltip: 'Cancel',
-            icon: const Icon(Icons.close),
-            onPressed: () {
-              setState(() {
-                _selectionMode = false;
-                _selectedIds.clear();
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  int _nextId = 1;
-  late List<_Reminder> _reminders;
+class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
+  final ReminderService _reminderService = ReminderService();
+  
+  List<ReminderWithCarInfo> _allReminders = [];
+  List<ReminderWithCarInfo> _filteredReminders = [];
+  bool _isLoading = true;
+  int _selectedIndex = 0; // 0: Upcoming, 1: Overdue, 2: Completed
+  bool _isSearching = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _reminders = <_Reminder>[
-      _Reminder(
-        id: _nextId++,
-        title: 'Oil Change',
-        subtitle: 'Due in 3 days',
-        icon: Icons.oil_barrel,
-        priority: 'High',
-        car: 'Toyota Camry',
-                  mileage: '75,000 km',
-        status: ReminderStatus.upcoming,
-      ),
-      _Reminder(
-        id: _nextId++,
-        title: 'Tire Rotation',
-        subtitle: 'Due in 1 week',
-        icon: Icons.tire_repair,
-        priority: 'Medium',
-        car: 'Toyota Camry',
-                  mileage: '75,200 km',
-        status: ReminderStatus.upcoming,
-      ),
-      _Reminder(
-        id: _nextId++,
-        title: 'Brake Inspection',
-        subtitle: 'Overdue by 5 days',
-        icon: Icons.disc_full,
-        priority: 'Critical',
-        car: 'Honda Civic',
-                  mileage: '42,500 km',
-        status: ReminderStatus.overdue,
-      ),
-      _Reminder(
-        id: _nextId++,
-        title: 'Battery Check',
-        subtitle: 'Completed 2 days ago',
-        icon: Icons.battery_full,
-        priority: 'Completed',
-        car: 'Toyota Camry',
-                  mileage: '74,800 km',
-        status: ReminderStatus.completed,
-      ),
-    ];
+    _loadReminders();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadReminders() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final reminders = await _reminderService.getAllRemindersWithCarInfo();
+      setState(() {
+        _allReminders = reminders;
+        _filteredReminders = reminders;
+        _isLoading = false;
+      });
+      _applyFilters();
+    } catch (e) {
+      setState(() {
+        _allReminders = [];
+        _filteredReminders = [];
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading reminders: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  List<ReminderWithCarInfo> get _upcomingReminders =>
+      _filteredReminders.where((r) => r.reminder.status == ReminderStatus.upcoming).toList();
+
+  List<ReminderWithCarInfo> get _overdueReminders =>
+      _filteredReminders.where((r) => r.reminder.status == ReminderStatus.overdue).toList();
+
+  List<ReminderWithCarInfo> get _completedReminders =>
+      _filteredReminders.where((r) => r.reminder.status == ReminderStatus.completed).toList();
+
+  void _applyFilters() {
+              setState(() {
+      if (_searchQuery.isEmpty) {
+        _filteredReminders = _allReminders;
+                } else {
+        _filteredReminders = _allReminders.where((reminderWithCar) {
+          final reminder = reminderWithCar.reminder;
+          final searchLower = _searchQuery.toLowerCase();
+          return reminder.title.toLowerCase().contains(searchLower) ||
+                 reminder.description.toLowerCase().contains(searchLower) ||
+                 reminder.type.displayName.toLowerCase().contains(searchLower) ||
+                 reminder.priority.displayName.toLowerCase().contains(searchLower) ||
+                 reminderWithCar.carDisplayName.toLowerCase().contains(searchLower);
+        }).toList();
+      }
+    });
+  }
+
+  void _toggleSearch() {
+                    setState(() {
+      _isSearching = !_isSearching;
+      if (!_isSearching) {
+        _searchController.clear();
+        _searchQuery = '';
+        _applyFilters();
+      }
+    });
+  }
+
+  void _onSearchChanged(String query) {
+                    setState(() {
+      _searchQuery = query;
+    });
+    _applyFilters();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
-          // Cool header design
           _buildHeaderWithBackground(),
-          
-          // Tab content
+          if (_isSearching) _buildSearchBar(),
           Expanded(
-            child: Container(
-              color: AppTheme.getThemeAwareBackground(context),
-              child: Column(
-                children: [
-                  // selection bar moved to header and bottom actions
-                  // Tab Content
-                  Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildUpcomingReminders(),
-                        _buildOverdueReminders(),
-                        _buildCompletedReminders(),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _buildCurrentRemindersList(),
           ),
         ],
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: Builder(
-        builder: (context) {
-          final width = MediaQuery.of(context).size.width * 0.9;
-          if (_selectionMode) {
-            return SizedBox(
-              width: width,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _selectedIds.isEmpty ? null : () {
-                        setState(() {
-                          for (final id in _selectedIds) {
-                            final r = _reminders.firstWhere((e) => e.id == id);
-                            r.status = ReminderStatus.completed;
-                            r.priority = 'Completed';
-                          }
-                          _selectionMode = false;
-                          _selectedIds.clear();
-                        });
-                      },
-                      icon: const Icon(Icons.mark_email_read_outlined),
-                      label: const Text('Mark as read'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.secondaryGreen,
-                        foregroundColor: Colors.white,
-                        shape: const StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _selectedIds.isEmpty ? null : () {
-                        setState(() {
-                          _reminders.removeWhere((e) => _selectedIds.contains(e.id));
-                          _selectionMode = false;
-                          _selectedIds.clear();
-                        });
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Delete'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.errorColor,
-                        foregroundColor: Colors.white,
-                        shape: const StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-          return SizedBox(
-            width: MediaQuery.of(context).size.width * 0.85,
-            height: 56,
-            child: ElevatedButton.icon(
-              onPressed: _showAddReminderSheet,
-              icon: const Icon(Icons.add, size: 22),
-              label: const Text(
-                'New Reminder',
-                style: TextStyle(
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryGreen,
-                foregroundColor: Colors.white,
-                elevation: 10,
-                shadowColor: AppTheme.primaryGreen.withOpacity(0.5),
-                shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
 
   Widget _buildHeaderWithBackground() {
     return Container(
-      height: 200,
+      height: 320,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -355,7 +147,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen>
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Column(
             children: [
               Row(
@@ -365,17 +157,16 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen>
                       if (Navigator.canPop(context)) {
                         Navigator.pop(context);
                       } else {
-                        // If no previous route, try to navigate to root
                         Navigator.of(context).popUntil((route) => route.isFirst);
                       }
                     },
                     icon: const Icon(
                       Icons.arrow_back_ios,
                       color: Colors.white,
-                      size: 28,
+                      size: 26,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
                       'Smart Reminders',
@@ -385,53 +176,88 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen>
                         color: Colors.white,
                         fontFamily: 'Orbitron',
                       ),
+                      textAlign: TextAlign.center,
                     ),
+                                     ),
+                   IconButton(
+                     icon: Icon(_isSearching ? Icons.close : Icons.search, color: Colors.white, size: 24),
+                     onPressed: _toggleSearch,
                                      ),
                  ],
                ),
-               const SizedBox(height: 16),
-               
-               // Tab Bar
-              SizedBox(
-                height: 44,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(22),
-                 child: Container(
-                   decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: Colors.white.withOpacity(0.20), width: 1),
-                   ),
-                   child: TabBar(
-                     controller: _tabController,
-                      indicatorSize: TabBarIndicatorSize.tab,
-                     labelColor: Colors.white,
-                      unselectedLabelColor: Colors.white70,
-                      dividerColor: Colors.transparent,
-                      labelPadding: const EdgeInsets.symmetric(vertical: 6),
-                     indicator: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: Colors.white.withOpacity(0.30), width: 1),
-                     ),
-                     labelStyle: const TextStyle(
+              const SizedBox(height: 8),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  'Stay on top of your vehicle maintenance',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
                        fontFamily: 'Orbitron',
-                       fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                      unselectedLabelStyle: const TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontWeight: FontWeight.w500,
-                        fontSize: 13,
-                     ),
-                     tabs: const [
-                       Tab(text: 'Upcoming'),
-                       Tab(text: 'Overdue'),
-                       Tab(text: 'Completed'),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+               const SizedBox(height: 16),
+               // Add Reminder button in header
+               Container(
+                 width: 170,
+                 height: 45,
+                 decoration: BoxDecoration(
+                   gradient: const LinearGradient(
+                     begin: Alignment.topLeft,
+                     end: Alignment.bottomRight,
+                     colors: [
+                       AppTheme.primaryGreen,
+                       AppTheme.darkAccentGreen,
                      ],
-                    ),
+                   ),
+                   borderRadius: BorderRadius.circular(28),
+                   boxShadow: [
+                     BoxShadow(
+                       color: AppTheme.primaryGreen.withOpacity(0.4),
+                       blurRadius: 8,
+                       offset: const Offset(0, 4),
+                     ),
+                   ],
+                 ),
+                 child: Material(
+                   color: Colors.transparent,
+                   child: InkWell(
+                     onTap: _showAddReminderSheet,
+                     borderRadius: BorderRadius.circular(28),
+                     child: const Row(
+                       mainAxisAlignment: MainAxisAlignment.center,
+                       children: [
+                         Icon(
+                           Icons.add_circle_outline,
+                           color: Colors.white,
+                           size: 20,
+                         ),
+                         SizedBox(width: 8),
+                         Text(
+                           'Add Reminder',
+                           style: TextStyle(
+                             color: Colors.white,
+                             fontSize: 14,
+                             fontWeight: FontWeight.w600,
+                             fontFamily: 'Orbitron',
+                           ),
+                         ),
+                       ],
+                     ),
                    ),
                  ),
+               ),
+               const SizedBox(height: 16),
+               Row(
+                 children: [
+                   _buildClickableStatCard('Upcoming', _upcomingReminders.length, Colors.blue, 0),
+                   const SizedBox(width: 8),
+                   _buildClickableStatCard('Overdue', _overdueReminders.length, Colors.red, 1),
+                   const SizedBox(width: 8),
+                   _buildClickableStatCard('Completed', _completedReminders.length, Colors.green, 2),
+                 ],
                ),
             ],
           ),
@@ -440,705 +266,1566 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen>
     );
   }
 
-  // Modern bottom sheet add form (popup)
-  void _showAddReminderSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          maxChildSize: 0.95,
-          minChildSize: 0.5,
-          expand: false,
-          builder: (context, controller) {
-            final formKey = GlobalKey<FormState>();
-            final title = TextEditingController();
-            final subtitle = TextEditingController();
-            final car = TextEditingController();
-            final mileage = TextEditingController();
-            DateTime? dueDate;
-            String priority = 'Medium';
-
-            return Container(
+  Widget _buildClickableStatCard(String title, int count, Color color, int index) {
+    final isSelected = _selectedIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
               decoration: BoxDecoration(
-                color: AppTheme.getThemeAwareCardBackground(context),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                border: Border.all(color: AppTheme.getThemeAwareBorderColor(context)),
-              ),
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 16,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              ),
-              child: Form(
-                key: formKey,
-                child: ListView(
-                  controller: controller,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 48,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Add Reminder',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSheetTextField(title, 'Title', 'Oil Change'),
-                    const SizedBox(height: 12),
-                    _buildSheetTextField(subtitle, 'Subtitle', 'Due in 3 days'),
-                    const SizedBox(height: 12),
-                    _buildSheetTextField(car, 'Car', 'Toyota Camry'),
-                    const SizedBox(height: 12),
-                    _buildSheetTextField(mileage, 'Mileage', '75200 km', keyboardType: TextInputType.number),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: priority,
-                      decoration: InputDecoration(
-                        labelText: 'Priority',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'Low', child: Text('Low')),
-                        DropdownMenuItem(value: 'Medium', child: Text('Medium')),
-                        DropdownMenuItem(value: 'High', child: Text('High')),
-                        DropdownMenuItem(value: 'Critical', child: Text('Critical')),
-                      ],
-                      onChanged: (v) => priority = v ?? 'Medium',
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final now = DateTime.now();
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: now,
-                          firstDate: now,
-                          lastDate: now.add(const Duration(days: 365 * 3)),
-                        );
-                        if (picked != null) {
-                          dueDate = picked;
-                        }
-                      },
-                      icon: const Icon(Icons.event),
-                      label: Text(dueDate == null ? 'Pick due date' : 'Due: ${dueDate.toLocal().toString().split(' ')[0]}'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.primaryGreen,
-                        side: const BorderSide(color: AppTheme.primaryGreen),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        if (!formKey.currentState!.validate()) return;
-                        setState(() {
-                          _reminders.add(_Reminder(
-                            id: _nextId++,
-                            title: title.text.trim(),
-                            subtitle: subtitle.text.trim(),
-                            icon: Icons.notifications,
-                            priority: priority,
-                            car: car.text.trim(),
-                            mileage: mileage.text.trim(),
-                            status: ReminderStatus.upcoming,
-                          ));
-                        });
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(Icons.save),
-                      label: const Text('Save Reminder'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryGreen,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildSheetTextField(TextEditingController c, String label, String hint, {TextInputType? keyboardType}) {
-    return TextFormField(
-      controller: c,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-    );
-  }
-  // duplicate removed
-
-  void _deleteSelectedReminders() {
-    final List<_Reminder> remainingReminders = _reminders.where((reminder) => !_selectedIds.contains(reminder.id)).toList();
-    setState(() {
-      _reminders = remainingReminders;
-      _selectedIds.clear();
-      _selectionMode = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${_selectedIds.length} reminders deleted.',
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        backgroundColor: AppTheme.errorColor,
-      ),
-    );
-  }
-
-  void _markSelectedComplete() {
-    final List<_Reminder> updatedReminders = _reminders.map((reminder) {
-      if (_selectedIds.contains(reminder.id)) {
-        return _Reminder(
-          id: reminder.id,
-          title: reminder.title,
-          subtitle: reminder.subtitle,
-          icon: reminder.icon,
-          priority: reminder.priority,
-          car: reminder.car,
-          mileage: reminder.mileage,
-          status: ReminderStatus.completed,
-        );
-      }
-      return reminder;
-    }).toList();
-    setState(() {
-      _reminders = updatedReminders;
-      _selectedIds.clear();
-      _selectionMode = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${_selectedIds.length} reminders marked as complete.',
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        backgroundColor: AppTheme.successColor,
-      ),
-    );
-  }
-
-  Widget _buildUpcomingReminders() {
-    final items = _reminders.where((r) => r.status == ReminderStatus.upcoming).toList();
-    return _buildRemindersList(items, isOverdue: false, completed: false);
-  }
-
-  Widget _buildOverdueReminders() {
-    final items = _reminders.where((r) => r.status == ReminderStatus.overdue).toList();
-    return _buildRemindersList(items, isOverdue: true, completed: false);
-  }
-
-  Widget _buildCompletedReminders() {
-    final items = _reminders.where((r) => r.status == ReminderStatus.completed).toList();
-    return _buildRemindersList(items, isOverdue: false, completed: true);
-  }
-
-  Widget _buildRemindersList(List<_Reminder> items, {required bool isOverdue, required bool completed}) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final r = items[index];
-        return _buildReminderCard(r, isOverdue, completed: completed);
-      },
-    );
-  }
-
-  Widget _buildReminderCard(_Reminder reminder, bool isOverdue, {bool completed = false}) {
-    Color priorityColor = AppTheme.primaryGreen;
-    
-    if (completed) {
-      priorityColor = AppTheme.secondaryGreen;
-    } else if (isOverdue) {
-      priorityColor = AppTheme.errorColor;
-    } else {
-      switch (reminder.priority) {
-        case 'High':
-          priorityColor = AppTheme.warningColor;
-          break;
-        case 'Critical':
-          priorityColor = AppTheme.errorColor;
-          break;
-        case 'Medium':
-          priorityColor = AppTheme.secondaryGreen;
-          break;
-        default:
-          priorityColor = AppTheme.primaryGreen;
-      }
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: priorityColor.withOpacity(0.1),
+            color: isSelected 
+                ? Colors.white.withOpacity(0.25) 
+                : Colors.white.withOpacity(0.15),
             borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            reminder.icon,
-            color: priorityColor,
-            size: 24,
-          ),
-        ),
-        title: Text(
-          reminder.title,
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-            color: completed ? AppTheme.getThemeAwareTextColor(context).withOpacity(0.6) : AppTheme.getThemeAwareTextColor(context),
-            decoration: completed ? TextDecoration.lineThrough : null,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(
-              reminder.subtitle,
-              style: TextStyle(
-                fontFamily: 'Orbitron',
-                color: priorityColor,
-                fontWeight: FontWeight.w500,
-              ),
+            border: Border.all(
+              color: isSelected 
+                  ? Colors.white.withOpacity(0.4) 
+                  : Colors.white.withOpacity(0.2),
+              width: isSelected ? 2 : 1,
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                  Container(
-                   width: 45,
-                   
-                   padding: const EdgeInsets.all(4),
-                   decoration: BoxDecoration(
-                     color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.05),
-                     borderRadius: BorderRadius.circular(4),
-                   ),
-                   child: Icon(
-                     const IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                  size: 14,
-                  color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
-                   ),
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    reminder.car,
-                    style: TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontSize: 12,
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Icon(
-                  Icons.speed,
-                  size: 14,
-                  color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    reminder.mileage,
-                    style: TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontSize: 12,
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        trailing: _selectionMode
-            ? Checkbox(
-                value: _selectedIds.contains(reminder.id),
-                onChanged: (v) => _toggleSelect(reminder),
-              )
-            : Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: priorityColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                reminder.priority,
-                style: TextStyle(
-                  fontFamily: 'Orbitron',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: priorityColor,
-                ),
-              ),
-            ),
-            if (!completed) ...[
-              const SizedBox(width: 8),
-              PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert, color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6)),
-                onSelected: (value) => _handleReminderAction(value, reminder),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'complete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_circle, color: AppTheme.successColor),
-                        SizedBox(width: 8),
-                        Text('Mark Complete'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'snooze',
-                    child: Row(
-                      children: [
-                        Icon(Icons.snooze, color: AppTheme.warningColor),
-                        SizedBox(width: 8),
-                        Text('Snooze'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit, color: AppTheme.primaryGreen),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, color: AppTheme.errorColor),
-                        SizedBox(width: 8),
-                        Text('Delete'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-        onLongPress: () => _enterSelection(reminder),
-        onTap: _selectionMode ? () => _toggleSelect(reminder) : () => _showReminderDetails(reminder),
-      ),
-    );
-  }
-
-  void _showAddReminderDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Add New Reminder',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        content: const Text(
-          'Add reminder feature will be implemented here.',
-          style: TextStyle(fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Add',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _handleReminderAction(String action, _Reminder reminder) {
-    switch (action) {
-      case 'complete':
-        _markComplete(reminder);
-        break;
-      case 'snooze':
-        _snoozeReminder(reminder);
-        break;
-      case 'edit':
-        _editReminder(reminder);
-        break;
-      case 'delete':
-        _deleteReminder(reminder);
-        break;
-    }
-  }
-
-  void _markComplete(_Reminder reminder) {
-    setState(() {
-      reminder.status = ReminderStatus.completed;
-      reminder.priority = 'Completed';
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${reminder.title} marked as complete!',
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        backgroundColor: AppTheme.successColor,
-      ),
-    );
-  }
-
-  void _snoozeReminder(_Reminder reminder) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${reminder.title} snoozed for 1 week.',
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        backgroundColor: AppTheme.warningColor,
-      ),
-    );
-  }
-
-  void _editReminder(_Reminder reminder) {
-    // Implementation for editing reminder
-  }
-
-  void _deleteReminder(_Reminder reminder) {
-    setState(() {
-      _reminders.removeWhere((r) => r.id == reminder.id);
-    });
-    // Implementation for deleting reminder
-  }
-
- void _showReminderDetails(_Reminder reminder) {
-  showGeneralDialog(
-    context: context,
-    barrierColor: Colors.black54,
-    barrierDismissible: true,
-    barrierLabel: 'Reminder details',
-    transitionDuration: const Duration(milliseconds: 250),
-    pageBuilder: (context, a1, a2) {
-      return Center(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppTheme.getThemeAwareCardBackground(context).withOpacity(0.96),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppTheme.getThemeAwareBorderColor(context)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: Colors.black.withOpacity(isSelected ? 0.2 : 0.1),
+                blurRadius: isSelected ? 8 : 6,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+                  children: [
+              Container(
+                width: 32,
+                height: 32,
+                        decoration: BoxDecoration(
+                  color: isSelected 
+                      ? color.withOpacity(0.3) 
+                      : color.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Text(
+                    count.toString(),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isSelected ? Colors.white : Colors.white70,
+                  fontFamily: 'Orbitron',
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: _onSearchChanged,
+        decoration: InputDecoration(
+          hintText: 'Search reminders...',
+          hintStyle: TextStyle(
+            color: Colors.grey[500],
+            fontFamily: 'Orbitron',
+          ),
+          prefixIcon: const Icon(Icons.search, color: AppTheme.primaryGreen),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    _onSearchChanged('');
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+        style: const TextStyle(fontFamily: 'Orbitron'),
+      ),
+    );
+  }
+
+  Widget _buildCurrentRemindersList() {
+    List<ReminderWithCarInfo> currentReminders;
+    ReminderStatus currentStatus;
+    
+    switch (_selectedIndex) {
+      case 0:
+        currentReminders = _upcomingReminders;
+        currentStatus = ReminderStatus.upcoming;
+        break;
+      case 1:
+        currentReminders = _overdueReminders;
+        currentStatus = ReminderStatus.overdue;
+        break;
+      case 2:
+        currentReminders = _completedReminders;
+        currentStatus = ReminderStatus.completed;
+        break;
+      default:
+        currentReminders = _upcomingReminders;
+        currentStatus = ReminderStatus.upcoming;
+    }
+    
+    return _buildRemindersList(currentReminders, currentStatus);
+  }
+
+  Widget _buildRemindersList(List<ReminderWithCarInfo> reminders, ReminderStatus status) {
+    if (reminders.isEmpty) {
+      return _buildEmptyState(status);
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: reminders.length,
+      itemBuilder: (context, index) {
+        final reminder = reminders[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _buildReminderCard(reminder),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState(ReminderStatus status) {
+    String message;
+    String emoji;
+    
+    switch (status) {
+      case ReminderStatus.upcoming:
+        message = 'No upcoming reminders.\nYour schedule is clear!';
+        emoji = '✅';
+          break;
+      case ReminderStatus.overdue:
+        message = 'No overdue reminders.\nYou\'re all caught up!';
+        emoji = '🎉';
+          break;
+      case ReminderStatus.completed:
+        message = 'No completed reminders yet.\nStart completing tasks!';
+        emoji = '📝';
+          break;
+    }
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            emoji,
+            style: const TextStyle(fontSize: 64),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+              fontFamily: 'Orbitron',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReminderCard(ReminderWithCarInfo reminderWithCar) {
+    final reminder = reminderWithCar.reminder;
+    Color priorityColor = _getPriorityColor(reminder.priority);
+    
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: () => _showReminderDetails(reminder, reminderWithCar.carDisplayName),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// Header
+            Row(
+              children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                   decoration: BoxDecoration(
+                      color: priorityColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                  child: Text(
+                        reminder.type.icon,
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                        Text(
+                          reminder.title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Orbitron',
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.directions_car,
+                              size: 14,
+                              color: Colors.grey[600],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              reminderWithCar.carDisplayName,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontFamily: 'Orbitron',
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          reminder.type.displayName,
+                    style: TextStyle(
+                      fontSize: 12,
+                            color: Colors.grey[600],
+                            fontFamily: 'Orbitron',
+                  ),
+                ),
+              ],
+            ),
+                  ),
+                ],
+              ),
+                    const SizedBox(height: 12),
+              Text(
+                reminder.description,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[700],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                    ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.schedule, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    reminder.displayText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (reminder.status != ReminderStatus.completed)
+                    ElevatedButton(
+                      onPressed: () => _markReminderCompleted(reminder),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryGreen,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        minimumSize: Size.zero,
+                      ),
+                      child: const Text(
+                        'Mark as Completed',
+                        style: TextStyle(fontSize: 10, fontFamily: 'Orbitron'),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'Completed',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: priorityColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      reminder.priority.displayName,
+                      style: TextStyle(
+                        color: priorityColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+                ),
+      ),
+    );
+  }
+
+  Color _getPriorityColor(ReminderPriority priority) {
+    switch (priority) {
+      case ReminderPriority.low:
+        return Colors.green;
+      case ReminderPriority.medium:
+        return Colors.orange;
+      case ReminderPriority.high:
+        return Colors.red;
+      case ReminderPriority.urgent:
+        return Colors.purple;
+    }
+  }
+
+
+  void _showReminderDetails(BackupReminder reminder, String carDisplayName) {
+    showDialog(
+      context: context,
+      builder: (context) => ReminderDetailsDialog(
+        reminder: reminder,
+        carDisplayName: carDisplayName,
+        onEdit: () => _showEditReminderDialog(reminder),
+        onDelete: () => _deleteReminder(reminder),
+        onMarkCompleted: () => _markReminderCompleted(reminder),
+        onMarkUncompleted: () => _markReminderUncompleted(reminder),
+      ),
+    );
+  }
+
+  void _showEditReminderDialog(BackupReminder reminder) {
+    Navigator.pop(context); // Close details dialog first
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => EditReminderForm(
+        reminder: reminder,
+        onReminderUpdated: _loadReminders,
+      ),
+    );
+  }
+
+  Future<void> _deleteReminder(BackupReminder reminder) async {
+    Navigator.pop(context); // Close details dialog first
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Reminder'),
+        content: Text('Are you sure you want to delete "${reminder.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        final result = await _reminderService.deleteReminder(reminder.id!);
+        if (result.isSuccess) {
+          await _loadReminders();
+          if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+                content: Text(result.message),
+                backgroundColor: AppTheme.primaryGreen,
+              ),
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result.message),
+                backgroundColor: Colors.red,
+      ),
+    );
+  }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting reminder: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _markReminderCompleted(BackupReminder reminder) async {
+    if (reminder.isCompleted) return;
+
+    try {
+      final result = await _reminderService.markReminderCompleted(reminder.id!);
+      if (result.isSuccess) {
+        await _loadReminders();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: AppTheme.primaryGreen,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error marking reminder as completed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _markReminderUncompleted(BackupReminder reminder) async {
+    if (!reminder.isCompleted) return;
+
+    try {
+      final result = await _reminderService.markReminderUncompleted(reminder.id!);
+      if (result.isSuccess) {
+        await _loadReminders();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error marking reminder as uncompleted: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showAddReminderSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => AddReminderForm(onReminderAdded: _loadReminders),
+    );
+  }
+}
+
+// Reminder Details Dialog
+class ReminderDetailsDialog extends StatelessWidget {
+  final BackupReminder reminder;
+  final String? carDisplayName;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback? onMarkCompleted;
+  final VoidCallback? onMarkUncompleted;
+
+  const ReminderDetailsDialog({
+    super.key,
+    required this.reminder,
+    this.carDisplayName,
+    required this.onEdit,
+    required this.onDelete,
+    this.onMarkCompleted,
+    this.onMarkUncompleted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+        constraints: const BoxConstraints(maxWidth: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            // Header
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                  width: 60,
+                  height: 60,
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryGreen.withOpacity(0.15),
-                      shape: BoxShape.circle,
+                    color: _getPriorityColor(reminder.priority).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(reminder.icon, color: AppTheme.primaryGreen),
+                  child: Center(
+                    child: Text(
+                      reminder.type.icon,
+                      style: const TextStyle(fontSize: 30),
                   ),
-                  const SizedBox(width: 12),
+                  ),
+                ),
+                const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           reminder.title,
-                          style: TextStyle(
-                            fontFamily: 'Orbitron',
-                            fontWeight: FontWeight.w700,
+                        style: const TextStyle(
                             fontSize: 20,
-                            color: AppTheme.getThemeAwareTextColor(context),
+                          fontWeight: FontWeight.bold,
+                fontFamily: 'Orbitron',
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          reminder.subtitle,
+                  Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                   decoration: BoxDecoration(
+                          color: _getPriorityColor(reminder.priority).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                  child: Text(
+                          '${reminder.type.displayName} - ${reminder.priority.displayName}',
                           style: TextStyle(
-                            fontFamily: 'Orbitron',
-                            color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                            fontSize: 13,
+                            color: _getPriorityColor(reminder.priority),
+                            fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                          ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, size: 22),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-              Divider(color: AppTheme.getThemeAwareBorderColor(context)),
-              const SizedBox(height: 12),
-
-              /// Details section
-              _detailRow(Icons.directions_car, "Car", reminder.car),
-              _detailRow(Icons.speed, "Mileage", reminder.mileage),
-              _detailRow(Icons.event, "Due", reminder.subtitle),
-
-              const SizedBox(height: 20),
-
-              /// Action buttons
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // Description
+            _buildDetailRow('Description', reminder.description),
+            if (carDisplayName != null)
+              _buildDetailRow('Car', carDisplayName!),
+            _buildDetailRow('Due Date/Mileage', reminder.displayText),
+            _buildDetailRow('Status', reminder.status.name.toUpperCase()),
+            _buildDetailRow('Created', _formatDate(reminder.createdAt)),
+            if (reminder.isCompleted && reminder.completedAt != null)
+              _buildDetailRow('Completed', _formatDate(reminder.completedAt!)),
+            
+            const SizedBox(height: 24),
+            
+            // Action buttons
               Row(
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          reminder.status = ReminderStatus.completed;
-                          reminder.priority = 'Completed';
-                        });
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: const Text("Mark as Read"),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.primaryGreen,
-                        side: BorderSide(color: AppTheme.getThemeAwareBorderColor(context)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
+                if (!reminder.isCompleted && onMarkCompleted != null) ...[
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        setState(() {
-                          _reminders.removeWhere((r) => r.id == reminder.id);
-                        });
                         Navigator.pop(context);
+                        onMarkCompleted!();
                       },
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text("Delete"),
+                      icon: const Icon(Icons.check, size: 14),
+                      label: const Text('Complete', style: TextStyle(fontSize: 14)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.errorColor,
+                        backgroundColor: AppTheme.primaryGreen,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (reminder.isCompleted && onMarkUncompleted != null) ...[
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onMarkUncompleted!();
+                      },
+                      icon: const Icon(Icons.undo, size: 14),
+                      label: const Text('Revert', style: TextStyle(fontSize: 14)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit, size: 14),
+                    label: const Text('Edit', style: TextStyle(fontSize: 14)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.primaryGreen,
+                      side: const BorderSide(color: AppTheme.primaryGreen),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onDelete,
+                      icon: const Icon(Icons.delete, size: 14),
+                    label: const Text('Delete', style: TextStyle(fontSize: 14)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: const BorderSide(color: Colors.red),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+            ),
+          ],
+        ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: const Text('Close'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+              child: Text(
+              '$label:',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+                ),
+              ),
+            ),
+                  Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getPriorityColor(ReminderPriority priority) {
+    switch (priority) {
+      case ReminderPriority.low:
+        return Colors.green;
+      case ReminderPriority.medium:
+        return Colors.orange;
+      case ReminderPriority.high:
+        return Colors.red;
+      case ReminderPriority.urgent:
+        return Colors.purple;
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+}
+
+// Add Reminder Form
+class AddReminderForm extends StatefulWidget {
+  final VoidCallback onReminderAdded;
+  
+  const AddReminderForm({super.key, required this.onReminderAdded});
+  
+  @override
+  State<AddReminderForm> createState() => _AddReminderFormState();
+}
+
+class _AddReminderFormState extends State<AddReminderForm> {
+  final ReminderService _reminderService = ReminderService();
+  
+  String title = '';
+  String description = '';
+  ReminderType selectedType = ReminderType.maintenance;
+  ReminderPriority selectedPriority = ReminderPriority.medium;
+  DateTime? targetDate;
+  int? targetMileage;
+  BackupCar? selectedCar;
+  List<BackupCar> userCars = [];
+  bool _isLoading = false;
+  bool _isLoadingCars = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserCars();
+  }
+
+  Future<void> _loadUserCars() async {
+    try {
+      final cars = await _reminderService.getUserCars();
+                        setState(() {
+        userCars = cars;
+        _isLoadingCars = false;
+        if (cars.isNotEmpty) {
+          selectedCar = cars.first;
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingCars = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        bottom: media.viewInsets.bottom + 16,
+        top: 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+            Center(
+              child: Container(
+                width: 48,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text('Add New Reminder', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18)),
+            const SizedBox(height: 8),
+            Text('* Required fields', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            const SizedBox(height: 16),
+            
+            // Car selection
+            if (_isLoadingCars)
+              const Center(child: CircularProgressIndicator())
+            else if (userCars.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange),
+                ),
+                child: const Text(
+                  'No cars found. Please add a car first before creating reminders.',
+                  style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w600),
+                ),
+              )
+            else ...[
+              _buildDropdown<BackupCar>(
+                label: 'Select Car*',
+                value: selectedCar,
+                items: userCars,
+                onChanged: (car) => setState(() => selectedCar = car),
+                itemBuilder: (car) => '${car.year} ${car.brand} ${car.model}',
+              ),
+              const SizedBox(height: 16),
+              
+              // Title and Type
+              Row(
+                      children: [
+                  Expanded(child: _field(label: 'Title*', onChanged: (v) => title = v)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildDropdown<ReminderType>(
+                      label: 'Type*',
+                      value: selectedType,
+                      items: ReminderType.values,
+                      onChanged: (type) => setState(() => selectedType = type!),
+                      itemBuilder: (type) => type.displayName,
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              
+              // Description
+              _field(
+                label: 'Description*',
+                onChanged: (v) => description = v,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              
+              // Priority
+              _buildDropdown<ReminderPriority>(
+                label: 'Priority*',
+                value: selectedPriority,
+                items: ReminderPriority.values,
+                onChanged: (priority) => setState(() => selectedPriority = priority!),
+                itemBuilder: (priority) => priority.displayName,
+              ),
+              const SizedBox(height: 16),
+              
+              // Target Date
+              InkWell(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now().add(const Duration(days: 30)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                  );
+                  if (date != null) {
+                    setState(() => targetDate = date);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                    child: Row(
+                      children: [
+                      const Icon(Icons.calendar_today),
+                      const SizedBox(width: 8),
+                      Text(
+                        targetDate != null
+                            ? 'Target Date: ${targetDate!.day}/${targetDate!.month}/${targetDate!.year}'
+                            : 'Select Target Date (optional)',
+                        style: const TextStyle(fontFamily: 'Orbitron'),
+                      ),
+                      ],
+                    ),
+                  ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Target Mileage
+              _field(
+                label: 'Target Mileage (optional)',
+                keyboard: TextInputType.number,
+                onChanged: (v) => targetMileage = int.tryParse(v),
+              ),
+              const SizedBox(height: 24),
+              
+              // Save Button
+              SizedBox(
+                width: double.infinity,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.primaryGreen,
+                        AppTheme.darkAccentGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: _isLoading || selectedCar == null ? null : _saveReminder,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: _isLoading 
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('Save Reminder', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
             ],
-          ),
+            const SizedBox(height: 8),
+          ],
         ),
-      );
-    },
-    transitionBuilder: (context, anim, a2, child) {
-      return Transform.scale(
-        scale: Curves.easeOutBack.transform(anim.value),
-        child: Opacity(opacity: anim.value, child: child),
-      );
-    },
-  );
-}
+      ),
+    );
+  }
 
-Widget _detailRow(IconData icon, String label, String value) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(
+  Widget _field({
+    required String label,
+    TextInputType? keyboard,
+    required Function(String) onChanged,
+    int maxLines = 1,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6)),
-        const SizedBox(width: 8),
         Text(
-          "$label:",
-          style: TextStyle(
+          label,
+          style: const TextStyle(
             fontFamily: 'Orbitron',
+            fontSize: 12,
             fontWeight: FontWeight.w600,
-            fontSize: 13,
-            color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
           ),
         ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'Orbitron',
-              fontSize: 13,
-              color: AppTheme.getThemeAwareTextColor(context),
-              decoration: TextDecoration.none,
+        const SizedBox(height: 4),
+        TextFormField(
+          keyboardType: keyboard,
+          onChanged: onChanged,
+          maxLines: maxLines,
+          style: const TextStyle(fontFamily: 'Orbitron'),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen),
             ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+          ),
+        ],
+    );
+  }
+
+  Widget _buildDropdown<T>({
+    required String label,
+    required T? value,
+    required List<T> items,
+    required Function(T?) onChanged,
+    required String Function(T) itemBuilder,
+    double? textSize,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        DropdownButtonFormField<T>(
+          value: value,
+          onChanged: onChanged,
+          items: items.map((item) {
+            return DropdownMenuItem<T>(
+              value: item,
+              child: Text(itemBuilder(item), style: TextStyle(fontFamily: 'Orbitron', fontSize: textSize ?? 16)),
+            );
+          }).toList(),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
         ),
       ],
-    ),
-  );
+    );
+  }
+
+  Future<void> _saveReminder() async {
+    setState(() => _isLoading = true);
+    
+    // Validation
+    if (title.isEmpty || description.isEmpty || selectedCar == null) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all required fields'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    try {
+      final result = await _reminderService.addReminder(
+        carId: selectedCar!.id!,
+        title: title,
+        description: description,
+        type: selectedType,
+        priority: selectedPriority,
+        targetDate: targetDate,
+        targetMileage: targetMileage,
+      );
+      
+      Navigator.pop(context);
+      
+      if (result.isSuccess) {
+        widget.onReminderAdded();
+        if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+              content: Text(result.message),
+              backgroundColor: AppTheme.primaryGreen,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: Colors.red,
+      ),
+    );
+  }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+            content: Text('Error adding reminder: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 }
 
+// Edit Reminder Form
+class EditReminderForm extends StatefulWidget {
+  final BackupReminder reminder;
+  final VoidCallback onReminderUpdated;
+  
+  const EditReminderForm({super.key, required this.reminder, required this.onReminderUpdated});
+  
+  @override
+  State<EditReminderForm> createState() => _EditReminderFormState();
+}
+
+class _EditReminderFormState extends State<EditReminderForm> {
+  final ReminderService _reminderService = ReminderService();
+  
+  late String title;
+  late String description;
+  late ReminderType selectedType;
+  late ReminderPriority selectedPriority;
+  DateTime? targetDate;
+  int? targetMileage;
+  BackupCar? selectedCar;
+  List<BackupCar> userCars = [];
+  bool _isLoading = false;
+  bool _isLoadingCars = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize with current reminder data
+    title = widget.reminder.title;
+    description = widget.reminder.description;
+    selectedType = widget.reminder.type;
+    selectedPriority = widget.reminder.priority;
+    targetDate = widget.reminder.targetDate;
+    targetMileage = widget.reminder.targetMileage;
+    _loadUserCars();
+  }
+
+  Future<void> _loadUserCars() async {
+    try {
+      final cars = await _reminderService.getUserCars();
+    setState(() {
+        userCars = cars;
+        _isLoadingCars = false;
+        // Find the car that matches the reminder's car ID
+        try {
+          selectedCar = cars.firstWhere((car) => car.id == widget.reminder.carId);
+        } catch (e) {
+          selectedCar = cars.isNotEmpty ? cars.first : null;
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingCars = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+  return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        bottom: media.viewInsets.bottom + 16,
+        top: 16,
+      ),
+      child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            Center(
+              child: Container(
+                width: 48,
+                height: 5,
+                    decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text('Edit Reminder', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18)),
+            const SizedBox(height: 8),
+            Text('* Required fields', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            const SizedBox(height: 16),
+            
+            // Car selection
+            if (_isLoadingCars)
+              const Center(child: CircularProgressIndicator())
+            else if (userCars.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange),
+                ),
+                child: const Text(
+                  'No cars found. Please add a car first.',
+                  style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w600),
+                ),
+              )
+            else ...[
+              _buildDropdown<BackupCar>(
+                label: 'Select Car*',
+                value: selectedCar,
+                items: userCars,
+                onChanged: (car) => setState(() => selectedCar = car),
+                itemBuilder: (car) => '${car.year} ${car.brand} ${car.model}',
+              ),
+              const SizedBox(height: 16),
+              
+              // Title and Type
+              Row(
+                children: [
+                  Expanded(child: _field(label: 'Title*', initialValue: title, onChanged: (v) => title = v)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildDropdown<ReminderType>(
+                      label: 'Type*',
+                      value: selectedType,
+                      items: ReminderType.values,
+                      textSize: 12,
+                      onChanged: (type) => setState(() => selectedType = type!),
+                      itemBuilder: (type) => type.displayName,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              // Description
+              _field(
+                label: 'Description*',
+                initialValue: description,
+                onChanged: (v) => description = v,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              
+              // Priority
+              _buildDropdown<ReminderPriority>(
+                label: 'Priority*',
+                value: selectedPriority,
+                items: ReminderPriority.values,
+                onChanged: (priority) => setState(() => selectedPriority = priority!),
+                itemBuilder: (priority) => priority.displayName,
+              ),
+              const SizedBox(height: 16),
+              
+              // Target Date
+              InkWell(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: targetDate ?? DateTime.now().add(const Duration(days: 30)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                  );
+                  if (date != null) {
+                    setState(() => targetDate = date);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+    child: Row(
+      children: [
+                      const Icon(Icons.calendar_today),
+        const SizedBox(width: 8),
+        Text(
+                        targetDate != null
+                            ? 'Target Date: ${targetDate!.day}/${targetDate!.month}/${targetDate!.year}'
+                            : 'Select Target Date (optional)',
+                        style: const TextStyle(fontFamily: 'Orbitron'),
+                      ),
+                      const Spacer(),
+                      if (targetDate != null)
+                        IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => setState(() => targetDate = null),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Target Mileage
+              _field(
+                label: 'Target Mileage (optional)',
+                initialValue: targetMileage?.toString() ?? '',
+                keyboard: TextInputType.number,
+                onChanged: (v) => targetMileage = v.isEmpty ? null : int.tryParse(v),
+              ),
+              const SizedBox(height: 24),
+              
+              // Update Button
+              SizedBox(
+                width: double.infinity,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.primaryGreen,
+                        AppTheme.darkAccentGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: _isLoading || selectedCar == null ? null : _updateReminder,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: _isLoading 
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('Update Reminder', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            ],
+          ),
+        ),
+    );
+  }
+
+  Widget _field({
+    required String label,
+    String? initialValue,
+    TextInputType? keyboard,
+    required Function(String) onChanged,
+    int maxLines = 1,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        TextFormField(
+          initialValue: initialValue,
+          keyboardType: keyboard,
+          onChanged: onChanged,
+          maxLines: maxLines,
+          style: const TextStyle(fontFamily: 'Orbitron'),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown<T>({
+    required String label,
+    required T? value,
+    required List<T> items,
+    required Function(T?) onChanged,
+    required String Function(T) itemBuilder,
+    double? textSize,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+              fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        DropdownButtonFormField<T>(
+          value: value,
+          onChanged: onChanged,
+          items: items.map((item) {
+            return DropdownMenuItem<T>(
+              value: item,
+              child: Text(itemBuilder(item), style: TextStyle(fontFamily: 'Orbitron', fontSize: textSize ?? 2)),
+            );
+          }).toList(),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _updateReminder() async {
+    setState(() => _isLoading = true);
+    
+    // Validation
+    if (title.isEmpty || description.isEmpty || selectedCar == null) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all required fields'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    try {
+      final result = await _reminderService.updateReminder(
+        id: widget.reminder.id!,
+        carId: selectedCar!.id!,
+        title: title,
+        description: description,
+        type: selectedType,
+        priority: selectedPriority,
+        targetDate: targetDate,
+        targetMileage: targetMileage,
+      );
+      
+      Navigator.pop(context);
+      
+      if (result.isSuccess) {
+        widget.onReminderUpdated();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: AppTheme.primaryGreen,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating reminder: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 }
