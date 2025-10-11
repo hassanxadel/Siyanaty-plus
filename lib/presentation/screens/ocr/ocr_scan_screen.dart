@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:camera/camera.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/ocr_service.dart';

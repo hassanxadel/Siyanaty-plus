@@ -59,7 +59,7 @@ dependencies:
   timezone: ^0.9.4
   url_launcher: ^6.2.5
   
-  # Firebase dependencies for advanced features (stable versions)
+  # Firebase dependencies for advanced features (compatible versions)
   firebase_core: ^2.24.2
   firebase_auth: ^4.15.3
   cloud_firestore: ^4.13.6
