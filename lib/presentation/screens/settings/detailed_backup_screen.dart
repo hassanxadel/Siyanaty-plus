@@ -4,6 +4,7 @@ import '../../../shared/constants/app_theme.dart';
 import '../../../services/firebase_backup_service.dart';
 import '../../../services/firebase_reminder_service.dart';
 import '../../../services/firebase_maintenance_service.dart';
+import '../../../services/comprehensive_backup_service.dart';
 
 class DetailedBackupScreen extends StatefulWidget {
   const DetailedBackupScreen({super.key});
@@ -15,11 +16,13 @@ class DetailedBackupScreen extends StatefulWidget {
 class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
   final FirebaseBackupService _backupService = FirebaseBackupService();
   final FirebaseReminderService _reminderService = FirebaseReminderService();
+  final ComprehensiveBackupService _comprehensiveService = ComprehensiveBackupService();
   
   bool _isLoading = false;
   BackupStatus? _backupStatus;
   ReminderBackupStatus? _reminderBackupStatus;
   MaintenanceBackupStatus? _maintenanceBackupStatus;
+  ComprehensiveBackupStatus? _comprehensiveStatus;
 
   @override
   void initState() {
@@ -32,11 +35,13 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
       final carStatus = await _backupService.getBackupStatus();
       final reminderStatus = await _reminderService.getBackupStatus();
       final maintenanceStatus = await FirebaseMaintenanceService.getBackupStatus();
+      final comprehensiveStatus = await _comprehensiveService.getComprehensiveBackupStatus();
       if (mounted) {
         setState(() {
           _backupStatus = carStatus;
           _reminderBackupStatus = reminderStatus;
           _maintenanceBackupStatus = maintenanceStatus;
+          _comprehensiveStatus = comprehensiveStatus;
         });
       }
     } catch (e) {
@@ -132,19 +137,6 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
     );
   }
 
-  void _navigateToAddCar() {
-    // Navigate back and go to cars screen
-    Navigator.pop(context);
-    // You can add navigation logic here based on your app's navigation structure
-    // For now, just pop back to the previous screen (settings)
-  }
-
-  void _navigateToAddReminder() {
-    // Navigate back and go to reminders screen  
-    Navigator.pop(context);
-    // You can add navigation logic here based on your app's navigation structure
-    // For now, just pop back to the previous screen (settings)
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -190,6 +182,8 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
                     onRestore: _restoreMaintenance,
                     isLoading: _isLoading,
                   ),
+                  const SizedBox(height: 16),
+                  _buildComprehensiveBackupCard(),
                   const SizedBox(height: 24),
                   _buildOverallStatus(),
                 ],
@@ -475,6 +469,212 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
       }
     } catch (e) {
       _showSnackBar('Error backing up maintenance: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Widget _buildComprehensiveBackupCard() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.primaryGreen.withOpacity(0.1),
+              AppTheme.primaryGreen.withOpacity(0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.backup,
+                    color: AppTheme.primaryGreen,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Comprehensive Backup',
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryGreen,
+                        ),
+                      ),
+                      Text(
+                        'Backup all data (Cars, Reminders, Maintenance) at once',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Status indicators
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatusIndicator(
+                    'Cars',
+                    _comprehensiveStatus?.carsBackedUp ?? false,
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatusIndicator(
+                    'Reminders',
+                    _comprehensiveStatus?.remindersBackedUp ?? false,
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatusIndicator(
+                    'Maintenance',
+                    _comprehensiveStatus?.maintenanceBackedUp ?? false,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Action buttons
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _backupAllData,
+                    icon: const Icon(Icons.cloud_upload, size: 18),
+                    label: const Text(
+                      'Backup All',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryGreen,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _restoreAllData,
+                    icon: const Icon(Icons.cloud_download, size: 18),
+                    label: const Text(
+                      'Restore All',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primaryGreen,
+                      side: const BorderSide(color: AppTheme.primaryGreen),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusIndicator(String label, bool isBackedUp) {
+    return Column(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: isBackedUp ? Colors.green : Colors.red,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _backupAllData() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final result = await _comprehensiveService.backupAllDataToFirebase();
+      
+      if (result.success) {
+        _showSnackBar('All data backed up successfully! ${result.totalSuccessCount} items processed.', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to backup all data: ${result.message}', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error backing up all data: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _restoreAllData() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final result = await _comprehensiveService.restoreAllDataFromFirebase();
+      
+      if (result.success) {
+        _showSnackBar('All data restored successfully! ${result.totalSuccessCount} items processed.', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to restore all data: ${result.message}', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error restoring all data: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

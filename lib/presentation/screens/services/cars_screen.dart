@@ -335,46 +335,56 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
 
   Widget _buildEmptyState() {
     final bool isSearching = _searchQuery.isNotEmpty;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 235,
-            height: 130,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.05),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(
-              isSearching ? Icons.search_off : const IconData(0xe800, fontFamily: 'MyFlutterApp'),
-              size: 75,
-              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.3),
+    return RefreshIndicator(
+      onRefresh: _loadCars,
+      color: AppTheme.primaryGreen,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: 400, // Give enough height for pull-to-refresh
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 235,
+                  height: 130,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    isSearching ? Icons.search_off : const IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                    size: 75,
+                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.3),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  isSearching ? 'No cars found' : 'No cars added yet',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.getThemeAwareTextColor(context),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isSearching 
+                      ? 'Try adjusting your search terms\nor clear the search to see all cars'
+                      : 'Add your first car to start tracking\nmaintenance and services',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+                  ),
+                ),
+                const SizedBox(height: 32),
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-          Text(
-            isSearching ? 'No cars found' : 'No cars added yet',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.getThemeAwareTextColor(context),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            isSearching 
-                ? 'Try adjusting your search terms\nor clear the search to see all cars'
-                : 'Add your first car to start tracking\nmaintenance and services',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
-              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 32),
-        ],
+        ),
       ),
     );
   }
@@ -421,13 +431,17 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
   }
 
   Widget _buildCarsList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(20),
-      itemCount: _filteredCars.length,
-      itemBuilder: (context, index) {
-        final car = _filteredCars[index];
-        return _buildCarCard(car, index);
-      },
+    return RefreshIndicator(
+      onRefresh: _loadCars,
+      color: AppTheme.primaryGreen,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(20),
+        itemCount: _filteredCars.length,
+        itemBuilder: (context, index) {
+          final car = _filteredCars[index];
+          return _buildCarCard(car, index);
+        },
+      ),
     );
   }
 

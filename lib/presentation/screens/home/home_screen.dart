@@ -8,7 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../actions/all_actions_screen.dart';
 import '../services/cars_screen.dart';
 import '../services/vin_lookup_screen.dart';
-import '../services/ocr_scanner_screen.dart';
+import '../ocr/ocr_scan_screen.dart';
 import '../services/barcode_scanner_screen.dart';
 import '../services/voice_notes_screen.dart';
 import '../services/mileage_track_screen.dart';
@@ -23,6 +23,7 @@ import '../../../services/car_service.dart';
 import '../../../models/backup_car.dart';
 import '../../../services/reminder_service.dart';
 import '../../../services/maintenance_service.dart';
+import '../../../services/notification_database_service.dart';
 import '../../../models/backup_reminder.dart';
 import '../../../models/backup_maintenance.dart';
 
@@ -38,7 +39,7 @@ class HomeDashboard extends StatefulWidget {
 /// State class for the home dashboard
 /// Manages animations, car selection, and user interactions
 class _HomeDashboardState extends State<HomeDashboard>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   /// Controller for managing entrance animations (fade and slide)
   late AnimationController _animationController;
   /// Fade animation for smooth screen entrance
@@ -55,6 +56,10 @@ class _HomeDashboardState extends State<HomeDashboard>
   final ReminderService _reminderService = ReminderService();
   /// Maintenance service for fetching maintenance data
   final MaintenanceService _maintenanceService = MaintenanceService();
+  /// Notification database service for checking notification count
+  final NotificationDatabaseService _notificationService = NotificationDatabaseService.instance;
+  /// Count of unread notifications for badge
+  int _notificationCount = 0;
   /// List of user's cars (max 5 for swipe)
   List<BackupCar> _userCars = [];
   /// Loading state for cars
@@ -104,11 +109,28 @@ class _HomeDashboardState extends State<HomeDashboard>
     _loadUpcomingReminders();
     /// Load latest maintenance
     _loadLatestMaintenance();
+    /// Load notification count
+    _loadNotificationCount();
+    
+    /// Add observer to detect app lifecycle changes
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Handle app lifecycle changes
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // Refresh notification count when app becomes active
+      _loadNotificationCount();
+    }
   }
 
   /// Clean up animation controllers and page controller
   @override
   void dispose() {
+    /// Remove observer
+    WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
     _carPageController.dispose();
     super.dispose();
@@ -181,6 +203,34 @@ class _HomeDashboardState extends State<HomeDashboard>
     }
   }
 
+  /// Load notification count for badge
+  Future<void> _loadNotificationCount() async {
+    try {
+      final notifications = await _notificationService.getAllNotifications();
+      if (mounted) {
+        setState(() {
+          _notificationCount = notifications.length;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _notificationCount = 0;
+        });
+      }
+    }
+  }
+
+  /// Refreshes all data on the home screen
+  Future<void> _refreshHomeData() async {
+    await Future.wait([
+      _loadUserCars(),
+      _loadUpcomingReminders(),
+      _loadLatestMaintenance(),
+      _loadNotificationCount(),
+    ]);
+  }
+
   /// Get time-based greeting message (Morning, Afternoon, Evening)
   String _getGreeting() {
     final hour = DateTime.now().hour;
@@ -212,7 +262,10 @@ class _HomeDashboardState extends State<HomeDashboard>
         opacity: _fadeAnimation,
         child: SlideTransition(
           position: _slideAnimation,
-          child: SingleChildScrollView(
+          child: RefreshIndicator(
+            onRefresh: _refreshHomeData,
+            color: AppTheme.primaryGreen,
+            child: SingleChildScrollView(
             child: Column(
               children: [
                 /// Header section with gradient background and user welcome
@@ -257,6 +310,7 @@ class _HomeDashboardState extends State<HomeDashboard>
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -307,7 +361,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                       _buildCircularIcon(
                         Icons.notifications_outlined,
                             () => _showNotifications(),
-                        hasNotificationBadge: true,
+                        hasNotificationBadge: _notificationCount > 0,
                         color: AppTheme.lightBackground,
                       ),
                       const SizedBox(width: 8),
@@ -1424,12 +1478,14 @@ class _HomeDashboardState extends State<HomeDashboard>
   }
 
   // Navigation Methods
-  void _showNotifications() {
+  void _showNotifications() async {
     HapticFeedback.lightImpact();
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const NotificationsScreen()),
     );
+    // Refresh notification count when returning from notifications screen
+    _loadNotificationCount();
   }
 
   void _showProfile() {
@@ -1462,7 +1518,7 @@ class _HomeDashboardState extends State<HomeDashboard>
       case 'ocr scanner':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const OcrScannerScreen()),
+          MaterialPageRoute(builder: (context) => const OcrScanScreen()),
         );
         break;
       case 'barcode scanner':

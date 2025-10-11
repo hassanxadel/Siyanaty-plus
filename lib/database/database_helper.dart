@@ -6,16 +6,18 @@ import 'package:path_provider/path_provider.dart';
 import '../models/backup_car.dart';
 import '../models/backup_reminder.dart';
 import '../models/backup_maintenance.dart';
+import 'ocr_database_helper.dart';
 
 /// Database helper class for managing SQLite database operations
 /// Handles car data storage with CRUD operations
 class DatabaseHelper {
   static const String _databaseName = 'syanaty.db';
-  static const int _databaseVersion = 4;
+  static const int _databaseVersion = 5; // Updated for OCR table
   
   static const String tableCars = 'cars';
   static const String tableReminders = 'reminders';
   static const String tableMaintenance = 'maintenance';
+  static const String tableScans = 'scans'; // OCR scans table
   
   // Singleton pattern
   DatabaseHelper._privateConstructor();
@@ -128,6 +130,14 @@ class DatabaseHelper {
       await db.execute('CREATE INDEX idx_maintenance_date ON $tableMaintenance (maintenance_date)');
       await db.execute('CREATE INDEX idx_maintenance_cost ON $tableMaintenance (cost)');
       
+      // Create OCR scans table
+      await db.execute(OcrDatabaseHelper.createTableSql);
+      
+      // Create indexes for scans
+      await db.execute('CREATE INDEX idx_scans_user_id ON ${OcrDatabaseHelper.tableName} (userId)');
+      await db.execute('CREATE INDEX idx_scans_timestamp ON ${OcrDatabaseHelper.tableName} (timestamp)');
+      await db.execute('CREATE INDEX idx_scans_source ON ${OcrDatabaseHelper.tableName} (source)');
+      
     } catch (e) {
       throw DatabaseException('Failed to create tables: $e');
     }
@@ -228,6 +238,16 @@ class DatabaseHelper {
         await db.execute('CREATE INDEX idx_maintenance_type ON $tableMaintenance (type)');
         await db.execute('CREATE INDEX idx_maintenance_date ON $tableMaintenance (maintenance_date)');
         await db.execute('CREATE INDEX idx_maintenance_cost ON $tableMaintenance (cost)');
+      }
+      
+      if (oldVersion < 5) {
+        // Version 5: Add OCR scans table
+        await db.execute(OcrDatabaseHelper.createTableSql);
+        
+        // Create indexes for scans
+        await db.execute('CREATE INDEX idx_scans_user_id ON ${OcrDatabaseHelper.tableName} (userId)');
+        await db.execute('CREATE INDEX idx_scans_timestamp ON ${OcrDatabaseHelper.tableName} (timestamp)');
+        await db.execute('CREATE INDEX idx_scans_source ON ${OcrDatabaseHelper.tableName} (source)');
       }
     } catch (e) {
       throw DatabaseException('Failed to upgrade database: $e');
@@ -999,6 +1019,50 @@ class DatabaseHelper {
       ''', [userId]);
     } catch (e) {
       throw DatabaseException('Failed to clear maintenance: $e');
+    }
+  }
+
+  /// Get overdue reminders with car information for a specific user
+  Future<List<Map<String, dynamic>>> getOverdueRemindersWithCarInfo(String userId) async {
+    try {
+      final db = await database;
+      final now = DateTime.now().toIso8601String();
+      return await db.rawQuery('''
+        SELECT 
+          r.*,
+          c.brand as car_brand,
+          c.model as car_model,
+          c.year as car_year,
+          c.license_plate as car_license_plate
+        FROM $tableReminders r
+        INNER JOIN $tableCars c ON r.car_id = c.id
+        WHERE c.user_id = ? AND r.is_completed = 0 AND r.target_date IS NOT NULL AND r.target_date < ?
+        ORDER BY r.target_date ASC
+      ''', [userId, now]);
+    } catch (e) {
+      throw DatabaseException('Failed to get overdue reminders with car info: $e');
+    }
+  }
+
+  /// Get upcoming reminders with car information for a specific user
+  Future<List<Map<String, dynamic>>> getUpcomingRemindersWithCarInfo(String userId) async {
+    try {
+      final db = await database;
+      final now = DateTime.now().toIso8601String();
+      return await db.rawQuery('''
+        SELECT 
+          r.*,
+          c.brand as car_brand,
+          c.model as car_model,
+          c.year as car_year,
+          c.license_plate as car_license_plate
+        FROM $tableReminders r
+        INNER JOIN $tableCars c ON r.car_id = c.id
+        WHERE c.user_id = ? AND r.is_completed = 0 AND r.target_date IS NOT NULL AND r.target_date >= ?
+        ORDER BY r.target_date ASC
+      ''', [userId, now]);
+    } catch (e) {
+      throw DatabaseException('Failed to get upcoming reminders with car info: $e');
     }
   }
 }

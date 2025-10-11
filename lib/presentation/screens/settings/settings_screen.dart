@@ -36,22 +36,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           _buildHeaderWithBackground(),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildProfileSection(currentUser, authProvider),
-                  const SizedBox(height: 24),
-                  _buildNotificationsSection(),
-                  const SizedBox(height: 24),
-                  const BackupButtonWidget(),
-                  const SizedBox(height: 24),
-                  _buildAppAppearanceSection(),
-                  const SizedBox(height: 24),
-                  _buildAboutSupportSection(),
-                  const SizedBox(height: 32),
-                ],
+            child: RefreshIndicator(
+              onRefresh: _refreshSettingsData,
+              color: AppTheme.primaryGreen,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildProfileSection(currentUser, authProvider),
+                    const SizedBox(height: 24),
+                    _buildNotificationsSection(),
+                    const SizedBox(height: 24),
+                    const BackupButtonWidget(),
+                    const SizedBox(height: 24),
+                    _buildAppAppearanceSection(),
+                    const SizedBox(height: 24),
+                    _buildAboutSupportSection(),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
           ),
@@ -782,6 +786,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _showMessage('Verification status refreshed!');
     } else if (mounted) {
       _showMessage('Failed to refresh verification status. Please try again.');
+    }
+  }
+
+  /// Refreshes all data on the settings screen
+  Future<void> _refreshSettingsData() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.reloadUser();
+    if (mounted) {
+      setState(() {}); // Refresh the UI
     }
   }
 }

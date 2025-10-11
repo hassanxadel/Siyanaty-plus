@@ -3,6 +3,7 @@ import '../database/database_helper.dart';
 import '../models/backup_maintenance.dart';
 import '../models/backup_reminder.dart';
 import '../shared/utils/app_logger.dart';
+import 'firebase_maintenance_service.dart';
 
 /// Service class for managing maintenance records
 /// Handles business logic, validation, and database operations for maintenance
@@ -69,6 +70,17 @@ class MaintenanceService {
 
       final id = await _databaseHelper.insertMaintenance(maintenance);
       AppLogger.info('Maintenance record added successfully with ID: $id');
+
+      // Backup to Firebase if user is authenticated
+      if (isUserAuthenticated) {
+        try {
+          await FirebaseMaintenanceService.backupMaintenanceToFirestore();
+          AppLogger.info('Maintenance record backed up to Firebase');
+        } catch (e) {
+          AppLogger.error('Failed to backup maintenance record to Firebase', error: e);
+          // Don't fail the operation if backup fails
+        }
+      }
 
       return MaintenanceOperationResult.success('Maintenance record added successfully');
     } catch (e) {
@@ -189,6 +201,18 @@ class MaintenanceService {
       final rowsUpdated = await _databaseHelper.updateMaintenance(updatedMaintenance, userId);
       if (rowsUpdated > 0) {
         AppLogger.info('Maintenance record updated successfully');
+        
+        // Backup to Firebase if user is authenticated
+        if (isUserAuthenticated) {
+          try {
+            await FirebaseMaintenanceService.backupMaintenanceToFirestore();
+            AppLogger.info('Updated maintenance record backed up to Firebase');
+          } catch (e) {
+            AppLogger.error('Failed to backup updated maintenance record to Firebase', error: e);
+            // Don't fail the operation if backup fails
+          }
+        }
+        
         return MaintenanceOperationResult.success('Maintenance record updated successfully');
       } else {
         return MaintenanceOperationResult.failure('Failed to update maintenance record');
@@ -211,6 +235,18 @@ class MaintenanceService {
 
       if (rowsDeleted > 0) {
         AppLogger.info('Maintenance record deleted successfully');
+        
+        // Backup to Firebase if user is authenticated
+        if (isUserAuthenticated) {
+          try {
+            await FirebaseMaintenanceService.backupMaintenanceToFirestore();
+            AppLogger.info('Maintenance record deletion backed up to Firebase');
+          } catch (e) {
+            AppLogger.error('Failed to backup maintenance record deletion to Firebase', error: e);
+            // Don't fail the operation if backup fails
+          }
+        }
+        
         return MaintenanceOperationResult.success('Maintenance record deleted successfully');
       } else {
         return MaintenanceOperationResult.failure('Maintenance record not found or access denied');

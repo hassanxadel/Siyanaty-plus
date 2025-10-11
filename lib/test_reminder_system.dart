@@ -4,7 +4,6 @@ library;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'models/backup_reminder.dart';
-import 'models/backup_car.dart';
 import 'services/reminder_service.dart';
 import 'services/firebase_reminder_service.dart';
 import 'database/database_helper.dart';

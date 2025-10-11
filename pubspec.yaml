@@ -50,11 +50,20 @@ dependencies:
   file_picker: ^8.0.0+1
   geolocator: ^12.0.0
   
+  # OCR and Camera
+  google_ml_kit: ^0.18.0
+  camera: ^0.10.5+9
+  
+  # Local Notifications
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+  url_launcher: ^6.2.5
+  
   # Firebase dependencies for advanced features (stable versions)
-  firebase_core: ^2.15.0
-  firebase_auth: ^4.7.0
-  cloud_firestore: ^4.8.0
-  firebase_storage: ^11.2.0
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.15.3
+  cloud_firestore: ^4.13.6
+  firebase_storage: ^11.5.6
   google_sign_in: ^6.1.5
   google_maps_flutter: ^2.10.1
 

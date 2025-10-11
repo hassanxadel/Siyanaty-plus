@@ -43,6 +43,8 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
   }
 
   Future<void> _loadMaintenance() async {
+    if (!mounted) return;
+    
     setState(() => _isLoading = true);
     
     try {
@@ -174,7 +176,7 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 28),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const Expanded(
@@ -267,11 +269,11 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
                 children: [
                   _buildClickableStatCard('All', _allMaintenance.length, Colors.blue, 0),
                   const SizedBox(width: 2),
-                  _buildClickableStatCard('Mechanics', _mechanicsMaintenance.length, Colors.orange, 1),
+                  _buildClickableStatCard('Mech', _mechanicsMaintenance.length, Colors.orange, 1),
                   const SizedBox(width: 2),
-                  _buildClickableStatCard('Electrical', _electricalMaintenance.length, Colors.red, 2),
+                  _buildClickableStatCard('Elec', _electricalMaintenance.length, Colors.red, 2),
                   const SizedBox(width: 2),
-                  _buildClickableStatCard('Suspension', _suspensionMaintenance.length, Colors.purple, 3),
+                  _buildClickableStatCard('Susp', _suspensionMaintenance.length, Colors.purple, 3),
                   const SizedBox(width: 2),
                   _buildClickableStatCard('Others', _othersMaintenance.length, Colors.green, 4),
                 ],
@@ -439,130 +441,208 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
     
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () => _showMaintenanceDetails(maintenanceWithInfo),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: typeColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      maintenance.type.displayName,
-                      style: TextStyle(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              const Color(0xFF1A362A), // Dark green
+              const Color(0xFF2E4032), // Slightly lighter dark green
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: InkWell(
+          onTap: () => _showMaintenanceDetails(maintenanceWithInfo),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with icon and title
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: typeColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _getMaintenanceIcon(maintenance.type),
                         color: typeColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                        size: 24,
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            maintenance.title,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          // Car info
+                          Row(
+                            children: [
+                              Icon(Icons.directions_car, size: 14, color: Colors.grey[400]),
+                              const SizedBox(width: 4),
+                              Text(
+                                maintenanceWithInfo.carDisplayName,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                maintenance.title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  ],
                 ),
-              ),
-              const SizedBox(height: 4),
-              // Car info
-              Row(
-                children: [
-                  Icon(Icons.directions_car, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    maintenanceWithInfo.carDisplayName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+                const SizedBox(height: 12),
+                
+                // Type and date row
+                Row(
+                  children: [
+                    Text(
+                      maintenance.type.displayName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[400],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              // Reminder info
-              Row(
-                children: [
-                  Icon(Icons.notification_important, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Related to: ${maintenanceWithInfo.reminderDisplayName}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+                    const Spacer(),
+                    Text(
+                      DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[400],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              if (maintenance.description.isNotEmpty) ...[
+                  ],
+                ),
                 const SizedBox(height: 8),
+                
+                // Description
                 Text(
-                  maintenance.description,
-                  style: TextStyle(
+                  maintenance.description.isNotEmpty 
+                    ? maintenance.description 
+                    : 'No description provided',
+                  style: const TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[700],
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryGreen.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'EGP ${maintenance.cost.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: AppTheme.primaryGreen,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                const SizedBox(height: 12),
+                
+                // Cost and action button row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'EGP ${maintenance.cost.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: AppTheme.primaryGreen,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  if (maintenance.mechanicName != null) ...[
-                    Icon(Icons.person, size: 14, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      maintenance.mechanicName!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: () => _showMaintenanceDetails(maintenanceWithInfo),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryGreen,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'View Details',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildMaintenanceDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFA5D6A7), // Muted light green
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Color(0xFFC8E6C9), // Light green text
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getMaintenanceIcon(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return Icons.build_circle;
+      case MaintenanceType.electrical:
+        return Icons.electrical_services;
+      case MaintenanceType.suspension:
+        return Icons.car_repair;
+      case MaintenanceType.others:
+        return Icons.miscellaneous_services;
+    }
   }
 
   Widget _buildEmptyState() {
@@ -654,8 +734,8 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
     );
   }
 
-  void _showEditMaintenanceSheet(BackupMaintenance maintenance) {
-    showModalBottomSheet(
+  void _showEditMaintenanceSheet(BackupMaintenance maintenance) async {
+    final updated = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -663,11 +743,16 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
       ),
       builder: (context) => EditMaintenanceForm(
         maintenance: maintenance,
-        onMaintenanceUpdated: () {
-          _loadMaintenance();
-        },
+        onMaintenanceUpdated: () {},
       ),
     );
+    if (!mounted) return;
+    if (updated == true) {
+      await _loadMaintenance();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maintenance updated successfully')),
+      );
+    }
   }
 
   void _deleteMaintenanceRecord(BackupMaintenance maintenance) {
@@ -858,7 +943,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
                       AppTheme.darkAccentGreen,
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
                       color: AppTheme.primaryGreen.withOpacity(0.3),
@@ -870,9 +955,9 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _saveMaintenance,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0c3c24),
-                    shadowColor: Colors.transparent,
-                    foregroundColor: Colors.white,
+                     backgroundColor: Colors.transparent,
+                     shadowColor: Colors.transparent,
+                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -1138,7 +1223,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
 }
 
 // Placeholder classes for other forms and dialogs
-class EditMaintenanceForm extends StatelessWidget {
+class EditMaintenanceForm extends StatefulWidget {
   final BackupMaintenance maintenance;
   final VoidCallback onMaintenanceUpdated;
 
@@ -1149,13 +1234,338 @@ class EditMaintenanceForm extends StatelessWidget {
   });
 
   @override
+  State<EditMaintenanceForm> createState() => _EditMaintenanceFormState();
+}
+
+class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _costController = TextEditingController();
+  final _mechanicController = TextEditingController();
+  final _invoiceController = TextEditingController();
+
+  final MaintenanceService _maintenanceService = MaintenanceService();
+
+  late DateTime _selectedDate;
+  late MaintenanceType _selectedType;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final m = widget.maintenance;
+    _titleController.text = m.title;
+    _descriptionController.text = m.description;
+    _costController.text = m.cost.toStringAsFixed(0);
+    _mechanicController.text = m.mechanicName ?? '';
+    _invoiceController.text = m.invoiceNumber ?? '';
+    _selectedDate = m.maintenanceDate;
+    _selectedType = m.type;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _costController.dispose();
+    _mechanicController.dispose();
+    _invoiceController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 200,
-      color: Colors.white,
-      child: const Center(
-        child: Text('Edit Maintenance Form - To be implemented'),
+    final media = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        bottom: media.viewInsets.bottom + 16,
+        top: 16,
       ),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Edit Maintenance Record', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18)),
+              const SizedBox(height: 16),
+
+              // Title and Type row
+              Row(
+                children: [
+                  Expanded(child: _field(label: 'Title*', controller: _titleController)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildTypeDropdown()),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Description
+              _field(
+                label: 'Description*',
+                controller: _descriptionController,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+
+              // Cost and Date row
+              Row(
+                children: [
+                  Expanded(child: _field(
+                    label: 'Cost (EGP)*',
+                    controller: _costController,
+                    keyboard: TextInputType.number,
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildDatePicker()),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Optional fields row
+              Row(
+                children: [
+                  Expanded(child: _field(
+                    label: 'Mechanic/Service Center (optional)',
+                    controller: _mechanicController,
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: _field(
+                    label: 'Invoice Number (optional)',
+                    controller: _invoiceController,
+                  )),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Save button with gradient
+              SizedBox(
+                width: double.infinity,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.primaryGreen,
+                        AppTheme.darkAccentGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text('Update Maintenance', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    if (_formKey.currentState == null || !_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await _maintenanceService.updateMaintenance(
+        maintenanceId: widget.maintenance.id!.toString(),
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        cost: double.tryParse(_costController.text.trim()) ?? 0,
+        maintenanceDate: _selectedDate,
+        type: _selectedType,
+        mechanicName: _mechanicController.text.trim().isEmpty ? null : _mechanicController.text.trim(),
+        invoiceNumber: _invoiceController.text.trim().isEmpty ? null : _invoiceController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (result.success) {
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating maintenance: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _field({
+    required String label,
+    required TextEditingController controller,
+    TextInputType? keyboard,
+    int maxLines = 1,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboard,
+          maxLines: maxLines,
+          style: const TextStyle(fontFamily: 'Orbitron'),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+          validator: label.contains('*')
+              ? (value) => value?.isEmpty == true ? 'This field is required' : null
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTypeDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Type*',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        DropdownButtonFormField<MaintenanceType>(
+          value: _selectedType,
+          style: const TextStyle(fontFamily: 'Orbitron'),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+          items: MaintenanceType.values.map((type) {
+            return DropdownMenuItem(
+              value: type,
+              child: Text(type.displayName, style: const TextStyle(fontFamily: 'Orbitron')),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) setState(() => _selectedType = value);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDatePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Maintenance Date*',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: () async {
+            final date = await showDatePicker(
+              context: context,
+              initialDate: _selectedDate,
+              firstDate: DateTime(2000),
+              lastDate: DateTime.now(),
+            );
+            if (date != null) setState(() => _selectedDate = date);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppTheme.primaryGreen),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('MMM dd, yyyy').format(_selectedDate),
+                  style: const TextStyle(fontFamily: 'Orbitron'),
+                ),
+                const Icon(Icons.calendar_today, color: AppTheme.primaryGreen, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1175,43 +1585,303 @@ class MaintenanceDetailsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maintenance = maintenanceWithInfo.maintenance;
+    final typeColor = _getMaintenanceTypeColor(maintenance.type);
     
-    return AlertDialog(
-      title: Text(maintenance.title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      elevation: 20,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 800),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              const Color(0xFF1A362A), // Dark green
+              const Color(0xFF2E4032), // Slightly lighter dark green
+            ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: typeColor.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with close button
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: typeColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          _getMaintenanceTypeIcon(maintenance.type),
+                          color: typeColor,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              maintenance.title,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Orbitron',
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: typeColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${maintenance.type.displayName} - ${DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate)}',
+                                style: TextStyle(
+                                  color: typeColor,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                      }
+                    },
+                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            
+            // Details section with modern styling
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  _buildModernDetailRow('Type', maintenance.type.displayName, Icons.category, typeColor),
+                  _buildModernDetailRow('Cost', 'EGP ${maintenance.cost.toStringAsFixed(2)}', Icons.attach_money, AppTheme.primaryGreen),
+                  _buildModernDetailRow('Date', DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate), Icons.calendar_today, Colors.blue),
+                  _buildModernDetailRow('Car', maintenanceWithInfo.carDisplayName, Icons.directions_car, Colors.orange),
+                  _buildModernDetailRow('Reminder', maintenanceWithInfo.reminderDisplayName, Icons.notification_important, Colors.purple),
+                  if (maintenance.description.isNotEmpty)
+                    _buildModernDetailRow('Description', maintenance.description, Icons.description, Colors.grey),
+                  if (maintenance.mechanicName != null)
+                    _buildModernDetailRow('Mechanic', maintenance.mechanicName!, Icons.person, Colors.cyan),
+                  if (maintenance.invoiceNumber != null)
+                    _buildModernDetailRow('Invoice', maintenance.invoiceNumber!, Icons.receipt, Colors.teal),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Modern action buttons
+            Column(
+              children: [
+                // Top row - Edit and Delete
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildModernButton(
+                        icon: Icons.edit_rounded,
+                        label: 'Edit',
+                        color: const Color(0xFF2196F3),
+                        onPressed: onEdit,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildModernButton(
+                        icon: Icons.delete_rounded,
+                        label: 'Delete',
+                        color: const Color(0xFFE91E63),
+                        onPressed: onDelete,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                
+               
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernDetailRow(String label, String value, IconData icon, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
         children: [
-          Text('Type: ${maintenance.type.displayName}'),
-          Text('Cost: EGP ${maintenance.cost.toStringAsFixed(2)}'),
-          Text('Date: ${DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate)}'),
-          Text('Car: ${maintenanceWithInfo.carDisplayName}'),
-          Text('Reminder: ${maintenanceWithInfo.reminderDisplayName}'),
-          if (maintenance.description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text('Description: ${maintenance.description}'),
-          ],
-          if (maintenance.mechanicName != null) ...[
-            const SizedBox(height: 4),
-            Text('Mechanic: ${maintenance.mechanicName}'),
-          ],
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[400],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
-        ),
-        TextButton(
-          onPressed: onEdit,
-          child: const Text('Edit'),
-        ),
-        TextButton(
-          onPressed: onDelete,
-          style: TextButton.styleFrom(foregroundColor: Colors.red),
-          child: const Text('Delete'),
-        ),
-      ],
     );
+  }
+
+  Widget _buildModernButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.8),
+            color,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getMaintenanceTypeColor(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return Colors.orange;
+      case MaintenanceType.electrical:
+        return Colors.red;
+      case MaintenanceType.suspension:
+        return Colors.purple;
+      case MaintenanceType.others:
+        return Colors.green;
+    }
+  }
+
+  IconData _getMaintenanceTypeIcon(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return Icons.build_circle;
+      case MaintenanceType.electrical:
+        return Icons.electrical_services;
+      case MaintenanceType.suspension:
+        return Icons.car_repair;
+      case MaintenanceType.others:
+        return Icons.miscellaneous_services;
+    }
   }
 }

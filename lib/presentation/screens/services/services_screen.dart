@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../shared/constants/app_theme.dart';
@@ -13,34 +14,37 @@ class ServiceCentersScreen extends StatefulWidget {
 class _ServiceCentersScreenState extends State<ServiceCentersScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
-  String _selectedFilter = 'All';
   
   // Google Maps related
   GoogleMapController? _mapController;
   LatLng? _currentLocation;
   Set<Marker> _markers = {};
   bool _isLoadingLocation = false;
-
-  final List<String> _filters = [
-    'All',
-    'Oil Change',
-    'Tire Service',
-    'Brake Repair',
-    'Engine Repair',
-    'Battery Service',
-    'Transmission',
-  ];
+  MapType _currentMapType = MapType.normal;
+  bool _mapLoadFailed = false;
+  bool _isMapLoading = true;
+  Timer? _mapLoadingTimer;
+  bool _isEmulator = false;
+  int _mapRefreshAttempts = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _checkIfEmulator();
     _getCurrentLocation();
+  }
+
+  void _checkIfEmulator() {
+    // Check if running on emulator
+    _isEmulator = true; // Assume emulator for now, can be enhanced with platform detection
+    print('Google Maps: Running on emulator: $_isEmulator');
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _mapLoadingTimer?.cancel();
     super.dispose();
   }
 
@@ -52,9 +56,6 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         children: [
           // Header with gradient background
           _buildHeaderWithBackground(),
-          
-          // Filter section
-          _buildFilterSection(),
           
           // Tab content
           Expanded(
@@ -103,8 +104,8 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                             fontSize: 10,
                           ),
                           tabs: const [
-                            Tab(icon: Icon(Icons.map, size: 12), text: 'Map View'),
-                            Tab(icon: Icon(Icons.list, size: 12), text: 'List View'),
+                            Tab(icon: Icon(Icons.map, size: 12), text: 'Maps'),
+                            Tab(icon: Icon(Icons.favorite, size: 12), text: 'Favorites'),
                           ],
                         ),
                       ),
@@ -116,7 +117,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                       controller: _tabController,
                       children: [
                         _buildMapView(),
-                        _buildListView(),
+                        _buildFavoritesView(),
                       ],
                     ),
                   ),
@@ -210,63 +211,6 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
     );
   }
 
-  Widget _buildFilterSection() {
-    return Container(
-      height: 80,
-      color: AppTheme.getThemeAwareBackground(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Text(
-              'Filter by Service Type',
-              style: TextStyle(
-                fontFamily: 'Orbitron',
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.getThemeAwareTextColor(context),
-              ),
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: _filters.length,
-              itemBuilder: (context, index) {
-                final filter = _filters[index];
-                final isSelected = filter == _selectedFilter;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(
-                      filter,
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : AppTheme.getThemeAwareTextColor(context),
-                      ),
-                    ),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        _selectedFilter = filter;
-                      });
-                      _updateMarkers();
-                    },
-                    backgroundColor: AppTheme.getThemeAwareCardBackground(context).withOpacity(0.3),
-                    selectedColor: AppTheme.primaryGreen,
-                    checkmarkColor: Colors.white,
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildMapView() {
     if (_isLoadingLocation) {
@@ -341,32 +285,128 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
 
     return Stack(
       children: [
-        // Google Maps
-        GoogleMap(
-          onMapCreated: (GoogleMapController controller) {
-            _mapController = controller;
-            _updateMarkers();
-          },
-          initialCameraPosition: CameraPosition(
-            target: _currentLocation!,
-            zoom: 14.0,
+        // Google Maps with enhanced error handling
+        Container(
+          color: Colors.grey[200], // Fallback background
+          child: _mapLoadFailed ? 
+            // Show fallback UI when map fails to load
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.map_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Map Loading Issue',
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Unable to load Google Maps.\nThis may be due to network issues or emulator limitations.',
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _mapLoadFailed = false;
+                        _isMapLoading = true;
+                        _mapRefreshAttempts = 0;
+                      });
+                      _getCurrentLocation();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text(
+                      'Retry Map',
+                      style: TextStyle(fontFamily: 'Orbitron'),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryGreen,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ) :
+            GoogleMap(
+            onMapCreated: (GoogleMapController controller) {
+              print('Google Maps: Map created successfully');
+              _mapController = controller;
+              
+              // Start loading timeout
+              _startMapLoadingTimeout();
+              
+              // Add a delay to ensure map is fully loaded before adding markers
+              Future.delayed(const Duration(milliseconds: 1000), () {
+                if (mounted) {
+                  _updateMarkers();
+                  _onMapLoaded(); // Mark map as loaded
+                }
+              });
+              
+              // For emulators, try additional refresh attempts
+              if (_isEmulator) {
+                Future.delayed(const Duration(seconds: 3), () {
+                  if (_isMapLoading && mounted) {
+                    print('Google Maps: Emulator - attempting first refresh');
+                    _forceMapRefresh();
+                  }
+                });
+              }
+            },
+            initialCameraPosition: CameraPosition(
+              target: _currentLocation!,
+              zoom: 14.0, // Slightly reduced zoom for better loading
+            ),
+            markers: _markers,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            mapType: _currentMapType,
+            onTap: (LatLng position) {
+              print('Google Maps: Map tapped at ${position.latitude}, ${position.longitude}');
+              // Hide any open info windows by rebuilding markers
+              if (mounted) {
+                setState(() {
+                  _updateMarkers();
+                });
+              }
+            },
+            onCameraMove: (CameraPosition position) {
+              // Optional: Handle camera movement
+            },
+            onCameraIdle: () {
+              // Map is idle, can perform operations
+              if (_isMapLoading) {
+                _onMapLoaded();
+              }
+            },
+            // Enhanced properties for better emulator compatibility
+            compassEnabled: true,
+            mapToolbarEnabled: false,
+            buildingsEnabled: false, // Disable for better performance
+            trafficEnabled: false,
+            zoomControlsEnabled: false, // Disable default controls
+            scrollGesturesEnabled: true,
+            zoomGesturesEnabled: true,
+            tiltGesturesEnabled: false, // Disable for better emulator performance
+            rotateGesturesEnabled: false, // Disable for better emulator performance
+            // Use lite mode for better emulator compatibility
+            liteModeEnabled: _isEmulator,
           ),
-          markers: _markers,
-          myLocationEnabled: true,
-          myLocationButtonEnabled: false,
-          mapType: MapType.normal,
-          onTap: (LatLng position) {
-            // Hide any open info windows by rebuilding markers
-            setState(() {
-              _updateMarkers();
-            });
-          },
-          onCameraMove: (CameraPosition position) {
-            // Optional: Handle camera movement
-          },
-          onCameraIdle: () {
-            // Optional: Handle when camera stops moving
-          },
         ),
         
         // Current location button
@@ -382,38 +422,202 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
           ),
         ),
         
-        // Floating service center cards
+        // Debug info overlay (temporary)
         Positioned(
-          bottom: 20,
+          top: 16,
           left: 16,
-          right: 16,
-          child: SizedBox(
-            height: 180,
-            child: PageView.builder(
-              itemCount: _getFilteredServiceCenters().length,
-              itemBuilder: (context, index) {
-                final center = _getFilteredServiceCenters()[index];
-                return Container(
-                  margin: const EdgeInsets.only(right: 16),
-                  child: _buildServiceCenterCard(center, compact: true),
-                );
-              },
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Location: ${_currentLocation?.latitude.toStringAsFixed(4)}, ${_currentLocation?.longitude.toStringAsFixed(4)}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontFamily: 'Orbitron',
+              ),
             ),
           ),
         ),
+        
+        // Map type switcher button
+        Positioned(
+          bottom: 100,
+          right: 16,
+          child: FloatingActionButton(
+            mini: true,
+            onPressed: _switchMapType,
+            backgroundColor: Colors.white,
+            foregroundColor: AppTheme.primaryGreen,
+            child: const Icon(Icons.layers),
+          ),
+        ),
+        
+        // Map loading indicator
+        if (_isMapLoading && !_mapLoadFailed)
+          Container(
+            color: Colors.black54,
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Loading map...',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        
+        // Fallback message if map fails to load
+        if (_mapLoadFailed)
+          Container(
+            color: Colors.black87,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.map_outlined,
+                      size: 64,
+                      color: AppTheme.primaryGreen,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Map Loading Issue',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This is common in emulators. Try switching map type or use a physical device.',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontFamily: 'Orbitron',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _mapLoadFailed = false;
+                                  _isMapLoading = true;
+                                  _mapRefreshAttempts = 0;
+                                  _switchMapType();
+                                });
+                              },
+                              icon: const Icon(Icons.layers),
+                              label: const Text('Switch Map Type'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryGreen,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _mapLoadFailed = false;
+                                  _isMapLoading = true;
+                                  _mapRefreshAttempts = 0;
+                                });
+                                _getCurrentLocation();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (_isEmulator)
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _mapLoadFailed = false;
+                                _isMapLoading = true;
+                                _mapRefreshAttempts = 0;
+                                _currentMapType = MapType.satellite;
+                              });
+                              _forceMapRefresh();
+                            },
+                            icon: const Icon(Icons.satellite),
+                            label: const Text('Force Satellite View'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
 
-  Widget _buildListView() {
-    final serviceCenters = _getFilteredServiceCenters();
-    
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: serviceCenters.length,
-      itemBuilder: (context, index) {
-        return _buildServiceCenterCard(serviceCenters[index]);
-      },
+  Widget _buildFavoritesView() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.favorite_border,
+            size: 80,
+            color: AppTheme.primaryGreen,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'No Favorites Yet',
+            style: TextStyle(
+              fontFamily: 'Orbitron',
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.backgroundGreen,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Tap on service center markers\non the map to add them to favorites',
+            style: TextStyle(
+              fontFamily: 'Orbitron',
+              fontSize: 14,
+              color: AppTheme.darkAccentGreen,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 
@@ -610,8 +814,8 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
     );
   }
 
-  List<Map<String, dynamic>> _getFilteredServiceCenters() {
-    final allCenters = [
+  List<Map<String, dynamic>> _getServiceCenters() {
+    return [
       {
         'name': 'QuickLube Express',
         'category': 'Oil Change',
@@ -673,16 +877,6 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         'coordinates': const LatLng(40.7282, -74.0776), // NYC coordinates
       },
     ];
-
-    if (_selectedFilter == 'All') {
-      return allCenters;
-    }
-    
-    return allCenters.where((center) => 
-        (center['services'] as List<String>).any((service) => 
-            service.toLowerCase().contains(_selectedFilter.toLowerCase())
-        )
-    ).toList();
   }
 
   IconData _getServiceIcon(String category) {
@@ -718,6 +912,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         _isLoadingLocation = false;
       });
       
+      print('Google Maps: Location found at ${position.latitude}, ${position.longitude}');
       _updateMarkers();
       
       if (mounted) {
@@ -759,9 +954,11 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
   }
 
   void _updateMarkers() {
-    final filteredCenters = _getFilteredServiceCenters();
-    _markers = filteredCenters.map((center) {
+    final serviceCenters = _getServiceCenters();
+    print('Google Maps: Updating markers for ${serviceCenters.length} service centers');
+    _markers = serviceCenters.map((center) {
       final coordinates = center['coordinates'] as LatLng;
+      print('Google Maps: Adding marker for ${center['name']} at ${coordinates.latitude}, ${coordinates.longitude}');
       return Marker(
         markerId: MarkerId(center['name']),
         position: coordinates,
@@ -773,11 +970,13 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
           _getMarkerColor(center['category']),
         ),
         onTap: () {
+          print('Google Maps: Marker tapped for ${center['name']}');
           // Show service center details
           _showServiceCenterDetails(center);
         },
       );
     }).toSet();
+    print('Google Maps: Total markers created: ${_markers.length}');
   }
 
   double _getMarkerColor(String category) {
@@ -987,5 +1186,88 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         backgroundColor: AppTheme.primaryGreen,
       ),
     );
+  }
+
+  void _switchMapType() {
+    setState(() {
+      switch (_currentMapType) {
+        case MapType.normal:
+          _currentMapType = MapType.satellite;
+          break;
+        case MapType.satellite:
+          _currentMapType = MapType.hybrid;
+          break;
+        case MapType.hybrid:
+          _currentMapType = MapType.terrain;
+          break;
+        case MapType.terrain:
+          _currentMapType = MapType.normal;
+          break;
+        case MapType.none:
+          _currentMapType = MapType.normal;
+          break;
+      }
+      _isMapLoading = true;
+      _mapLoadFailed = false;
+    });
+    print('Google Maps: Switched to map type: $_currentMapType');
+    _startMapLoadingTimeout();
+  }
+
+  void _startMapLoadingTimeout() {
+    _mapLoadingTimer?.cancel();
+    // Shorter timeout for emulators
+    final timeout = _isEmulator ? const Duration(seconds: 5) : const Duration(seconds: 10);
+    
+    _mapLoadingTimer = Timer(timeout, () {
+      if (_isMapLoading) {
+        if (_isEmulator && _mapRefreshAttempts < 3) {
+          // Try to refresh map for emulators
+          _mapRefreshAttempts++;
+          print('Google Maps: Emulator timeout - attempting refresh #$_mapRefreshAttempts');
+          _forceMapRefresh();
+        } else {
+          setState(() {
+            _isMapLoading = false;
+            _mapLoadFailed = true;
+          });
+          print('Google Maps: Map loading timeout - showing fallback UI');
+        }
+      }
+    });
+  }
+
+  void _forceMapRefresh() {
+    if (_mapController != null && _currentLocation != null) {
+      // Force camera update to trigger map refresh
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: _currentLocation!,
+            zoom: 15.0,
+          ),
+        ),
+      );
+      
+      // Try different map type
+      if (_mapRefreshAttempts == 2) {
+        setState(() {
+          _currentMapType = MapType.satellite;
+        });
+        print('Google Maps: Switching to satellite view for emulator');
+      }
+      
+      // Restart timeout
+      _startMapLoadingTimeout();
+    }
+  }
+
+  void _onMapLoaded() {
+    _mapLoadingTimer?.cancel();
+    setState(() {
+      _isMapLoading = false;
+      _mapLoadFailed = false;
+    });
+    print('Google Maps: Map loaded successfully');
   }
 }

@@ -4,6 +4,8 @@ import 'shared/constants/app_theme.dart';
 import 'shared/services/database_service.dart';
 import 'shared/services/firebase_service.dart';
 import 'shared/utils/app_logger.dart';
+import 'services/local_notification_service.dart';
+import 'services/reminder_service.dart';
 import 'presentation/providers/theme_provider.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/widgets/bottom_nav_bar.dart';
@@ -35,6 +37,24 @@ void main() async {
     
     /// Initialize backup database helper
     await DatabaseHelper.instance.database;
+    
+    /// Initialize local notification service
+    try {
+      await LocalNotificationService.instance.initialize();
+      AppLogger.info('Local notification service initialized successfully');
+    } catch (e) {
+      AppLogger.warning('Local notification service initialization failed: $e');
+    }
+    
+    /// Schedule all reminder notifications on app startup
+    try {
+      final reminderService = ReminderService();
+      await reminderService.scheduleAllReminderNotifications();
+      await reminderService.checkAndNotifyDueReminders();
+      AppLogger.info('Reminder notifications scheduled successfully');
+    } catch (e) {
+      AppLogger.warning('Failed to schedule reminder notifications: $e');
+    }
     
     AppLogger.info('App initialization completed successfully');
   } catch (e) {
