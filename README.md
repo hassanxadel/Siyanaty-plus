@@ -289,7 +289,7 @@ android {
 <key>CFBundleDisplayName</key>
 <string>Siyanaty+</string>
 <key>CFBundleIdentifier</key>
-<string>com.example.siyanatyPlus</string>
+<string>com.example.siyanaty</string>
 ```
 
 ---

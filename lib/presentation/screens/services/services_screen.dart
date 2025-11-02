@@ -1,7 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../../shared/constants/app_constants.dart';
 import '../../../shared/services/location_service.dart';
 
 class ServiceCentersScreen extends StatefulWidget {
@@ -9,6 +16,61 @@ class ServiceCentersScreen extends StatefulWidget {
 
   @override
   State<ServiceCentersScreen> createState() => _ServiceCentersScreenState();
+}
+
+// Service Center model
+class ServiceCenter {
+  final String id;
+  final String name;
+  final String address;
+  final double lat;
+  final double lng;
+  final double? rating;
+  final String? phoneNumber;
+  final bool isOpen;
+  final List<String> types;
+
+  ServiceCenter({
+    required this.id,
+    required this.name,
+    required this.address,
+    required this.lat,
+    required this.lng,
+    this.rating,
+    this.phoneNumber,
+    this.isOpen = true,
+    this.types = const [],
+  });
+
+  factory ServiceCenter.fromJson(Map<String, dynamic> json) {
+    final location = json['geometry']['location'];
+    return ServiceCenter(
+      id: json['place_id'] ?? '',
+      name: json['name'] ?? 'Unknown Service Center',
+      address: json['vicinity'] ?? json['formatted_address'] ?? 'No address',
+      lat: (location['lat'] as num).toDouble(),
+      lng: (location['lng'] as num).toDouble(),
+      rating: (json['rating'] as num?)?.toDouble(),
+      phoneNumber: json['formatted_phone_number'],
+      isOpen: json['opening_hours']?['open_now'] ?? true,
+      types: List<String>.from(json['types'] ?? []),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'id': id,
+      'name': name,
+      'address': address,
+      'lat': lat,
+      'lng': lng,
+      'rating': rating,
+      'phoneNumber': phoneNumber,
+      'isOpen': isOpen,
+      'types': types,
+      'addedAt': FieldValue.serverTimestamp(),
+    };
+  }
 }
 
 class _ServiceCentersScreenState extends State<ServiceCentersScreen>
@@ -27,12 +89,25 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
   bool _isEmulator = false;
   int _mapRefreshAttempts = 0;
 
+  // Service Centers data
+  List<ServiceCenter> _serviceCenters = [];
+  List<ServiceCenter> _favoriteServiceCenters = [];
+
+  // API Configuration - Using key from constants
+  static const String _googlePlacesApiKey = AppConstants.googleMapsApiKey;
+
+  // Firebase
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _checkIfEmulator();
+    _loadFavorites();
     _getCurrentLocation();
+    // Don't auto-fetch service centers - only when user clicks button
   }
 
   void _checkIfEmulator() {
@@ -106,6 +181,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                           tabs: const [
                             Tab(icon: Icon(Icons.map, size: 12), text: 'Maps'),
                             Tab(icon: Icon(Icons.favorite, size: 12), text: 'Favorites'),
+                            Tab(icon: Icon(Icons.location_on, size: 12), text: 'Centers'),
                           ],
                         ),
                       ),
@@ -115,13 +191,68 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                   Expanded(
                     child: TabBarView(
                       controller: _tabController,
+                      physics: const NeverScrollableScrollPhysics(), // Disable swiping
                       children: [
                         _buildMapView(),
                         _buildFavoritesView(),
+                        _buildCentersListView(),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 100),
+                  
+                  // Nearby Centers button - positioned between map and nav bar
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.backgroundGreen,
+                          AppTheme.primaryGreen,
+                          AppTheme.darkAccentGreen,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(25),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryGreen.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        _tabController.animateTo(2); // Switch to Centers tab
+                        _fetchNearbyServiceCenters();
+                      },
+                      icon: const Icon(Icons.location_searching, color: Colors.white),
+                      label: const Text(
+                        'Find Nearby Centers',
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
@@ -404,8 +535,8 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
             zoomGesturesEnabled: true,
             tiltGesturesEnabled: false, // Disable for better emulator performance
             rotateGesturesEnabled: false, // Disable for better emulator performance
-            // Use lite mode for better emulator compatibility
-            liteModeEnabled: _isEmulator,
+            // Disable lite mode to get full functionality
+            liteModeEnabled: false,
           ),
         ),
         
@@ -455,6 +586,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
             child: const Icon(Icons.layers),
           ),
         ),
+        
         
         // Map loading indicator
         if (_isMapLoading && !_mapLoadFailed)
@@ -587,45 +719,599 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
   }
 
   Widget _buildFavoritesView() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.favorite_border,
-            size: 80,
-            color: AppTheme.primaryGreen,
+    if (_favoriteServiceCenters.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.favorite_border,
+              size: 80,
+              color: AppTheme.primaryGreen,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'No Favorites Yet',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.backgroundGreen,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Tap on service center markers\non the map to add them to favorites',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 14,
+                color: AppTheme.darkAccentGreen,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _favoriteServiceCenters.length,
+      itemBuilder: (context, index) {
+        final center = _favoriteServiceCenters[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          SizedBox(height: 16),
-          Text(
-            'No Favorites Yet',
-            style: TextStyle(
-              fontFamily: 'Orbitron',
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.backgroundGreen,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: InkWell(
+            onTap: () => _showServiceCenterBottomSheet(center),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.favorite,
+                        color: Colors.red,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          center.name,
+                          style: const TextStyle(
+                            fontFamily: 'Orbitron',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _showRemoveFromFavoritesDialog(center),
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 12),
+                  
+                  // Address
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        color: AppTheme.primaryGreen,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          center.address,
+                          style: const TextStyle(
+                            fontFamily: 'Orbitron',
+                            fontSize: 12,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  if (center.rating != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.star,
+                          color: Colors.orange,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${center.rating!.toStringAsFixed(1)} rating',
+                          style: const TextStyle(
+                            fontFamily: 'Orbitron',
+                            fontSize: 12,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  
+                  const SizedBox(height: 12),
+                  
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [AppTheme.darkAccentGreen, AppTheme.backgroundGreen],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                spreadRadius: 1,
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton.icon(
+                            onPressed: () => _navigateToServiceCenter(center),
+                            icon: const Icon(Icons.directions, size: 16, color: Colors.white),
+                            label: const Text(
+                              'Navigate',
+                              style: TextStyle(
+                                fontFamily: 'Orbitron', 
+                                fontSize: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (center.phoneNumber != null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _callServiceCenter(center),
+                            icon: const Icon(Icons.phone, size: 16),
+                            label: const Text(
+                              'Call',
+                              style: TextStyle(fontFamily: 'Orbitron', fontSize: 12),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-          SizedBox(height: 8),
-          Text(
-            'Tap on service center markers\non the map to add them to favorites',
-            style: TextStyle(
-              fontFamily: 'Orbitron',
-              fontSize: 14,
-              color: AppTheme.darkAccentGreen,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+        ),
+        );
+      },
     );
+  }
+
+  Widget _buildCentersListView() {
+    if (_serviceCenters.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.location_searching,
+              size: 80,
+              color: AppTheme.primaryGreen.withOpacity(0.7),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No Service Centers Found',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.backgroundGreen,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Try searching from the Maps tab\nor check your location settings',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 14,
+                color: AppTheme.darkAccentGreen,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.backgroundGreen,
+                    AppTheme.primaryGreen,
+                    AppTheme.darkAccentGreen,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _tabController.animateTo(0); // Switch to Maps tab
+                  _fetchNearbyServiceCenters();
+                },
+                icon: const Icon(Icons.search, color: Colors.white),
+                label: const Text(
+                  'Search for Centers',
+                  style: TextStyle(
+                    fontFamily: 'Orbitron',
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _serviceCenters.length,
+      itemBuilder: (context, index) {
+        final center = _serviceCenters[index];
+        final distance = _currentLocation != null 
+            ? _calculateDistance(_currentLocation!, LatLng(center.lat, center.lng))
+            : null;
+        
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header with name and favorite button
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        color: AppTheme.primaryGreen,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          center.name,
+                          style: const TextStyle(
+                            fontFamily: 'Orbitron',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _addToFavorites(center),
+                        icon: Icon(
+                          _isFavorite(center.id) ? Icons.favorite : Icons.favorite_border,
+                          color: _isFavorite(center.id) ? Colors.red : AppTheme.darkAccentGreen,
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 12),
+                  
+                  // Address
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.place,
+                        color: AppTheme.darkAccentGreen,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          center.address,
+                          style: const TextStyle(
+                            fontFamily: 'Orbitron',
+                            fontSize: 12,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 8),
+                  
+                  // Rating and Distance Row
+                  Row(
+                    children: [
+                      if (center.rating != null) ...[
+                        const Icon(
+                          Icons.star,
+                          color: Colors.orange,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          center.rating!.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontFamily: 'Orbitron',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                      ],
+                      if (distance != null) ...[
+                        const Icon(
+                          Icons.directions_walk,
+                          color: AppTheme.primaryGreen,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${distance.toStringAsFixed(1)} km',
+                          style: const TextStyle(
+                            fontFamily: 'Orbitron',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryGreen,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 12),
+                  
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.backgroundGreen,
+                                AppTheme.primaryGreen,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primaryGreen.withOpacity(0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton.icon(
+                            onPressed: () => _navigateToServiceCenter(center),
+                            icon: const Icon(Icons.directions, size: 16, color: Colors.white),
+                            label: const Text(
+                              'Navigate',
+                              style: TextStyle(
+                                fontFamily: 'Orbitron', 
+                                fontSize: 12,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (center.phoneNumber != null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.blue,
+                                  Colors.blueAccent,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.withOpacity(0.3),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton.icon(
+                              onPressed: () => _callServiceCenter(center),
+                              icon: const Icon(Icons.phone, size: 16, color: Colors.white),
+                              label: const Text(
+                                'Call',
+                                style: TextStyle(
+                                  fontFamily: 'Orbitron', 
+                                  fontSize: 12,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Helper method to calculate distance between two points
+  double _calculateDistance(LatLng start, LatLng end) {
+    const double earthRadius = 6371; // Earth's radius in kilometers
+    
+    double lat1Rad = start.latitude * (pi / 180);
+    double lat2Rad = end.latitude * (pi / 180);
+    double deltaLatRad = (end.latitude - start.latitude) * (pi / 180);
+    double deltaLngRad = (end.longitude - start.longitude) * (pi / 180);
+    
+    double a = sin(deltaLatRad / 2) * sin(deltaLatRad / 2) +
+        cos(lat1Rad) * cos(lat2Rad) *
+        sin(deltaLngRad / 2) * sin(deltaLngRad / 2);
+    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    
+    return earthRadius * c;
   }
 
   Widget _buildServiceCenterCard(Map<String, dynamic> center, {bool compact = false}) {
     return Container(
       margin: EdgeInsets.only(bottom: compact ? 0 : 16),
-      decoration: AppTheme.cardDecoration(),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
       child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
@@ -662,7 +1348,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                               fontFamily: 'Orbitron',
                               fontSize: compact ? 14 : 16,
                               fontWeight: FontWeight.w700,
-                              color: AppTheme.backgroundGreen,
+                              color: Colors.white,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -736,7 +1422,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                   style: TextStyle(
                     fontFamily: 'Orbitron',
                     fontSize: compact ? 11 : 12,
-                    color: Colors.grey[600],
+                    color: Colors.white70,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -756,7 +1442,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                           fontFamily: 'Orbitron',
                           fontSize: compact ? 10 : 11,
                           fontWeight: FontWeight.w500,
-                          color: AppTheme.backgroundGreen,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -768,7 +1454,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _callServiceCenter(center),
+                          onPressed: () => _showOldServiceCenterCall(center),
                           icon: const Icon(Icons.phone, size: 16),
                           label: const Text(
                             'Call',
@@ -787,7 +1473,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => _navigateToServiceCenter(center),
+                          onPressed: () => _showOldServiceCenterNavigation(center),
                           icon: const Icon(Icons.directions, size: 16),
                           label: const Text(
                             'Navigate',
@@ -913,35 +1599,60 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
       });
       
       print('Google Maps: Location found at ${position.latitude}, ${position.longitude}');
-      _updateMarkers();
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Location found!',
-              style: TextStyle(fontFamily: 'Orbitron'),
+      // Check if this is the default emulator location (Google HQ)
+      if (position.latitude == 37.4219983 && position.longitude == -122.084) {
+        // Override with specific Cairo coordinates for testing
+        setState(() {
+          _currentLocation = const LatLng(29.973360, 31.259310); // Specific Cairo coordinates
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Emulator detected. Using your specified Cairo location.',
+                style: TextStyle(fontFamily: 'Orbitron'),
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
             ),
-            backgroundColor: AppTheme.primaryGreen,
-          ),
+          );
+        }
+      }
+      
+      // Move camera to current location
+      if (_mapController != null) {
+        await _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(_currentLocation!, 15.0),
         );
       }
+      
+      _updateMarkers();
+      // Don't auto-fetch service centers - only when user clicks button
+      
     } catch (e) {
       setState(() {
         _isLoadingLocation = false;
+        // Set a fallback location (Specific Cairo coordinates)
+        _currentLocation = const LatLng(29.973360, 31.259310);
       });
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Failed to get location: $e',
+              'Failed to get location. Using fallback location.\nError: ${e.toString()}',
               style: const TextStyle(fontFamily: 'Orbitron'),
             ),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
+      
+      _updateMarkers();
+      // Don't auto-fetch service centers - only when user clicks button
     }
   }
 
@@ -954,29 +1665,8 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
   }
 
   void _updateMarkers() {
-    final serviceCenters = _getServiceCenters();
-    print('Google Maps: Updating markers for ${serviceCenters.length} service centers');
-    _markers = serviceCenters.map((center) {
-      final coordinates = center['coordinates'] as LatLng;
-      print('Google Maps: Adding marker for ${center['name']} at ${coordinates.latitude}, ${coordinates.longitude}');
-      return Marker(
-        markerId: MarkerId(center['name']),
-        position: coordinates,
-        infoWindow: InfoWindow(
-          title: center['name'],
-          snippet: '${center['rating']} ⭐ • ${center['distance']} mi away',
-        ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          _getMarkerColor(center['category']),
-        ),
-        onTap: () {
-          print('Google Maps: Marker tapped for ${center['name']}');
-          // Show service center details
-          _showServiceCenterDetails(center);
-        },
-      );
-    }).toSet();
-    print('Google Maps: Total markers created: ${_markers.length}');
+    // Use the new service centers marker update method
+    _updateMarkersWithServiceCenters();
   }
 
   double _getMarkerColor(String category) {
@@ -1099,7 +1789,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _callServiceCenter(center),
+                      onPressed: () => _showOldServiceCenterCall(center),
                       icon: const Icon(Icons.phone),
                       label: const Text(
                         'Call Center',
@@ -1118,7 +1808,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _navigateToServiceCenter(center),
+                      onPressed: () => _showOldServiceCenterNavigation(center),
                       icon: const Icon(Icons.navigation),
                       label: const Text(
                         'Navigate',
@@ -1164,29 +1854,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
     );
   }
 
-  void _callServiceCenter(Map<String, dynamic> center) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Calling ${center['name']}...',
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        backgroundColor: AppTheme.primaryGreen,
-      ),
-    );
-  }
 
-  void _navigateToServiceCenter(Map<String, dynamic> center) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Opening navigation to ${center['name']}...',
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        backgroundColor: AppTheme.primaryGreen,
-      ),
-    );
-  }
 
   void _switchMapType() {
     setState(() {
@@ -1269,5 +1937,706 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
       _mapLoadFailed = false;
     });
     print('Google Maps: Map loaded successfully');
+  }
+
+  // Service Centers Functionality Methods
+
+  /// Fetch nearby service centers using Google Places API
+  Future<void> _fetchNearbyServiceCenters() async {
+    if (_currentLocation == null) return;
+
+    try {
+      // Search for "service center" using Google Places API
+      final String url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+          '?location=${_currentLocation!.latitude},${_currentLocation!.longitude}'
+          '&radius=10000'
+          '&keyword=service%20center'
+          '&type=car_repair'
+          '&key=$_googlePlacesApiKey';
+
+      print('Searching for service centers at: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
+      print('API URL: $url');
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'User-Agent': 'Siyanaty Plus Mobile App',
+          'Referer': 'https://siyanaty.app',
+          'Accept': 'application/json',
+        },
+      );
+      
+      print('API Response Status: ${response.statusCode}');
+      print('API Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        if (data['status'] == 'OK') {
+          final List<ServiceCenter> centers = (data['results'] as List)
+              .map((json) => ServiceCenter.fromJson(json))
+              .toList();
+
+          setState(() {
+            _serviceCenters = centers;
+          });
+
+          _updateMarkersWithServiceCenters();
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Found ${centers.length} service centers nearby',
+                  style: const TextStyle(fontFamily: 'Orbitron'),
+                ),
+                backgroundColor: AppTheme.primaryGreen,
+              ),
+            );
+          }
+        } else if (data['status'] == 'REQUEST_DENIED') {
+          throw Exception('API Key issue: ${data['error_message'] ?? 'Please check your Google Cloud Console settings'}');
+        } else if (data['status'] == 'ZERO_RESULTS') {
+          // Try a broader search with different keywords
+          await _searchWithAlternativeKeywords();
+        } else {
+          throw Exception('Places API error: ${data['status']} - ${data['error_message'] ?? 'Unknown error'}');
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('Error fetching service centers: $e');
+      
+      if (mounted) {
+        String errorMessage = 'Failed to load service centers';
+        if (e.toString().contains('REQUEST_DENIED')) {
+          errorMessage = 'API Key Error: Please check Google Cloud Console settings';
+        } else if (e.toString().contains('ZERO_RESULTS')) {
+          errorMessage = 'No service centers found in this area';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMessage,
+              style: const TextStyle(fontFamily: 'Orbitron'),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _fetchNearbyServiceCenters(),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Try alternative search keywords if no results found
+  Future<void> _searchWithAlternativeKeywords() async {
+    if (_currentLocation == null) return;
+
+    final List<String> keywords = [
+      'car%20repair',
+      'auto%20service',
+      'garage',
+      'automotive%20service',
+      'car%20maintenance'
+    ];
+
+    for (String keyword in keywords) {
+      try {
+        final String url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+            '?location=${_currentLocation!.latitude},${_currentLocation!.longitude}'
+            '&radius=15000'
+            '&keyword=$keyword'
+            '&type=car_repair'
+            '&key=$_googlePlacesApiKey';
+
+        final response = await http.get(
+          Uri.parse(url),
+          headers: {
+            'User-Agent': 'Siyanaty Plus Mobile App',
+            'Referer': 'https://siyanaty.app',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          
+          if (data['status'] == 'OK' && (data['results'] as List).isNotEmpty) {
+            final List<ServiceCenter> centers = (data['results'] as List)
+                .map((json) => ServiceCenter.fromJson(json))
+                .toList();
+
+            setState(() {
+              _serviceCenters = centers;
+            });
+
+            _updateMarkersWithServiceCenters();
+            
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Found ${centers.length} automotive services nearby',
+                    style: const TextStyle(fontFamily: 'Orbitron'),
+                  ),
+                  backgroundColor: AppTheme.primaryGreen,
+                ),
+              );
+            }
+            return; // Exit after finding results
+          }
+        }
+      } catch (e) {
+        print('Alternative search failed for keyword: $keyword');
+        continue;
+      }
+    }
+
+    // If no results found with any keyword
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No service centers found in this area. Try expanding search radius.',
+            style: TextStyle(fontFamily: 'Orbitron'),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+
+  /// Update map markers with service centers
+  void _updateMarkersWithServiceCenters() {
+    final Set<Marker> markers = {};
+
+    // Add user location marker
+    if (_currentLocation != null) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('user_location'),
+          position: _currentLocation!,
+          infoWindow: const InfoWindow(
+            title: 'You are here',
+            snippet: 'Your current location',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        ),
+      );
+    }
+
+    // Add service center markers
+    for (final center in _serviceCenters) {
+      markers.add(
+        Marker(
+          markerId: MarkerId(center.id),
+          position: LatLng(center.lat, center.lng),
+          infoWindow: InfoWindow(
+            title: center.name,
+            snippet: center.address,
+            onTap: () => _showServiceCenterBottomSheet(center),
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          onTap: () => _showServiceCenterBottomSheet(center),
+        ),
+      );
+    }
+
+    setState(() {
+      _markers = markers;
+    });
+
+    print('Google Maps: Updated markers - ${markers.length} total');
+  }
+
+  /// Show service center details in bottom sheet
+  void _showServiceCenterBottomSheet(ServiceCenter center) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.build,
+                          color: AppTheme.primaryGreen,
+                          size: 28,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            center.name,
+                            style: const TextStyle(
+                              fontFamily: 'Orbitron',
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.backgroundGreen,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Details
+                    _buildServiceCenterDetail(Icons.location_on, center.address),
+                    
+                    if (center.rating != null)
+                      _buildServiceCenterDetail(
+                        Icons.star,
+                        '${center.rating!.toStringAsFixed(1)} rating',
+                      ),
+                    
+                    if (center.phoneNumber != null)
+                      _buildServiceCenterDetail(Icons.phone, center.phoneNumber!),
+                    
+                    _buildServiceCenterDetail(
+                      center.isOpen ? Icons.schedule : Icons.schedule_outlined,
+                      center.isOpen ? 'Open now' : 'Closed',
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Action buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _addToFavorites(center),
+                            icon: Icon(
+                              _isFavorite(center.id) ? Icons.favorite : Icons.favorite_border,
+                            ),
+                            label: Text(
+                              _isFavorite(center.id) ? 'Favorited' : 'Add to Favorites',
+                              style: const TextStyle(fontFamily: 'Orbitron'),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _isFavorite(center.id) 
+                                  ? Colors.red 
+                                  : AppTheme.primaryGreen,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _navigateToServiceCenter(center),
+                            icon: const Icon(Icons.directions),
+                            label: const Text(
+                              'Navigate',
+                              style: TextStyle(fontFamily: 'Orbitron'),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.darkAccentGreen,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 12),
+                    
+                    if (center.phoneNumber != null)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _callServiceCenter(center),
+                          icon: const Icon(Icons.phone),
+                          label: const Text(
+                            'Call Service Center',
+                            style: TextStyle(fontFamily: 'Orbitron'),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServiceCenterDetail(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: AppTheme.primaryGreen, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 14,
+                color: AppTheme.backgroundGreen,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Add or remove service center from favorites
+  Future<void> _addToFavorites(ServiceCenter center) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please log in to save favorites',
+            style: TextStyle(fontFamily: 'Orbitron'),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final favoritesRef = _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorite_service_centers');
+
+      if (_isFavorite(center.id)) {
+        // Remove from favorites
+        await favoritesRef.doc(center.id).delete();
+        setState(() {
+          _favoriteServiceCenters.removeWhere((c) => c.id == center.id);
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Removed from favorites',
+                style: TextStyle(fontFamily: 'Orbitron'),
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } else {
+        // Add to favorites
+        await favoritesRef.doc(center.id).set(center.toFirestore());
+        setState(() {
+          _favoriteServiceCenters.add(center);
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Added to favorites ✅',
+                style: TextStyle(fontFamily: 'Orbitron'),
+              ),
+              backgroundColor: AppTheme.primaryGreen,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error managing favorites: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to update favorites: $e',
+              style: const TextStyle(fontFamily: 'Orbitron'),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Check if service center is in favorites
+  bool _isFavorite(String centerId) {
+    return _favoriteServiceCenters.any((center) => center.id == centerId);
+  }
+
+  /// Navigate to service center using Google Maps
+  Future<void> _navigateToServiceCenter(ServiceCenter center) async {
+    final url = 'https://www.google.com/maps/dir/?api=1&destination=${center.lat},${center.lng}';
+    
+    try {
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      } else {
+        throw Exception('Could not launch Google Maps');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to open navigation: $e',
+              style: const TextStyle(fontFamily: 'Orbitron'),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Call service center
+  Future<void> _callServiceCenter(ServiceCenter center) async {
+    if (center.phoneNumber == null) return;
+    
+    final url = 'tel:${center.phoneNumber}';
+    
+    try {
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url));
+      } else {
+        throw Exception('Could not make phone call');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to make call: $e',
+              style: const TextStyle(fontFamily: 'Orbitron'),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Load user's favorite service centers
+  Future<void> _loadFavorites() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final favoritesSnapshot = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorite_service_centers')
+          .get();
+
+      final favorites = favoritesSnapshot.docs.map((doc) {
+        final data = doc.data();
+        return ServiceCenter(
+          id: data['id'] ?? doc.id,
+          name: data['name'] ?? 'Unknown',
+          address: data['address'] ?? 'No address',
+          lat: (data['lat'] as num).toDouble(),
+          lng: (data['lng'] as num).toDouble(),
+          rating: (data['rating'] as num?)?.toDouble(),
+          phoneNumber: data['phoneNumber'],
+          isOpen: data['isOpen'] ?? true,
+          types: List<String>.from(data['types'] ?? []),
+        );
+      }).toList();
+
+      setState(() {
+        _favoriteServiceCenters = favorites;
+      });
+    } catch (e) {
+      print('Error loading favorites: $e');
+    }
+  }
+
+  /// Helper methods for old service center format (Map<String, dynamic>)
+  void _showOldServiceCenterCall(Map<String, dynamic> center) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Calling ${center['name']}...',
+          style: const TextStyle(fontFamily: 'Orbitron'),
+        ),
+        backgroundColor: AppTheme.primaryGreen,
+      ),
+    );
+  }
+
+  void _showOldServiceCenterNavigation(Map<String, dynamic> center) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Opening navigation to ${center['name']}...',
+          style: const TextStyle(fontFamily: 'Orbitron'),
+        ),
+        backgroundColor: AppTheme.primaryGreen,
+      ),
+    );
+  }
+
+  void _showRemoveFromFavoritesDialog(ServiceCenter center) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.transparent,
+          content: Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.darkAccentGreen, AppTheme.backgroundGreen],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  spreadRadius: 2,
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.orange,
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Remove from Favorites',
+                  style: TextStyle(
+                    fontFamily: 'Orbitron',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Are you sure you want to remove "${center.name}" from your favorites?',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Orbitron',
+                    fontSize: 14,
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontFamily: 'Orbitron',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _addToFavorites(center); // This will remove it since it's already favorited
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Remove',
+                          style: TextStyle(
+                            fontFamily: 'Orbitron',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }

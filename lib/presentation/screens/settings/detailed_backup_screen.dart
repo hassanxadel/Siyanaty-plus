@@ -5,6 +5,8 @@ import '../../../services/firebase_backup_service.dart';
 import '../../../services/firebase_reminder_service.dart';
 import '../../../services/firebase_maintenance_service.dart';
 import '../../../services/comprehensive_backup_service.dart';
+import '../../../services/mileage_service.dart';
+import '../../../services/license_service.dart';
 
 class DetailedBackupScreen extends StatefulWidget {
   const DetailedBackupScreen({super.key});
@@ -17,12 +19,17 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
   final FirebaseBackupService _backupService = FirebaseBackupService();
   final FirebaseReminderService _reminderService = FirebaseReminderService();
   final ComprehensiveBackupService _comprehensiveService = ComprehensiveBackupService();
+  final MileageService _mileageService = MileageService();
+  final LicenseService _licenseService = LicenseService();
   
   bool _isLoading = false;
   BackupStatus? _backupStatus;
   ReminderBackupStatus? _reminderBackupStatus;
   MaintenanceBackupStatus? _maintenanceBackupStatus;
   ComprehensiveBackupStatus? _comprehensiveStatus;
+  LicenseBackupStatus? _licenseBackupStatus;
+  int _localMileageCount = 0;
+  int _cloudMileageCount = 0;
 
   @override
   void initState() {
@@ -36,12 +43,23 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
       final reminderStatus = await _reminderService.getBackupStatus();
       final maintenanceStatus = await FirebaseMaintenanceService.getBackupStatus();
       final comprehensiveStatus = await _comprehensiveService.getComprehensiveBackupStatus();
+      
+      // Get mileage counts
+      final localMileage = await _mileageService.getAllEntries();
+      final cloudMileage = await _mileageService.getEntriesFromFirebase();
+      
+      // Get license backup status
+      final licenseStatus = await _licenseService.getLicenseBackupStatus();
+      
       if (mounted) {
         setState(() {
           _backupStatus = carStatus;
           _reminderBackupStatus = reminderStatus;
           _maintenanceBackupStatus = maintenanceStatus;
           _comprehensiveStatus = comprehensiveStatus;
+          _licenseBackupStatus = licenseStatus;
+          _localMileageCount = localMileage.length;
+          _cloudMileageCount = cloudMileage.length;
         });
       }
     } catch (e) {
@@ -183,6 +201,26 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
                     isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
+                  _buildDataTypeCard(
+                    title: 'Mileage Tracking Data',
+                    icon: Icons.speed,
+                    localCount: _localMileageCount,
+                    cloudCount: _cloudMileageCount,
+                    onBackup: _backupMileage,
+                    onRestore: _restoreMileage,
+                    isLoading: _isLoading,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDataTypeCard(
+                    title: 'License Images',
+                    icon: Icons.credit_card,
+                    localCount: _licenseBackupStatus?.localCount ?? 0,
+                    cloudCount: _licenseBackupStatus?.cloudCount ?? 0,
+                    onBackup: _backupLicenseImages,
+                    onRestore: _restoreLicenseImages,
+                    isLoading: _isLoading,
+                  ),
+                  const SizedBox(height: 16),
                   _buildComprehensiveBackupCard(),
                   const SizedBox(height: 24),
                   _buildOverallStatus(),
@@ -204,22 +242,26 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
     required VoidCallback onRestore,
     required bool isLoading,
   }) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.getThemeAwareCardBackground(context),
-              AppTheme.getThemeAwareCardBackground(context).withOpacity(0.8),
-            ],
-          ),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.darkAccentGreen.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -227,16 +269,16 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
               children: [
                 Icon(
                   icon,
-                  color: AppTheme.primaryGreen,
+                  color: Colors.white,
                   size: 28,
                 ),
                 const SizedBox(width: 12),
                 Text(
                   title,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.getThemeAwareTextColor(context),
+                    color: Colors.white,
                     fontFamily: 'Orbitron',
                   ),
                 ),
@@ -255,44 +297,60 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
             Row(
               children: [
                 Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: isLoading ? null : onBackup,
-                    icon: const Icon(Icons.cloud_upload, size: 18),
-                    label: const Text(
-                      'Backup',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontWeight: FontWeight.w600,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Colors.green, Colors.greenAccent],
                       ),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryGreen,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                    child: ElevatedButton.icon(
+                      onPressed: isLoading ? null : onBackup,
+                      icon: const Icon(Icons.cloud_upload, size: 18, color: Colors.white),
+                      label: const Text(
+                        'Backup',
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: isLoading ? null : onRestore,
-                    icon: const Icon(Icons.cloud_download, size: 18),
-                    label: const Text(
-                      'Restore',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontWeight: FontWeight.w600,
-                      ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white, width: 1),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryGreen,
-                      side: const BorderSide(color: AppTheme.primaryGreen),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                    child: ElevatedButton.icon(
+                      onPressed: isLoading ? null : onRestore,
+                      icon: const Icon(Icons.cloud_download, size: 18, color: Colors.white),
+                      label: const Text(
+                        'Restore',
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
                   ),
@@ -301,8 +359,7 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildStatusRow(String label, String value) {
@@ -313,16 +370,16 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
         children: [
           Text(
             label,
-            style: TextStyle(
-              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+            style: const TextStyle(
+              color: Colors.white70,
               fontFamily: 'Orbitron',
               fontSize: 12,
             ),
           ),
           Text(
             value,
-            style: TextStyle(
-              color: AppTheme.getThemeAwareTextColor(context),
+            style: const TextStyle(
+              color: Colors.white,
               fontFamily: 'Orbitron',
               fontWeight: FontWeight.w600,
               fontSize: 12,
@@ -469,6 +526,94 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
       }
     } catch (e) {
       _showSnackBar('Error backing up maintenance: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _backupMileage() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final success = await _mileageService.syncToFirebase();
+      
+      if (success) {
+        _showSnackBar('Mileage data backed up successfully', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to backup mileage data', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error backing up mileage data: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _restoreMileage() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final success = await _mileageService.syncFromFirebase();
+      
+      if (success) {
+        _showSnackBar('Mileage data restored successfully', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to restore mileage data', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error restoring mileage data: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _backupLicenseImages() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final result = await _licenseService.backupLicenseImagesToFirebase();
+      
+      if (result.isSuccess) {
+        _showSnackBar('License images backed up successfully! ${result.successCount} images processed.', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to backup license images: ${result.message}', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error backing up license images: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _restoreLicenseImages() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final result = await _licenseService.restoreLicenseImagesFromFirebase();
+      
+      if (result.isSuccess) {
+        _showSnackBar('License images restored successfully! ${result.successCount} images processed.', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to restore license images: ${result.message}', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error restoring license images: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

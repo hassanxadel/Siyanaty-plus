@@ -120,12 +120,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -275,12 +285,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,12 +348,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,6 +671,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildAppAppearanceSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'App Appearance',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).brightness == Brightness.light
+                  ? AppTheme.primaryGreen
+                  : AppTheme.getThemeAwareTextColor(context),
+              fontFamily: 'Orbitron',
+            ),
+          ),
+          const SizedBox(height: 16),
+          Consumer<ThemeProvider>(
+            builder: (context, themeProvider, child) {
+              return _buildSwitchTile(
+                'Dark Mode',
+                'Toggle between light and dark theme',
+                themeProvider.isDarkMode,
+                (value) {
+                  themeProvider.toggleTheme();
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOldAppAppearanceSection() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(

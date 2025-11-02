@@ -449,12 +449,22 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: InkWell(
         onTap: () => _navigateToCarDetails(car),
@@ -512,14 +522,16 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontFamily: 'Orbitron',
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${car.mileage} km',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
-                            color: Colors.grey[600],
+                            color: Colors.white70,
                           ),
                         ),
                       ],
@@ -528,13 +540,13 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryGreen.withOpacity(0.1),
+                      color: AppTheme.primaryGreen.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
                       car.licensePlate,
                       style: const TextStyle(
-                        color: AppTheme.primaryGreen,
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -561,51 +573,90 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
               
               const SizedBox(height: 16),
               
-              // Action buttons
+              // Action buttons with gradient backgrounds
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      
-                      onPressed: () => _navigateToCarDetails(car),
-                      icon: const Icon(Icons.visibility, size: 18),
-                      label: const Text('View'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.primaryGreen,
-                        side: const BorderSide(color: AppTheme.primaryGreen),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.primaryGreen,
+                            AppTheme.darkAccentGreen,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryGreen.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _navigateToCarDetails(car),
+                        icon: const Icon(Icons.visibility, size: 18),
+                        label: const Text('View', style: TextStyle(fontFamily: 'Orbitron', fontSize: 14, fontWeight: FontWeight.w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                     Expanded(
-                     child: ElevatedButton(
-                       onPressed: () {
-                       // TODO: Add maintenance
-                       },
-                       style: ElevatedButton.styleFrom(
-                         backgroundColor: AppTheme.primaryGreen,
-                         foregroundColor: Colors.white,
-                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                       ),
-                       child: const Row(
-                         mainAxisAlignment: MainAxisAlignment.center,
-                         mainAxisSize: MainAxisSize.min,
-                         children: [
-                           Icon(
-                             IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                             size: 16,
-                             
-                           ),
-                           SizedBox(width: 35),
-                           Text(
-                             'Service',
-                             style: TextStyle(fontSize: 16),
-                           ),
-                         ],
-                       ),
-                     ),
-                   ),
-
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.primaryGreen,
+                            AppTheme.darkAccentGreen,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryGreen.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          // TODO: Add maintenance
+                        },
+                        icon: const Icon(
+                          IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                          size: 16,
+                        ),
+                        label: const Text(
+                          'Service',
+                          style: TextStyle(fontSize: 14, fontFamily: 'Orbitron', fontWeight: FontWeight.w600),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -620,9 +671,9 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
         children: [
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
             fontSize: 12,
-              color: Colors.grey[600],
+              color: Colors.white70,
             fontWeight: FontWeight.w500,
             ),
             textAlign: TextAlign.center,
@@ -633,6 +684,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
           textAlign: TextAlign.center,
           maxLines: 1,
@@ -670,137 +722,169 @@ class CarDetailsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      elevation: 20,
       child: Container(
-        padding: const EdgeInsets.all(20),
-        constraints: const BoxConstraints(maxWidth: 400),
+        padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 700),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF1A362A), // Dark green
+              Color(0xFF2E4032), // Slightly lighter dark green
+            ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: AppTheme.primaryGreen.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with car image
+            // Header with close button
             Row(
               children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryGreen.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: car.imagePath != null && car.imagePath!.isNotEmpty
-                        ? Image.file(
-                            File(car.imagePath!),
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(
-                                IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                                color: AppTheme.primaryGreen,
-                                size: 40,
-                              );
-                            },
-                          )
-                        : const Icon(
-                            IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                            color: AppTheme.primaryGreen,
-                            size: 40,
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 16),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Text(
-                        '${car.year} ${car.brand} ${car.model}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Orbitron',
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryGreen.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                          color: AppTheme.primaryGreen,
+                          size: 24,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryGreen.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          car.licensePlate,
-                          style: const TextStyle(
-                            color: AppTheme.primaryGreen,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${car.year} ${car.brand} ${car.model}',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Orbitron',
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryGreen.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                car.licensePlate,
+                                style: const TextStyle(
+                                  color: AppTheme.primaryGreen,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                      }
+                    },
+                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             
-            // Car details
-            _buildDetailRow('Mileage', '${car.mileage} km'),
-            _buildDetailRow('Color', car.color),
-            _buildDetailRow('Fuel Type', car.fuelType),
-            _buildDetailRow('Engine', car.engineCC + (car.turbo ? ' Turbo' : '')),
-            _buildDetailRow('VIN', car.vin),
-            _buildDetailRow('Added', _formatDate(car.createdAt)),
-            if (car.updatedAt != car.createdAt)
-              _buildDetailRow('Last Updated', _formatDate(car.updatedAt)),
+            // Details section with modern styling
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  _buildModernDetailRow('Mileage', '${car.mileage} km', Icons.speed, Colors.blue),
+                  _buildModernDetailRow('Color', car.color, Icons.color_lens, Colors.purple),
+                  _buildModernDetailRow('Fuel Type', car.fuelType, Icons.local_gas_station, Colors.orange),
+                  _buildModernDetailRow('Engine', car.engineCC + (car.turbo ? ' Turbo' : ''), Icons.build, Colors.red),
+                  _buildModernDetailRow('VIN', car.vin, Icons.qr_code, Colors.cyan),
+                  _buildModernDetailRow('Added', _formatDate(car.createdAt), Icons.calendar_today, Colors.green),
+                  if (car.updatedAt != car.createdAt)
+                    _buildModernDetailRow('Last Updated', _formatDate(car.updatedAt), Icons.update, Colors.teal),
+                ],
+              ),
+            ),
             
             const SizedBox(height: 24),
             
-            // Action buttons
-            Row(
+            // Modern action buttons
+            Column(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('Edit'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryGreen,
-                      side: const BorderSide(color: AppTheme.primaryGreen),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                // Top row - Edit and Delete
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildModernButton(
+                        icon: Icons.edit_rounded,
+                        label: 'Edit',
+                        color: const Color(0xFF2196F3),
+                        onPressed: () {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            onEdit();
+                          }
+                        },
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onDelete,
-                    icon: const Icon(Icons.delete, size: 18),
-                    label: const Text('Delete'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildModernButton(
+                        icon: Icons.delete_rounded,
+                        label: 'Delete',
+                        color: const Color.fromARGB(255, 219, 25, 25),
+                        onPressed: () {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            onDelete();
+                          }
+                        },
+                      ),
                     ),
-                  ),
+                  ],
                 ),
+                const SizedBox(height: 12),
+              
               ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryGreen,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: const Text('Close'),
-              ),
             ),
           ],
         ),
@@ -808,29 +892,109 @@ class CarDetailsDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildModernDetailRow(String label, String value, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
-              ),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 16,
             ),
           ),
+          const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[400],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildModernButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.8),
+            color,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

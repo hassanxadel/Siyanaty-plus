@@ -1,5 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../../services/license_service.dart';
+import '../../../services/car_service.dart';
+import '../../../models/license_image.dart';
+import '../../../models/backup_car.dart';
 
 class LicenseScreen extends StatefulWidget {
   const LicenseScreen({super.key});
@@ -9,20 +15,89 @@ class LicenseScreen extends StatefulWidget {
 }
 
 class _LicenseScreenState extends State<LicenseScreen> {
-  String? _personalLicenseImage;
-  String? _carLicenseImage;
+  final LicenseService _licenseService = LicenseService();
+  final CarService _carService = CarService();
+  
+  List<BackupCar> _cars = [];
+  BackupCar? _selectedCar;
+  LicenseImage? _personalLicense;
+  LicenseImage? _vehicleLicense;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    // Set default images for now
-    _personalLicenseImage = 'assets/images/Personal.jpg';
-    _carLicenseImage = 'assets/images/Car_Lic.jpeg';
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final cars = await _carService.getAllCars();
+      setState(() {
+        _cars = cars;
+        if (_cars.isNotEmpty && _selectedCar == null) {
+          _selectedCar = _cars.first;
+        }
+      });
+      
+      if (_selectedCar != null) {
+        await _loadLicenseImages();
+      }
+    } catch (e) {
+      _showMessage('Failed to load data: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadLicenseImages() async {
+    if (_selectedCar == null) return;
+    
+    try {
+      final personalLicense = await _licenseService.getLicenseImageByType(
+        _selectedCar!.id!, 
+        'personal'
+      );
+      final vehicleLicense = await _licenseService.getLicenseImageByType(
+        _selectedCar!.id!, 
+        'vehicle'
+      );
+      
+      setState(() {
+        _personalLicense = personalLicense;
+        _vehicleLicense = vehicleLicense;
+      });
+    } catch (e) {
+      _showMessage('Failed to load license images: $e');
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontFamily: 'Orbitron'),
+        ),
+        backgroundColor: AppTheme.primaryGreen,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        body: const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
+          ),
+        ),
+      );
+    }
     
     return Scaffold(
       backgroundColor: AppTheme.getThemeAwareBackground(context),
@@ -38,62 +113,42 @@ class _LicenseScreenState extends State<LicenseScreen> {
                 children: [
                   const SizedBox(height: 16),
                   
-                  // Personal License Section
-                  _buildLicenseSection(
-                    context,
-                    'Personal License',
-                    'Your driver\'s license or ID card',
-                    Icons.person,
-                    _personalLicenseImage,
-                    () => _showImageOptions(context, 'personal'),
-                  ),
+                  // Car Selection Section
+                  if (_cars.isNotEmpty) _buildCarSelectionCard(),
+                  if (_cars.isNotEmpty) const SizedBox(height: 16),
                   
-                  const SizedBox(height: 16),
-                  
-                  // Car License Section
-                  _buildLicenseSection(
-                    context,
-                    'Car License',
-                    'Your vehicle registration or title',
-                    Icons.directions_car,
-                    _carLicenseImage,
-                    () => _showImageOptions(context, 'car'),
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Info Card
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? AppTheme.darkModeCardBackground : AppTheme.lightModeCardBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppTheme.primaryGreen.withOpacity(0.2),
-                        width: 1,
-                      ),
+                  // Show content only if a car is selected
+                  if (_selectedCar != null) ...[
+                    // Personal License Section
+                    _buildLicenseSection(
+                      context,
+                      'Personal License',
+                      'Your driver\'s license or ID card',
+                      Icons.person,
+                      _personalLicense?.imagePath,
+                      () => _showImageOptions(context, 'personal'),
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.info_outline,
-                          color: AppTheme.primaryGreen,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Your license images are stored securely on your device and are not shared with any third parties.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDarkMode ? AppTheme.lightBackground.withOpacity(0.8) : AppTheme.darkAccentGreen.withOpacity(0.8),
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                        ),
-                      ],
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Vehicle License Section
+                    _buildLicenseSection(
+                      context,
+                      'Vehicle License',
+                      'Your vehicle registration or title',
+                      Icons.directions_car,
+                      _vehicleLicense?.imagePath,
+                      () => _showImageOptions(context, 'vehicle'),
                     ),
-                  ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Info Card
+                    _buildInfoCard(),
+                  ] else if (_cars.isEmpty) ...[
+                    // No cars message
+                    _buildNoCarsMessage(),
+                  ],
                   
                   const SizedBox(height: 100), // Bottom spacing for navigation
                 ],
@@ -101,6 +156,196 @@ class _LicenseScreenState extends State<LicenseScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCarSelectionCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.darkAccentGreen.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.directions_car,
+                color: Colors.white,
+                size: 24,
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Select Vehicle',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<BackupCar>(
+                value: _selectedCar,
+                isExpanded: true,
+                dropdownColor: AppTheme.darkAccentGreen,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                  fontSize: 16,
+                ),
+                icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                items: _cars.map((car) {
+                  return DropdownMenuItem<BackupCar>(
+                    value: car,
+                    child: Text(
+                      '${car.brand} ${car.model} (${car.year})',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (BackupCar? newCar) {
+                  if (newCar != null) {
+                    setState(() {
+                      _selectedCar = newCar;
+                    });
+                    _loadLicenseImages();
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.darkAccentGreen.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: const Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: Colors.white,
+            size: 24,
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Your license images are stored securely on your device and can be backed up to Firebase.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.white70,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoCarsMessage() {
+    return Container(
+      padding: const EdgeInsets.all(40),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.darkAccentGreen.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.directions_car_outlined,
+            size: 64,
+            color: Colors.white70,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'No Vehicles Found',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontFamily: 'Orbitron',
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Please add a vehicle first to manage license images.',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.white70,
+              fontFamily: 'Orbitron',
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -195,17 +440,25 @@ class _LicenseScreenState extends State<LicenseScreen> {
     String? imagePath,
     VoidCallback onTap,
   ) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDarkMode ? AppTheme.darkModeCardBackground : AppTheme.lightModeCardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.darkAccentGreen.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -215,12 +468,12 @@ class _LicenseScreenState extends State<LicenseScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.1),
+                  color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   icon,
-                  color: AppTheme.primaryGreen,
+                  color: Colors.white,
                   size: 24,
                 ),
               ),
@@ -231,19 +484,19 @@ class _LicenseScreenState extends State<LicenseScreen> {
                   children: [
                     Text(
                       title,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.getThemeAwareTextColor(context),
+                        color: Colors.white,
                         fontFamily: 'Orbitron',
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: isDarkMode ? AppTheme.lightBackground.withOpacity(0.7) : AppTheme.darkAccentGreen.withOpacity(0.7),
+                        color: Colors.white70,
                         fontFamily: 'Orbitron',
                       ),
                     ),
@@ -263,26 +516,71 @@ class _LicenseScreenState extends State<LicenseScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: AppTheme.primaryGreen.withOpacity(0.3),
+                  color: Colors.white.withOpacity(0.3),
                   width: 1,
                 ),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  imagePath,
+                child: Image.file(
+                  File(imagePath),
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      color: Colors.grey.withOpacity(0.2),
-                      child: const Icon(
-                        Icons.image_not_supported,
-                        color: Colors.grey,
-                        size: 48,
+                      color: Colors.white.withOpacity(0.1),
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.image_not_supported,
+                            color: Colors.white70,
+                            size: 48,
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Image not found',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                        ],
                       ),
                     );
                   },
                 ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            Container(
+              width: double.infinity,
+              height: 200,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1,
+                ),
+                color: Colors.white.withOpacity(0.1),
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.add_photo_alternate,
+                    color: Colors.white70,
+                    size: 48,
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'No image added',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -292,19 +590,31 @@ class _LicenseScreenState extends State<LicenseScreen> {
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: onTap,
-                  icon: const Icon(Icons.camera_alt, size: 16),
-                  label: const Text(
-                    'Update Image',
-                    style: TextStyle(fontFamily: 'Orbitron', fontSize: 14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Colors.green, Colors.greenAccent],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryGreen,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  child: ElevatedButton.icon(
+                    onPressed: onTap,
+                    icon: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                    label: Text(
+                      imagePath != null ? 'Update Image' : 'Add Image',
+                      style: const TextStyle(
+                        fontFamily: 'Orbitron', 
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -312,19 +622,28 @@ class _LicenseScreenState extends State<LicenseScreen> {
               if (imagePath != null) ...[
                 const SizedBox(width: 12),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _viewImage(context, imagePath, title),
-                    icon: const Icon(Icons.visibility, size: 18),
-                    label: const Text(
-                      'View',
-                      style: TextStyle(fontFamily: 'Orbitron'),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white, width: 1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryGreen,
-                      side: const BorderSide(color: AppTheme.primaryGreen),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    child: ElevatedButton.icon(
+                      onPressed: () => _viewImage(context, imagePath, title),
+                      icon: const Icon(Icons.visibility, size: 18, color: Colors.white),
+                      label: const Text(
+                        'View',
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -435,26 +754,93 @@ class _LicenseScreenState extends State<LicenseScreen> {
     );
   }
 
-  void _takePhoto(BuildContext context, String licenseType) {
+  Future<void> _takePhoto(BuildContext context, String licenseType) async {
     Navigator.pop(context);
-    // TODO: Implement camera functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Camera functionality coming soon!'),
-        backgroundColor: AppTheme.primaryGreen,
-      ),
-    );
+    
+    if (_selectedCar == null) {
+      _showMessage('Please select a car first');
+      return;
+    }
+    
+    try {
+      final result = await _licenseService.takePhotoFromCamera();
+      
+      if (result.isSuccess && result.imagePath != null) {
+        await _saveLicenseImage(licenseType, result.imagePath!);
+      } else {
+        _showMessage(result.message);
+      }
+    } catch (e) {
+      _showMessage('Failed to take photo: $e');
+    }
   }
 
-  void _pickFromGallery(BuildContext context, String licenseType) {
+  Future<void> _pickFromGallery(BuildContext context, String licenseType) async {
     Navigator.pop(context);
-    // TODO: Implement gallery picker functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Gallery picker coming soon!'),
-        backgroundColor: AppTheme.primaryGreen,
-      ),
-    );
+    
+    if (_selectedCar == null) {
+      _showMessage('Please select a car first');
+      return;
+    }
+    
+    try {
+      final result = await _licenseService.pickImageFromGallery();
+      
+      if (result.isSuccess && result.imagePath != null) {
+        await _saveLicenseImage(licenseType, result.imagePath!);
+      } else {
+        _showMessage(result.message);
+      }
+    } catch (e) {
+      _showMessage('Failed to pick image: $e');
+    }
+  }
+
+  Future<void> _saveLicenseImage(String licenseType, String imagePath) async {
+    if (_selectedCar == null) return;
+    
+    try {
+      // Check if license image already exists
+      final existingLicense = await _licenseService.getLicenseImageByType(
+        _selectedCar!.id!, 
+        licenseType
+      );
+      
+      if (existingLicense != null) {
+        // Update existing license image
+        final result = await _licenseService.updateLicenseImage(
+          id: existingLicense.id!,
+          carId: _selectedCar!.id!,
+          licenseType: licenseType,
+          imagePath: imagePath,
+        );
+        
+        if (result.isSuccess) {
+          _showMessage('License image updated successfully');
+          HapticFeedback.lightImpact();
+          await _loadLicenseImages();
+        } else {
+          _showMessage(result.message);
+        }
+      } else {
+        // Add new license image
+        final result = await _licenseService.addLicenseImage(
+          carId: _selectedCar!.id!,
+          licenseType: licenseType,
+          imagePath: imagePath,
+        );
+        
+        if (result.isSuccess) {
+          _showMessage('License image added successfully');
+          HapticFeedback.lightImpact();
+          await _loadLicenseImages();
+        } else {
+          _showMessage(result.message);
+        }
+      }
+    } catch (e) {
+      _showMessage('Failed to save license image: $e');
+    }
   }
 
   void _viewImage(BuildContext context, String imagePath, String title) {
@@ -473,13 +859,27 @@ class _LicenseScreenState extends State<LicenseScreen> {
           ),
           body: Center(
             child: InteractiveViewer(
-              child: Image.asset(
-                imagePath,
+              child: Image.file(
+                File(imagePath),
                 errorBuilder: (context, error, stackTrace) {
                   return const Center(
-                    child: Text(
-                      'Image not found',
-                      style: TextStyle(color: Colors.white),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.white,
+                          size: 64,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Image not found',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Orbitron',
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 },

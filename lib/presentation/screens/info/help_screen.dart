@@ -6,109 +6,193 @@ class HelpScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
     return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
-      appBar: AppBar(
-        title: const Text(
-          'Help & Support',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+      backgroundColor: AppTheme.backgroundGreen,
+      body: Column(
+        children: [
+          _buildHeader(context),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Quick Actions
+                  _buildQuickActions(context),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // FAQ Section
+                  _buildFAQSection(context),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Contact Support
+                  _buildContactSupport(context),
+                ],
+              ),
+            ),
           ),
-        ),
-        backgroundColor: AppTheme.primaryGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Quick Actions
-            _buildQuickActions(context),
-            
-            const SizedBox(height: 32),
-            
-            // FAQ Section
-            _buildFAQSection(context),
-            
-            const SizedBox(height: 32),
-            
-            // Contact Support
-            _buildContactSupport(context),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      height: 200,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.backgroundGreen,
+            AppTheme.darkAccentGreen,
+            AppTheme.primaryGreen,
           ],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.arrow_back_ios,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'Help & Support',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Get help and find answers to common questions',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontFamily: 'Orbitron',
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildQuickActions(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Quick Actions',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primaryGreen,
-            fontFamily: 'Orbitron',
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
-        ),
-        const SizedBox(height: 16),
-        
-        _buildActionCard(
-          context,
-          'Getting Started Guide',
-          'Learn how to set up your car profile and start tracking maintenance',
-          Icons.play_circle_outline,
-          () => _showGettingStarted(context),
-        ),
-        
-        const SizedBox(height: 12),
-        
-        _buildActionCard(
-          context,
-          'Reset Account Data',
-          'Clear all your data and start fresh',
-          Icons.refresh,
-          () => _showResetDialog(context),
-        ),
-        
-        const SizedBox(height: 12),
-        
-        _buildActionCard(
-          context,
-          'Export Data',
-          'Download your maintenance records and data',
-          Icons.download,
-          () => _exportData(context),
-        ),
-      ],
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Quick Actions',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontFamily: 'Orbitron',
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          _buildActionCard(
+            context,
+            'Getting Started Guide',
+            'Learn how to set up your car profile and start tracking maintenance',
+            Icons.play_circle_outline,
+            () => _showGettingStarted(context),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          _buildActionCard(
+            context,
+            'Reset Account Data',
+            'Clear all your data and start fresh',
+            Icons.refresh,
+            () => _showResetDialog(context),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          _buildActionCard(
+            context,
+            'Export Data',
+            'Download your maintenance records and data',
+            Icons.download,
+            () => _exportData(context),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildActionCard(BuildContext context, String title, String subtitle, IconData icon, VoidCallback onTap) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(15),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isDarkMode ? AppTheme.darkModeCardBackground : AppTheme.lightModeCardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppTheme.primaryGreen.withOpacity(0.2),
-            width: 1,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.backgroundGreen,
+              AppTheme.primaryGreen,
+            ],
           ),
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -116,12 +200,19 @@ class HelpScreen extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppTheme.primaryGreen.withOpacity(0.2),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.primaryGreen,
+                    AppTheme.darkAccentGreen,
+                  ],
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 icon,
-                color: AppTheme.primaryGreen,
+                color: Colors.white,
                 size: 24,
               ),
             ),
@@ -132,28 +223,28 @@ class HelpScreen extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.getThemeAwareTextColor(context),
+                      color: Colors.white,
                       fontFamily: 'Orbitron',
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12,
-                      color: isDarkMode ? AppTheme.lightBackground.withOpacity(0.8) : AppTheme.darkAccentGreen.withOpacity(0.8),
+                      color: Colors.white70,
                       fontFamily: 'Orbitron',
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(
+            const Icon(
               Icons.arrow_forward_ios,
-              color: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
+              color: Colors.white,
               size: 16,
             ),
           ],
@@ -163,99 +254,131 @@ class HelpScreen extends StatelessWidget {
   }
 
   Widget _buildFAQSection(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Frequently Asked Questions',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primaryGreen,
-            fontFamily: 'Orbitron',
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
-        ),
-        const SizedBox(height: 16),
-        
-        _buildFAQItem(
-          context,
-          'How do I add my first car?',
-          'Go to the Home screen and tap the "+" button. Enter your car details including make, model, year, and mileage. The app will automatically set up maintenance schedules based on your vehicle.',
-        ),
-        
-        _buildFAQItem(
-          context,
-          'How accurate are the maintenance reminders?',
-          'Our AI analyzes your driving patterns, manufacturer recommendations, and real-world data to provide highly accurate reminders. You can also customize intervals based on your preferences.',
-        ),
-        
-        _buildFAQItem(
-          context,
-          'Can I use the app without an internet connection?',
-          'Yes! Most features work offline. Your data syncs automatically when you reconnect to the internet. Only real-time features like service center locations require an internet connection.',
-        ),
-        
-        _buildFAQItem(
-          context,
-          'How do I connect my OBD device?',
-          'Go to the OBD Dashboard and tap "Connect Device". Make sure your OBD adapter is plugged into your car and Bluetooth is enabled on your phone.',
-        ),
-        
-        _buildFAQItem(
-          context,
-          'Is my data secure?',
-          'Absolutely. All data is encrypted and stored securely. We never share your personal information with third parties. You can delete your account and all data at any time.',
-        ),
-      ],
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Frequently Asked Questions',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontFamily: 'Orbitron',
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          _buildFAQItem(
+            context,
+            'How do I add my first car?',
+            'Go to the Home screen and tap the "+" button. Enter your car details including make, model, year, and mileage. The app will automatically set up maintenance schedules based on your vehicle.',
+          ),
+          
+          _buildFAQItem(
+            context,
+            'How accurate are the maintenance reminders?',
+            'Our AI analyzes your driving patterns, manufacturer recommendations, and real-world data to provide highly accurate reminders. You can also customize intervals based on your preferences.',
+          ),
+          
+          _buildFAQItem(
+            context,
+            'Can I use the app without an internet connection?',
+            'Yes! Most features work offline. Your data syncs automatically when you reconnect to the internet. Only real-time features like service center locations require an internet connection.',
+          ),
+          
+          _buildFAQItem(
+            context,
+            'How do I connect my OBD device?',
+            'Go to the OBD Dashboard and tap "Connect Device". Make sure your OBD adapter is plugged into your car and Bluetooth is enabled on your phone.',
+          ),
+          
+          _buildFAQItem(
+            context,
+            'Is my data secure?',
+            'Absolutely. All data is encrypted and stored securely. We never share your personal information with third parties. You can delete your account and all data at any time.',
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildFAQItem(BuildContext context, String question, String answer) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
-    return ExpansionTile(
-      title: Text(
-        question,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.getThemeAwareTextColor(context),
-          fontFamily: 'Orbitron',
+    return Theme(
+      data: Theme.of(context).copyWith(
+        dividerColor: Colors.transparent,
+        expansionTileTheme: const ExpansionTileThemeData(
+          iconColor: Colors.white,
+          collapsedIconColor: Colors.white70,
         ),
       ),
-      iconColor: AppTheme.primaryGreen,
-      collapsedIconColor: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Text(
-            answer,
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.5,
-              color: isDarkMode ? AppTheme.lightBackground.withOpacity(0.9) : AppTheme.darkAccentGreen.withOpacity(0.9),
-              fontFamily: 'Orbitron',
-            ),
+      child: ExpansionTile(
+        title: Text(
+          question,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            fontFamily: 'Orbitron',
           ),
         ),
-      ],
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Text(
+              answer,
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                color: Colors.white70,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildContactSupport(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDarkMode ? AppTheme.darkModeCardBackground : AppTheme.lightModeCardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,16 +388,16 @@ class HelpScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppTheme.primaryGreen,
+              color: Colors.white,
               fontFamily: 'Orbitron',
             ),
           ),
           const SizedBox(height: 12),
-          Text(
+          const Text(
             'Our support team is here to help you get the most out of Siyana+.',
             style: TextStyle(
               fontSize: 14,
-              color: AppTheme.getThemeAwareTextColor(context),
+              color: Colors.white70,
               fontFamily: 'Orbitron',
             ),
           ),
@@ -283,42 +406,84 @@ class HelpScreen extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    // Open email
-                  },
-                  icon: const Icon(Icons.email, size: 18),
-                  label: const Text(
-                    'Email Support',
-                    style: TextStyle(fontFamily: 'Orbitron', fontSize: 14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.backgroundGreen,
+                        AppTheme.primaryGreen,
+                        AppTheme.darkAccentGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryGreen,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      // Open email
+                    },
+                    icon: const Icon(Icons.email, size: 18, color: Colors.white),
+                    label: const Text(
+                      'Email',
+                      style: TextStyle(fontFamily: 'Orbitron', fontSize: 14, color: Colors.white),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    // Open chat or phone
-                  },
-                  icon: const Icon(Icons.chat, size: 18),
-                  label: const Text(
-                    'Live Chat',
-                    style: TextStyle(fontFamily: 'Orbitron'),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.backgroundGreen,
+                        AppTheme.primaryGreen,
+                        AppTheme.darkAccentGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.primaryGreen,
-                    side: const BorderSide(color: AppTheme.primaryGreen),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      // Open chat or phone
+                    },
+                    icon: const Icon(Icons.chat, size: 18, color: Colors.white),
+                    label: const Text(
+                      'Chat',
+                      style: TextStyle(fontFamily: 'Orbitron', fontSize: 14, color: Colors.white),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                     ),
                   ),
                 ),
@@ -331,30 +496,39 @@ class HelpScreen extends StatelessWidget {
   }
 
   void _showGettingStarted(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        backgroundColor: AppTheme.backgroundGreen,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         title: const Text(
           'Getting Started',
-          style: TextStyle(color: AppTheme.primaryGreen, fontFamily: 'Orbitron'),
+          style: TextStyle(color: Colors.white, fontFamily: 'Orbitron', fontWeight: FontWeight.bold),
         ),
-        content: Text(
+        content: const Text(
           '1. Add your car details in the Home screen\n'
           '2. Set up maintenance reminders\n'
           '3. Connect your OBD device (optional)\n'
           '4. Start tracking your car\'s health!\n\n'
           'Need more help? Check our full tutorial in the app.',
-          style: TextStyle(color: AppTheme.getThemeAwareTextColor(context), fontFamily: 'Orbitron'),
+          style: TextStyle(color: Colors.white70, fontFamily: 'Orbitron'),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Got it!',
-              style: TextStyle(color: AppTheme.primaryGreen, fontFamily: 'Orbitron'),
+          Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Got it!',
+                style: TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
+              ),
             ),
           ),
         ],
@@ -363,42 +537,49 @@ class HelpScreen extends StatelessWidget {
   }
 
   void _showResetDialog(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        backgroundColor: AppTheme.backgroundGreen,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         title: const Text(
           'Reset Account Data',
-          style: TextStyle(color: AppTheme.errorColor, fontFamily: 'Orbitron'),
+          style: TextStyle(color: Colors.red, fontFamily: 'Orbitron', fontWeight: FontWeight.bold),
         ),
-        content: Text(
+        content: const Text(
           'This will permanently delete all your cars, maintenance records, and settings. This action cannot be undone.',
-          style: TextStyle(color: AppTheme.getThemeAwareTextColor(context), fontFamily: 'Orbitron'),
+          style: TextStyle(color: Colors.white70, fontFamily: 'Orbitron'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text(
               'Cancel',
-              style: TextStyle(color: AppTheme.darkAccentGreen, fontFamily: 'Orbitron'),
+              style: TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
             ),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Implement reset logic
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Account data reset successfully'),
-                  backgroundColor: AppTheme.primaryGreen,
-                ),
-              );
-            },
-            child: const Text(
-              'Reset',
-              style: TextStyle(color: AppTheme.errorColor, fontFamily: 'Orbitron'),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.red,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // Implement reset logic
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Account data reset successfully', style: TextStyle(fontFamily: 'Orbitron')),
+                    backgroundColor: AppTheme.primaryGreen,
+                  ),
+                );
+              },
+              child: const Text(
+                'Reset',
+                style: TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
+              ),
             ),
           ),
         ],
@@ -409,10 +590,11 @@ class HelpScreen extends StatelessWidget {
   void _exportData(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Exporting your data...'),
+        content: Text('Exporting your data...', style: TextStyle(fontFamily: 'Orbitron')),
         backgroundColor: AppTheme.primaryGreen,
       ),
     );
     // Implement export logic
   }
 }
+

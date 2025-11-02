@@ -1,79 +1,59 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../../services/security/authentication_manager.dart';
+import '../security/mfa_verification_screen.dart';
 import '../../providers/auth_provider.dart';
-import 'create_account_screen.dart';
 import 'forgot_password_screen.dart';
+import 'create_account_screen.dart';
 
-/// Modern login screen with animated entrance and form validation
-/// Handles user authentication through Firebase Auth
-class ModernLoginScreen extends StatefulWidget {
-  /// Callback function triggered after successful login
-  final VoidCallback? onLogin;
-  const ModernLoginScreen({super.key, this.onLogin});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   @override
-  State<ModernLoginScreen> createState() => _ModernLoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-/// State class for the modern login screen
-/// Manages form state, animations, and authentication logic
-class _ModernLoginScreenState extends State<ModernLoginScreen>
-    with TickerProviderStateMixin {
-  /// Controller for email input field
+class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin {
+  final AuthenticationManager _authManager = AuthenticationManager();
   final _emailController = TextEditingController();
-  /// Controller for password input field
   final _passwordController = TextEditingController();
-  /// Form validation key for input validation
-  final _formKey = GlobalKey<FormState>();
-  /// Toggle for password visibility
-  bool _isPasswordVisible = false;
-  /// Loading state during authentication
+  
   bool _isLoading = false;
-  /// Controller for fade-in animation
+  bool _obscurePassword = true;
+  String? _errorMessage;
+  
   late AnimationController _fadeController;
-  /// Controller for slide-up animation
   late AnimationController _slideController;
-  /// Fade animation for smooth entrance
   late Animation<double> _fadeAnimation;
-  /// Slide animation for content movement
   late Animation<Offset> _slideAnimation;
 
-  /// Initialize animation controllers and start entrance animations
   @override
   void initState() {
     super.initState();
-    /// Create fade controller for smooth opacity transition
+    
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    /// Create slide controller for content movement
+    
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
     
-    /// Configure fade animation for form elements
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeInOut,
-    ));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+    );
 
-    /// Configure slide animation for content entrance
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.3),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+    );
 
-    /// Start both animations for smooth entrance
     _fadeController.forward();
     _slideController.forward();
   }
@@ -92,40 +72,41 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
     return Scaffold(
       backgroundColor: AppTheme.backgroundGreen,
       body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: SlideTransition(
-            position: _slideAnimation,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 0),
-              child: Form(
-                key: _formKey,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: FadeTransition(
+                opacity: _fadeAnimation,
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Logo at top
-                    SizedBox(
-                      height: 100,
-                      child: Align(
-                        alignment: Alignment.topLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 20, top: 22),
-                          child: Image.asset(
-                            'assets/images/logo.png',
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ),
-                    ),
-                    _buildHeader(),
+                    const SizedBox(height: 40),
+                    _buildLogo(),
+                    const SizedBox(height: 40),
+                    _buildTitle(),
+                    const SizedBox(height: 8),
+                    _buildSubtitle(),
+                    const SizedBox(height: 40),
+                    _buildEmailField(),
                     const SizedBox(height: 20),
-                    _buildLoginForm(),
-                    const SizedBox(height: 20),
-                    _buildSocialLoginSection(),
-                    const SizedBox(height: 20),
-                    _buildNavigationButtons(),
-                    const SizedBox(height: 20),
-                    _buildFooterLinks(),
+                    _buildPasswordField(),
+                    const SizedBox(height: 8),
+                    _buildForgotPasswordLink(),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 16),
+                      _buildErrorMessage(),
+                    ],
+                    const SizedBox(height: 32),
+                    _buildSignInButton(),
+                    const SizedBox(height: 24),
+                    _buildOrDivider(),
+                    const SizedBox(height: 24),
+                    _buildGoogleSignInButton(),
+                    const SizedBox(height: 32),
+                    _buildNewUserSection(),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -136,637 +117,448 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Left-aligned title and subtitle only
-                      const Text(
-          'Sign in to Siyana+',
-                        style: TextStyle(
-                          fontSize: 32,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.lightBackground,
-            fontFamily: 'Orbitron',
-            letterSpacing: -0.5,
-          ),
-          textAlign: TextAlign.left,
+  Widget _buildLogo() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        height: 60,
+        width: 180,
+        child: Image.asset(
+          'assets/images/logo.png',
+          fit: BoxFit.contain,
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Your smart car maintenance companion',
-          style: TextStyle(
-            fontSize: 16,
-            color: AppTheme.lightBackground.withOpacity(0.8),
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.w400,
-          ),
-          textAlign: TextAlign.left,
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildLoginForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Email Field
-        const Text(
-          'Email address',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.lightBackground,
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildEmailField(),
-        const SizedBox(height: 24),
-        
-        // Password Field
-        const Text(
-          'Password',
-                          style: TextStyle(
-                            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.lightBackground,
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildPasswordField(),
-        const SizedBox(height: 8),
-        // Forgot Password Link
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () => _navigateToForgotPassword(),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: const Text(
-              'Forgot Password?',
-              style: TextStyle(
-                color: AppTheme.secondaryGreen,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                fontFamily: 'Orbitron',
-                decoration: TextDecoration.underline,
-                decorationColor: AppTheme.secondaryGreen,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 32),
-        
-        // Sign In Button
-        _buildSignInButton(),
-      ],
+  Widget _buildTitle() {
+    return const Text(
+      'Sign in to Siyana+',
+      style: TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        color: AppTheme.lightBackground,
+        fontFamily: 'Orbitron',
+      ),
+      textAlign: TextAlign.left,
+    );
+  }
+
+  Widget _buildSubtitle() {
+    return const Text(
+      'Your smart car maintenance companion',
+      style: TextStyle(
+        fontSize: 16,
+        color: AppTheme.lightBackground,
+        fontFamily: 'Orbitron',
+      ),
+      textAlign: TextAlign.left,
     );
   }
 
   Widget _buildEmailField() {
-    return Container(
-                        decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.lightBackground.withOpacity(0.3),
-          width: 1.5,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Email address',
+          style: TextStyle(
+            fontSize: 16,
+            color: AppTheme.lightBackground,
+            fontFamily: 'Orbitron',
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        color: Colors.transparent,
-      ),
-      child: TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppTheme.lightBackground.withOpacity(0.3),
+              width: 1.5,
+            ),
+            color: Colors.transparent,
+          ),
+          child: TextFormField(
+        controller: _emailController,
+        keyboardType: TextInputType.emailAddress,
         style: const TextStyle(
           color: AppTheme.lightBackground,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           fontFamily: 'Orbitron',
         ),
-        decoration: const InputDecoration(
-          hintText: 'Email address',
-          hintStyle: TextStyle(
-            color: AppTheme.lightBackground,
-            fontSize: 16,
-            fontFamily: 'Orbitron',
+            decoration: const InputDecoration(
+              hintText: 'Email address',
+              hintStyle: TextStyle(
+                color: AppTheme.lightBackground,
+                fontFamily: 'Orbitron',
+              ),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            ),
           ),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.all(20),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter your email';
-                                }
-          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                                  return 'Please enter a valid email';
-                                }
-                                return null;
-                              },
-                            ),
+        ),
+      ],
     );
   }
 
   Widget _buildPasswordField() {
-    return Container(
-                                  decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.lightBackground.withOpacity(0.3),
-          width: 1.5,
-        ),
-        color: Colors.transparent,
-      ),
-      child: TextFormField(
-        controller: _passwordController,
-        obscureText: !_isPasswordVisible,
-        style: const TextStyle(
-          color: AppTheme.lightBackground,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'Orbitron',
-        ),
-        decoration: InputDecoration(
-          hintText: 'Password',
-          hintStyle: const TextStyle(
-            color: AppTheme.lightBackground,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Password',
+          style: TextStyle(
             fontSize: 16,
+            color: AppTheme.lightBackground,
             fontFamily: 'Orbitron',
+            fontWeight: FontWeight.w500,
           ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(20),
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-              _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
-                                    color: AppTheme.primaryGreen,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                _isPasswordVisible = !_isPasswordVisible;
-                                    });
-                                  },
-                                ),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter your password';
-                                }
-                                if (value.length < 6) {
-                                  return 'Password must be at least 6 characters';
-                                }
-                                return null;
-                              },
-                            ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppTheme.lightBackground.withOpacity(0.3),
+              width: 1.5,
+            ),
+            color: Colors.transparent,
+          ),
+          child: TextField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            keyboardType: TextInputType.visiblePassword,
+            style: const TextStyle(
+              color: AppTheme.lightBackground,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Orbitron',
+            ),
+            decoration: InputDecoration(
+              hintText: 'Password',
+              hintStyle: const TextStyle(
+                color: AppTheme.lightBackground,
+                fontFamily: 'Orbitron',
+              ),
+              suffixIcon: IconButton(
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                  color: AppTheme.lightBackground,
+                ),
+              ),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildForgotPasswordLink() {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ModernForgotPasswordScreen(),
+            ),
+          );
+        },
+        child: const Text(
+          'Forgot Password?',
+          style: TextStyle(
+            color: AppTheme.lightBackground,
+            fontFamily: 'Orbitron',
+            fontSize: 14,
+            decoration: TextDecoration.underline,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorMessage() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 14,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildSignInButton() {
-    return Container(
-                              width: double.infinity,
-                              height: 56,
-      decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-        gradient: _isLoading 
+    return SizedBox(
+      width: double.infinity,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: _isLoading 
             ? null 
             : const LinearGradient(
                 colors: [AppTheme.lightBackground, AppTheme.secondaryGreen],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
-        color: _isLoading ? AppTheme.lightBackground.withOpacity(0.3) : null,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: _isLoading ? null : _handleSignIn,
-          child: Center(
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.backgroundGreen),
-                                        ),
-                                      )
-                                    : const Text(
-                    'Sign in',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.backgroundGreen,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-          ),
+          borderRadius: BorderRadius.circular(12),
         ),
-      ),
-    );
-  }
-
-    Widget _buildSocialLoginSection() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Divider(
-                color: AppTheme.lightBackground.withOpacity(0.3),
-                thickness: 1,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'or',
-                style: TextStyle(
-                  color: AppTheme.lightBackground.withOpacity(0.8),
-                  fontSize: 16,
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Divider(
-                color: AppTheme.lightBackground.withOpacity(0.3),
-                thickness: 1,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        _buildSocialButton(
-          'Sign in with Google',
-          Icons.g_mobiledata,
-          () => _handleGoogleSignIn(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNavigationButtons() {
-    return Column(
-      children: [
-        // Create Account Section
-        Row(
-          children: [
-            Expanded(
-              child: Divider(
-                color: AppTheme.lightBackground.withOpacity(0.3),
-                thickness: 1,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'New to Siyana+?',
-                style: TextStyle(
-                  color: AppTheme.lightBackground.withOpacity(0.8),
-                  fontSize: 14,
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Divider(
-                color: AppTheme.lightBackground.withOpacity(0.3),
-                thickness: 1,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        // Create Account Link
-        Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'No account? ',
-                style: TextStyle(
-                  color: AppTheme.lightBackground.withOpacity(0.8),
-                  fontSize: 14,
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              TextButton(
-                onPressed: () => _navigateToCreateAccount(),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text(
-                  'Join now',
-                  style: TextStyle(
-                    color: AppTheme.secondaryGreen,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'Orbitron',
-                    decoration: TextDecoration.underline,
-                    decorationColor: AppTheme.secondaryGreen,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-      ],
-    );
-  }
-
-    Widget _buildSocialButton(String text, IconData icon, VoidCallback onTap) {
-    return Container(
-      width: double.infinity,
-      height: 56,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.lightBackground.withOpacity(0.3),
-          width: 1.5,
-        ),
-        color: Colors.transparent,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: AppTheme.lightBackground,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.lightBackground,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _navigateToCreateAccount() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ModernCreateAccountScreen(),
-      ),
-    );
-  }
-
-  void _navigateToForgotPassword() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ModernForgotPasswordScreen(),
-      ),
-    );
-  }
-
-  Widget _buildFooterLinks() {
-    return Column(
-      children: [
-        Text(
-          'Returning user and problems logging in ?',
-          style: TextStyle(
-            color: AppTheme.lightBackground.withOpacity(0.8),
-            fontSize: 14,
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: _showContactSupport,
-          child: const Text(
-            'Contact us',
-            style: TextStyle(
-              color: AppTheme.secondaryGreen,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Orbitron',
-              decoration: TextDecoration.underline,
-              decorationColor: AppTheme.secondaryGreen,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _handleSignIn() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      
-      final success = await authProvider.signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-
-        if (success) {
-          // Show success feedback
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Welcome back to Siyana+!',
-                style: TextStyle(fontFamily: 'Orbitron'),
-              ),
-              backgroundColor: AppTheme.primaryGreen,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-
-          // Navigate to main app
-          if (widget.onLogin != null) {
-            widget.onLogin!();
-          }
-        } else {
-          // Show error message
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                authProvider.errorMessage ?? 'Sign in failed',
-                style: const TextStyle(fontFamily: 'Orbitron'),
-              ),
-              backgroundColor: AppTheme.errorColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'An unexpected error occurred. Please try again.',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-            backgroundColor: AppTheme.errorColor,
-            behavior: SnackBarBehavior.floating,
+        child: ElevatedButton(
+          onPressed: _isLoading ? null : _signIn,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            foregroundColor: Colors.black,
+            shadowColor: Colors.transparent,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            elevation: 0,
           ),
-        );
+          child: _isLoading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                  ),
+                )
+              : const Text(
+                  'Sign in',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Orbitron',
+                    color: AppTheme.backgroundGreen,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrDivider() {
+    return const Row(
+      children: [
+        Expanded(child: Divider(color: AppTheme.lightBackground,)),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'or',
+            style: TextStyle(
+              color: AppTheme.lightBackground,
+              fontFamily: 'Orbitron',
+              fontSize: 14,
+            ),
+          ),
+        ),
+        Expanded(child: Divider(color: AppTheme.lightBackground,)),
+      ],
+    );
+  }
+
+  Widget _buildGoogleSignInButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _isLoading ? null : _signInWithGoogle,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          side: const BorderSide(color: Colors.white54),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+        icon: SvgPicture.asset(
+          'assets/images/google-icon-logo-svgrepo-com.svg',
+          width: 24,
+          height: 24,
+        ),
+        label: Text(
+          'Sign In with Google',
+          style: TextStyle(
+            fontSize: 16,
+            fontFamily: 'Orbitron',
+            color: AppTheme.lightBackground,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNewUserSection() {
+    return Column(
+      children: [
+        const Row(
+          children: [
+            Expanded(child: Divider(color: AppTheme.lightBackground,)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'New to Siyana+?',
+                style: TextStyle(
+                  color: AppTheme.lightBackground,
+                  fontFamily: 'Orbitron',
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: AppTheme.lightBackground,)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ModernCreateAccountScreen(),
+              ),
+            );
+          },
+          child: RichText(
+            text: const TextSpan(
+              text: 'No account? ',
+              style: TextStyle(
+                color: AppTheme.lightBackground,
+                fontFamily: 'Orbitron',
+                fontSize: 14,
+              ),
+              children: [
+                TextSpan(
+                  text: 'Join now',
+                  style: TextStyle(
+                    color: AppTheme.primaryGreen,
+                    fontFamily: 'Orbitron',
+                    fontSize: 14,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _signIn() async {
+    if (_isLoading) return;
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter both email and password';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Use the new security system for authentication
+      final result = await _authManager.signInWithEmailPassword(email, password);
+
+      if (result.success) {
+        // Check if PIN is set up, if not, navigate to PIN setup
+        _navigateToNextScreen();
+      } else if (result.requiresMfa) {
+        // Navigate to MFA verification
+        _navigateToMfaVerification(result.userId!, result.deviceId!);
+      } else {
+        setState(() {
+          _errorMessage = result.error ?? 'Sign in failed';
+          _isLoading = false;
+        });
       }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'An error occurred during sign in';
+        _isLoading = false;
+      });
     }
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    HapticFeedback.selectionClick();
-    setState(() { _isLoading = true; });
-    
+  Future<void> _signInWithGoogle() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
     try {
+      // Use AuthProvider for Google sign-in
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final success = await authProvider.signInWithGoogle();
       
-      if (mounted) {
-        setState(() { _isLoading = false; });
-        
-        if (success) {
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Successfully signed in with Google!',
-                style: TextStyle(fontFamily: 'Orbitron'),
-              ),
-              backgroundColor: AppTheme.primaryGreen,
-              duration: Duration(seconds: 2),
-            ),
-          );
-          if (widget.onLogin != null) { widget.onLogin!(); }
-        } else {
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                authProvider.errorMessage ?? 'Google Sign-In failed',
-                style: const TextStyle(fontFamily: 'Orbitron'),
-              ),
-              backgroundColor: AppTheme.errorColor,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
+      if (success) {
+        _navigateToNextScreen();
+      } else {
+        setState(() {
+          _errorMessage = authProvider.errorMessage ?? 'Google sign in failed';
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() { _isLoading = false; });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'An unexpected error occurred during Google Sign-In',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-            backgroundColor: AppTheme.errorColor,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
+      setState(() {
+        _errorMessage = 'An error occurred during Google sign in';
+        _isLoading = false;
+      });
     }
   }
 
+  void _navigateToNextScreen() {
+    // Authentication successful - just pop (for non-MFA flows)
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
 
-
-  void _showContactSupport() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.lightBackground,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+  void _navigateToMfaVerification(String userId, String deviceId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => MfaVerificationScreen(
+          userId: userId,
+          deviceId: deviceId,
+          // No callback - let MFA screen handle its own navigation
         ),
-        title: const Text(
-          'Contact Support',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.w700,
-            color: AppTheme.backgroundGreen,
-          ),
-        ),
-        content: const Text(
-          'Need help? Our support team is here to assist you with any login issues.',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            color: AppTheme.backgroundGreen,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Close',
-              style: TextStyle(
-                fontFamily: 'Orbitron',
-                color: AppTheme.primaryGreen,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Implement email or chat support
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryGreen,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              'Get Help',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-        ],
       ),
     );
   }

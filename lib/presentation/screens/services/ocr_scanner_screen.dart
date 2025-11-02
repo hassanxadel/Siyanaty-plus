@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:camera/camera.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../../services/ocr_service.dart';
+import '../../../services/car_service.dart';
+import 'ocr_review_screen.dart';
+import 'ocr_history_screen.dart';
 import '../../widgets/bottom_nav_bar.dart';
 
 class OcrScannerScreen extends StatefulWidget {
@@ -13,34 +16,83 @@ class OcrScannerScreen extends StatefulWidget {
 }
 
 class _OcrScannerScreenState extends State<OcrScannerScreen> {
-  bool _isScanning = false;
-  String? _extractedText;
-  List<String> _extractedData = [];
+  final OcrService _ocrService = OcrService();
+  final TextEditingController _documentNameController = TextEditingController();
+  bool _isProcessing = false;
+  String? _lastImagePath;
+  List<CameraDescription>? _cameras;
+  CameraController? _cameraController;
+  bool _isCameraInitialized = false;
+  bool _showCamera = false;
+  String? _selectedCarId;
+  List<dynamic> _cars = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCameras();
+    _loadCars();
+  }
+
+  Future<void> _loadCars() async {
+    try {
+      final carService = CarService();
+      final cars = await carService.getAllCars();
+      if (mounted) {
+                        setState(() {
+                          _cars = cars;
+                          if (_cars.isNotEmpty) {
+                            _selectedCarId = _cars.first.id.toString();
+                          }
+                        });
+      }
+    } catch (e) {
+      print('Error loading cars: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _cameraController?.dispose();
+    _documentNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeCameras() async {
+    try {
+      _cameras = await availableCameras();
+      if (_cameras != null && _cameras!.isNotEmpty) {
+        _cameraController = CameraController(
+          _cameras![0],
+          ResolutionPreset.high,
+          enableAudio: false,
+        );
+        await _cameraController!.initialize();
+        if (mounted) {
+          setState(() {
+            _isCameraInitialized = true;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error initializing camera: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          _buildHeader(context),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildInstructionsCard(),
-                  const SizedBox(height: 24),
-                  _buildScannerCard(),
-                  const SizedBox(height: 24),
-                  if (_extractedData.isNotEmpty) _buildResultsCard(),
-                ],
-              ),
+      body: _showCamera && _isCameraInitialized
+          ? _buildCameraPreview()
+          : Column(
+              children: [
+                _buildHeader(context),
+                Expanded(
+                  child: _buildMainInterface(),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: BottomNavBar(currentIndex: 0, onTap: (i) {}),
+      bottomNavigationBar: _showCamera ? null : BottomNavBar(currentIndex: 0, onTap: (i) {}),
     );
   }
 
@@ -87,13 +139,29 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
                       fontFamily: 'Orbitron',
                     ),
                   ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const OcrHistoryScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.history,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  'Extract Data from Service Reports & Documents',
+                  'Scan documents and extract text using AI',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.white70,
@@ -109,550 +177,694 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
     );
   }
 
-  Widget _buildInstructionsCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
+  Widget _buildMainInterface() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.info_outline,
-                color: AppTheme.primaryGreen,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'How to Use OCR Scanner',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
-                  fontFamily: 'Orbitron',
+          // Show either the "Scan Documents" header or the uploaded image
+          if (_lastImagePath == null) ...[
+            // Header - only show when no image is uploaded
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.darkAccentGreen,
+                    AppTheme.backgroundGreen,
+                  ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildInstructionStep(
-            '1',
-            'Choose Method',
-            'Select between camera scanning for live documents or file import for existing images/PDFs.',
-            Icons.photo_camera,
-          ),
-          const SizedBox(height: 12),
-          _buildInstructionStep(
-            '2',
-            'Capture or Select',
-            'Use camera to scan documents in real-time, or browse and select files from your device storage.',
-            Icons.folder_open,
-          ),
-          const SizedBox(height: 12),
-          _buildInstructionStep(
-            '3',
-            'Extract & Organize',
-            'The OCR will automatically extract text and organize service data for easy management.',
-            Icons.text_fields,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInstructionStep(String number, String title, String description, IconData icon) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: AppTheme.primaryGreen,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Text(
-              number,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    icon,
-                    color: AppTheme.secondaryGreen,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
-                      fontFamily: 'Orbitron',
-                    ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground.withOpacity(0.8) : Colors.black54,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildScannerCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Document Scanner',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            height: 200,
-            decoration: BoxDecoration(
-              color: AppTheme.backgroundGreen.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppTheme.primaryGreen.withOpacity(0.5),
-                style: BorderStyle.solid,
-                width: 2,
-              ),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: const Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.document_scanner,
-                    color: AppTheme.primaryGreen,
-                    size: 48,
+                    size: 64,
+                    color: Colors.white,
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   Text(
-                    'Choose Your Method',
+                    'Scan Documents',
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
                       fontFamily: 'Orbitron',
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Text(
-                    'Scan with camera or import from files',
+                    'Capture or select an image to extract text using AI',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground.withOpacity(0.7) : Colors.black54,
                       fontFamily: 'Orbitron',
+                      fontSize: 14,
+                      color: Colors.white70,
                     ),
                     textAlign: TextAlign.center,
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          // Camera Scan Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _isScanning ? null : _startCameraScan,
-              icon: Icon(
-                _isScanning ? Icons.stop : Icons.camera_alt,
-                color: Colors.white,
+            const SizedBox(height: 30),
+          ] else ...[
+            // Show uploaded image when available
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
-              label: Text(
-                _isScanning ? 'Scanning...' : 'Scan with Camera',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryGreen,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: Image.file(
+                  File(_lastImagePath!),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: 200,
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          // Import from Files Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _isScanning ? null : _importFromFiles,
-              icon: const Icon(
-                Icons.folder_open,
-                color: Colors.white,
-              ),
-              label: const Text(
-                'Import from Files',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Orbitron',
+            const SizedBox(height: 16),
+            // Image info
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.darkAccentGreen,
+                    AppTheme.backgroundGreen,
+                  ],
                 ),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.darkAccentGreen,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Image ready for processing',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _lastImagePath = null;
+                      });
+                    },
+                    child: const Text(
+                      'Remove',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 12,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Document name and car selection
+            _buildTextField(
+              controller: _documentNameController,
+              hintText: 'Document Name (e.g., Insurance Card)',
+              icon: Icons.description,
+            ),
+            const SizedBox(height: 12),
+            _buildCarDropdown(),
+            const SizedBox(height: 20),
+          ],
+          
+          // Action buttons
+          _buildActionButton(
+            icon: Icons.camera_alt,
+            title: 'Take Photo',
+            subtitle: 'Use camera to capture document',
+            onTap: _showCamera ? null : _captureFromCamera,
+            isEnabled: !_isProcessing && _isCameraInitialized,
+          ),
+          
+          const SizedBox(height: 16),
+          
+          _buildActionButton(
+            icon: Icons.photo_library,
+            title: 'Choose from Gallery',
+            subtitle: 'Select existing image from gallery',
+            onTap: _pickFromGallery,
+            isEnabled: !_isProcessing,
+          ),
+          
+          const SizedBox(height: 30),
+          
+          // Process button - only show when image is available
+          if (_lastImagePath != null) ...[
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.backgroundGreen,
+                    AppTheme.primaryGreen,
+                    AppTheme.darkAccentGreen,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: _isProcessing ? null : () => _processImage(_lastImagePath!),
+                icon: _isProcessing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.auto_awesome, color: Colors.white),
+                label: Text(
+                  _isProcessing ? 'Processing...' : 'Extract Text with AI',
+                  style: const TextStyle(
+                    fontFamily: 'Orbitron',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          // Clear Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _extractedData.isEmpty ? null : _clearResults,
-              icon: const Icon(
-                Icons.clear,
-                color: Colors.white,
-              ),
-              label: const Text(
-                'Clear Results',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.errorColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
+            const SizedBox(height: 20),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildResultsCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.text_fields,
-                color: AppTheme.primaryGreen,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Extracted Data',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
+  Widget _buildCameraPreview() {
+    return Stack(
+      children: [
+        CameraPreview(_cameraController!),
+        
+        // Camera controls overlay
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppTheme.backgroundGreen.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  Colors.black.withOpacity(0.8),
+                  Colors.transparent,
+                ],
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                const Text(
-                  'Service Information:',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryGreen,
-                    fontFamily: 'Orbitron',
+                // Back button
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _showCamera = false;
+                    });
+                  },
+                  icon: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white,
+                    size: 30,
                   ),
                 ),
-                const SizedBox(height: 12),
-                ..._extractedData.map((data) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: AppTheme.secondaryGreen,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        margin: const EdgeInsets.only(top: 6),
+                
+                // Capture button
+                GestureDetector(
+                  onTap: _isProcessing ? null : _takePicture,
+                  child: Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      color: _isProcessing ? Colors.grey : Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppTheme.primaryGreen,
+                        width: 3,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          data,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
-                            fontFamily: 'Orbitron',
+                    ),
+                    child: _isProcessing
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
+                            ),
+                          )
+                        : const Icon(
+                            Icons.camera_alt,
+                            color: AppTheme.primaryGreen,
+                            size: 30,
                           ),
-                        ),
-                      ),
-                    ],
                   ),
-                )),
+                ),
+                
+                // Gallery button
+                IconButton(
+                  onPressed: _isProcessing ? null : _pickFromGallery,
+                  icon: const Icon(
+                    Icons.photo_library,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _saveToMaintenance,
-                  icon: const Icon(
-                    Icons.save,
-                    color: Colors.white,
+        ),
+        
+        // Processing overlay
+        if (_isProcessing)
+          Container(
+            color: Colors.black54,
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
-                  label: const Text(
-                    'Save to Maintenance',
+                  SizedBox(height: 16),
+                  Text(
+                    'Processing image...',
                     style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 18,
                       fontFamily: 'Orbitron',
                     ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.secondaryGreen,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _exportData,
-                  icon: const Icon(
-                    Icons.download,
-                    color: Colors.white,
-                  ),
-                  label: const Text(
-                    'Export',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.infoColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ],
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback? onTap,
+    required bool isEnabled,
+  }) {
+    return GestureDetector(
+      onTap: isEnabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: isEnabled ? const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.backgroundGreen,
+              AppTheme.darkAccentGreen,
+            ],
+          ) : null,
+          color: isEnabled ? null : AppTheme.darkAccentGreen.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isEnabled ? [
+            BoxShadow(
+              color: AppTheme.primaryGreen.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ] : [],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: isEnabled ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.primaryGreen,
+                    AppTheme.darkAccentGreen,
+                  ],
+                ) : null,
+                color: isEnabled ? null : Colors.grey,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isEnabled ? Colors.white : Colors.grey[400],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 12,
+                      color: isEnabled ? Colors.white70 : Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: isEnabled ? Colors.white : Colors.grey,
+              size: 16,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  void _startCameraScan() async {
+  Future<void> _captureFromCamera() async {
+    if (_isProcessing) return;
+    
     setState(() {
-      _isScanning = true;
+      _isProcessing = true;
     });
 
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80,
-      );
-
+      final image = await _ocrService.captureImageFromCamera();
       if (image != null) {
-        // Simulate OCR processing
-        await Future.delayed(const Duration(seconds: 2));
-        
-        // Mock extracted data from camera
+        final String savedPath = await _ocrService.saveImageToAppDirectory(image);
         setState(() {
-          _extractedData = [
-            'Service Date: 2024-01-15',
-            'Vehicle: Toyota Camry 2020',
-            'Mileage: 45,000 km',
-            'Service Type: Oil Change & Tire Rotation',
-            'Technician: Mahmoud',
-            'Parts Used: 5W-30 Oil, Oil Filter',
-            'Total Cost: EGP 89.99',
-            'Next Service: 50,000 km',
-            'Source: Camera Scan',
-          ];
-          _isScanning = false;
+          _lastImagePath = savedPath;
         });
-
-        HapticFeedback.lightImpact();
-        _showMessage('Document scanned successfully from camera!');
-      } else {
-        setState(() {
-          _isScanning = false;
-        });
+        await _processImage(savedPath);
       }
     } catch (e) {
+      _showErrorDialog('Failed to capture image: $e');
+    } finally {
       setState(() {
-        _isScanning = false;
+        _isProcessing = false;
       });
-      _showMessage('Error accessing camera: $e');
     }
   }
 
-  void _importFromFiles() async {
+  Future<void> _takePicture() async {
+    if (_isProcessing || _cameraController == null) return;
+    
     setState(() {
-      _isScanning = true;
+      _isProcessing = true;
     });
 
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
-        allowMultiple: false,
-      );
-
-      if (result != null) {
-        // Simulate OCR processing
-        await Future.delayed(const Duration(seconds: 2));
-        
-        // Mock extracted data from file
-        setState(() {
-          _extractedData = [
-            'Service Date: 2024-01-10',
-            'Vehicle: Honda Accord 2019',
-            'Mileage: 52,000 km',
-            'Service Type: Brake Service & Inspection',
-            'Technician: Ahmed',
-            'Parts Used: Brake Pads, Brake Fluid',
-            'Total Cost: EGP 150.00',
-            'Next Service: 55,000 km',
-            'Source: File Import',
-            'File: ${result.files.first.name}',
-          ];
-          _isScanning = false;
-        });
-
-        HapticFeedback.lightImpact();
-        _showMessage('Document imported and processed successfully!');
-      } else {
-        setState(() {
-          _isScanning = false;
-        });
-      }
-    } catch (e) {
+      final image = await _cameraController!.takePicture();
+      final String savedPath = await _ocrService.saveImageToAppDirectory(image);
+      
       setState(() {
-        _isScanning = false;
+        _lastImagePath = savedPath;
+        _showCamera = false;
       });
-      _showMessage('Error importing file: $e');
+      
+      await _processImage(savedPath);
+    } catch (e) {
+      _showErrorDialog('Failed to take picture: $e');
+    } finally {
+      setState(() {
+        _isProcessing = false;
+      });
     }
   }
 
-  void _clearResults() {
+  Future<void> _pickFromGallery() async {
+    if (_isProcessing) return;
+    
     setState(() {
-      _extractedData.clear();
-      _extractedText = null;
+      _isProcessing = true;
     });
-    HapticFeedback.lightImpact();
+
+    try {
+      final image = await _ocrService.pickImageFromGallery();
+      if (image != null) {
+        final String savedPath = await _ocrService.saveImageToAppDirectory(image);
+        setState(() {
+          _lastImagePath = savedPath;
+        });
+        await _processImage(savedPath);
+      }
+    } catch (e) {
+      _showErrorDialog('Failed to pick image: $e');
+    } finally {
+      setState(() {
+        _isProcessing = false;
+      });
+    }
   }
 
-  void _saveToMaintenance() {
-    HapticFeedback.lightImpact();
-    _showMessage('Data saved to maintenance records');
+  Future<void> _processImage(String imagePath) async {
+    if (_isProcessing) return;
+    
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final String extractedText = await _ocrService.recognizeTextFromImage(imagePath);
+      
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OcrReviewScreen(
+              imagePath: imagePath,
+              extractedText: extractedText,
+              source: 'mlkit',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      _showErrorDialog('Failed to extract text: $e');
+    } finally {
+      setState(() {
+        _isProcessing = false;
+      });
+    }
   }
 
-  void _exportData() {
-    HapticFeedback.lightImpact();
-    _showMessage('Data exported successfully');
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData icon,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        style: const TextStyle(
+          color: Colors.white,
+          fontFamily: 'Orbitron',
+          fontSize: 14,
+        ),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: const TextStyle(
+            color: Colors.white54,
+            fontFamily: 'Orbitron',
+          ),
+          prefixIcon: Icon(icon, color: Colors.white70),
+          filled: true,
+          fillColor: Colors.transparent,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+      ),
+    );
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+  Widget _buildCarDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedCarId,
+          hint: const Row(
+            children: [
+              Icon(Icons.directions_car, color: Colors.white70, size: 20),
+              SizedBox(width: 12),
+              Text(
+                'Select Car',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontFamily: 'Orbitron',
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          isExpanded: true,
+          dropdownColor: AppTheme.darkAccentGreen,
+          icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+          style: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'Orbitron',
+            fontSize: 14,
+          ),
+                        items: _cars.map((car) {
+                          return DropdownMenuItem<String>(
+                            value: car.id.toString(),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.directions_car, color: Colors.white70, size: 20),
+                                const SizedBox(width: 12),
+                                Text(
+                                  '${car.brand} ${car.model} (${car.year})',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Orbitron',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+          onChanged: (String? newValue) {
+            setState(() {
+              _selectedCarId = newValue;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Error',
+          style: TextStyle(fontFamily: 'Orbitron'),
+        ),
         content: Text(
           message,
           style: const TextStyle(fontFamily: 'Orbitron'),
         ),
-        backgroundColor: AppTheme.primaryGreen,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'OK',
+              style: TextStyle(fontFamily: 'Orbitron'),
+            ),
+          ),
+        ],
       ),
     );
   }

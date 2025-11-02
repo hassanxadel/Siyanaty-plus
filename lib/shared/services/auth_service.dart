@@ -64,15 +64,31 @@ class AuthService {
       AppLogger.error('Firebase Auth error during sign in', error: e);
       return AuthResult.failure(_getAuthErrorMessage(e));
     } catch (e) {
-      // Handle known Firebase Auth plugin casting error
-      if (e.toString().contains('PigeonUserDetails')) {
-        AppLogger.warning('Firebase Auth plugin casting error - ignoring', error: e);
+      // Handle known Firebase Auth plugin casting error (PigeonUserDetails)
+      // This is a benign error from the google_sign_in plugin that doesn't affect functionality
+      if (e.toString().contains('PigeonUserDetails') || 
+          e.toString().contains('type \'_JsonQuerySnapshot\'') ||
+          e.toString().contains('type cast')) {
+        AppLogger.warning('Firebase Auth plugin type casting warning - user is authenticated', error: e);
         // The user is actually signed in, just continue
         if (_auth.currentUser != null) {
-          // Check if user profile exists, create if missing
-          await ensureUserProfileExists(_auth.currentUser!);
-          await _updateUserActivity(_auth.currentUser!.uid);
-          return AuthResult.success('Welcome back!', _auth.currentUser);
+          try {
+            // Check if user profile exists, create if missing
+            await ensureUserProfileExists(_auth.currentUser!);
+            
+            // Check authorization
+            final bool isAuthorized = await _checkUserAuthorization(_auth.currentUser!.uid);
+            if (!isAuthorized) {
+              await _auth.signOut();
+              return AuthResult.failure('Access denied. You are not authorized to use this app.');
+            }
+            
+            await _updateUserActivity(_auth.currentUser!.uid);
+            return AuthResult.success('Welcome back!', _auth.currentUser);
+          } catch (innerError) {
+            AppLogger.error('Error during post-auth setup', error: innerError);
+            return AuthResult.failure('Authentication succeeded but setup failed. Please try again.');
+          }
         }
       }
       
@@ -227,6 +243,31 @@ class AuthService {
       return AuthResult.success('Welcome!', userCredential.user);
       
     } catch (e) {
+      // Handle known Firebase Auth plugin casting error (PigeonUserDetails)
+      if (e.toString().contains('PigeonUserDetails') || 
+          e.toString().contains('type \'_JsonQuerySnapshot\'') ||
+          e.toString().contains('type cast')) {
+        AppLogger.warning('Firebase Auth plugin type casting warning - user is authenticated', error: e);
+        // The user is actually signed in, just continue
+        if (_auth.currentUser != null) {
+          try {
+            await ensureUserProfileExists(_auth.currentUser!);
+            
+            final bool isAuthorized = await _checkUserAuthorization(_auth.currentUser!.uid);
+            if (!isAuthorized) {
+              await signOut();
+              return AuthResult.failure('Access denied. You are not authorized to use this app.');
+            }
+            
+            await _updateUserActivity(_auth.currentUser!.uid);
+            return AuthResult.success('Welcome!', _auth.currentUser);
+          } catch (innerError) {
+            AppLogger.error('Error during post-auth setup', error: innerError);
+            return AuthResult.failure('Authentication succeeded but setup failed. Please try again.');
+          }
+        }
+      }
+      
       AppLogger.error('Error during Google Sign-In', error: e);
       
       // Handle specific Google Sign-In errors

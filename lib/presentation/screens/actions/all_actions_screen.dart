@@ -146,12 +146,22 @@ class AllActionsScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppTheme.darkAccentGreen.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: color.withOpacity(0.3),
-            width: 1,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
+            ],
           ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.darkAccentGreen.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -173,12 +183,10 @@ class AllActionsScreen extends StatelessWidget {
             Text(
               label,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppTheme.lightBackground
-                    : Colors.black,
+                color: Colors.white,
                 fontFamily: 'Orbitron',
               ),
               maxLines: 1,
@@ -189,11 +197,9 @@ class AllActionsScreen extends StatelessWidget {
               child: Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 8,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? AppTheme.lightBackground.withOpacity(0.8)
-                      : Colors.black,
+                  color: Colors.white70,
                   fontFamily: 'Orbitron',
                 ),
                 maxLines: 2,

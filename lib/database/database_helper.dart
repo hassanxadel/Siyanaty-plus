@@ -6,18 +6,22 @@ import 'package:path_provider/path_provider.dart';
 import '../models/backup_car.dart';
 import '../models/backup_reminder.dart';
 import '../models/backup_maintenance.dart';
+import '../models/license_image.dart';
 import 'ocr_database_helper.dart';
+import 'mileage_database_helper.dart';
+import 'voice_note_database_helper.dart';
 
 /// Database helper class for managing SQLite database operations
 /// Handles car data storage with CRUD operations
 class DatabaseHelper {
   static const String _databaseName = 'syanaty.db';
-  static const int _databaseVersion = 5; // Updated for OCR table
+  static const int _databaseVersion = 8; // Updated for license images table
   
   static const String tableCars = 'cars';
   static const String tableReminders = 'reminders';
   static const String tableMaintenance = 'maintenance';
   static const String tableScans = 'scans'; // OCR scans table
+  static const String tableLicenseImages = 'license_images'; // License images table
   
   // Singleton pattern
   DatabaseHelper._privateConstructor();
@@ -138,6 +142,43 @@ class DatabaseHelper {
       await db.execute('CREATE INDEX idx_scans_timestamp ON ${OcrDatabaseHelper.tableName} (timestamp)');
       await db.execute('CREATE INDEX idx_scans_source ON ${OcrDatabaseHelper.tableName} (source)');
       
+      // Create mileage entries table
+      await db.execute(MileageDatabaseHelper.createTableQuery);
+      
+      // Create indexes for mileage entries
+      await db.execute('CREATE INDEX idx_mileage_user_id ON ${MileageDatabaseHelper.tableName} (userId)');
+      await db.execute('CREATE INDEX idx_mileage_date ON ${MileageDatabaseHelper.tableName} (date)');
+      await db.execute('CREATE INDEX idx_mileage_mileage ON ${MileageDatabaseHelper.tableName} (mileage)');
+      
+      // Create voice notes table
+      await db.execute(VoiceNoteDatabaseHelper.createTableQuery);
+      
+      // Create indexes for voice notes
+      await db.execute('CREATE INDEX idx_voice_notes_user_id ON ${VoiceNoteDatabaseHelper.tableName} (userId)');
+      await db.execute('CREATE INDEX idx_voice_notes_created_at ON ${VoiceNoteDatabaseHelper.tableName} (createdAt)');
+      await db.execute('CREATE INDEX idx_voice_notes_title ON ${VoiceNoteDatabaseHelper.tableName} (title)');
+      
+      // Create license images table
+      await db.execute('''
+        CREATE TABLE $tableLicenseImages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          car_id INTEGER NOT NULL,
+          license_type TEXT NOT NULL,
+          image_path TEXT NOT NULL,
+          image_url TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          user_id TEXT NOT NULL,
+          FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE,
+          UNIQUE(car_id, license_type)
+        )
+      ''');
+      
+      // Create indexes for license images
+      await db.execute('CREATE INDEX idx_license_images_car_id ON $tableLicenseImages (car_id)');
+      await db.execute('CREATE INDEX idx_license_images_user_id ON $tableLicenseImages (user_id)');
+      await db.execute('CREATE INDEX idx_license_images_type ON $tableLicenseImages (license_type)');
+      
     } catch (e) {
       throw DatabaseException('Failed to create tables: $e');
     }
@@ -248,6 +289,49 @@ class DatabaseHelper {
         await db.execute('CREATE INDEX idx_scans_user_id ON ${OcrDatabaseHelper.tableName} (userId)');
         await db.execute('CREATE INDEX idx_scans_timestamp ON ${OcrDatabaseHelper.tableName} (timestamp)');
         await db.execute('CREATE INDEX idx_scans_source ON ${OcrDatabaseHelper.tableName} (source)');
+      }
+      
+      if (oldVersion < 6) {
+        // Version 6: Add mileage entries table
+        await db.execute(MileageDatabaseHelper.createTableQuery);
+        
+        // Create indexes for mileage entries
+        await db.execute('CREATE INDEX idx_mileage_user_id ON ${MileageDatabaseHelper.tableName} (userId)');
+        await db.execute('CREATE INDEX idx_mileage_date ON ${MileageDatabaseHelper.tableName} (date)');
+        await db.execute('CREATE INDEX idx_mileage_mileage ON ${MileageDatabaseHelper.tableName} (mileage)');
+      }
+      
+      if (oldVersion < 7) {
+        // Version 7: Add voice notes table
+        await db.execute(VoiceNoteDatabaseHelper.createTableQuery);
+        
+        // Create indexes for voice notes
+        await db.execute('CREATE INDEX idx_voice_notes_user_id ON ${VoiceNoteDatabaseHelper.tableName} (userId)');
+        await db.execute('CREATE INDEX idx_voice_notes_created_at ON ${VoiceNoteDatabaseHelper.tableName} (createdAt)');
+        await db.execute('CREATE INDEX idx_voice_notes_title ON ${VoiceNoteDatabaseHelper.tableName} (title)');
+      }
+      
+      if (oldVersion < 8) {
+        // Version 8: Add license images table
+        await db.execute('''
+          CREATE TABLE $tableLicenseImages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            car_id INTEGER NOT NULL,
+            license_type TEXT NOT NULL,
+            image_path TEXT NOT NULL,
+            image_url TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            user_id TEXT NOT NULL,
+            FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE,
+            UNIQUE(car_id, license_type)
+          )
+        ''');
+        
+        // Create indexes for license images
+        await db.execute('CREATE INDEX idx_license_images_car_id ON $tableLicenseImages (car_id)');
+        await db.execute('CREATE INDEX idx_license_images_user_id ON $tableLicenseImages (user_id)');
+        await db.execute('CREATE INDEX idx_license_images_type ON $tableLicenseImages (license_type)');
       }
     } catch (e) {
       throw DatabaseException('Failed to upgrade database: $e');
@@ -1063,6 +1147,147 @@ class DatabaseHelper {
       ''', [userId, now]);
     } catch (e) {
       throw DatabaseException('Failed to get upcoming reminders with car info: $e');
+    }
+  }
+
+  // ==================== LICENSE IMAGES METHODS ====================
+
+  /// Insert a new license image
+  Future<int> insertLicenseImage(LicenseImage licenseImage) async {
+    try {
+      final db = await database;
+      return await db.insert(
+        tableLicenseImages,
+        licenseImage.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to insert license image: $e');
+    }
+  }
+
+  /// Get license image by ID for a specific user
+  Future<LicenseImage?> getLicenseImageById(int id, String userId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        tableLicenseImages,
+        where: 'id = ? AND user_id = ?',
+        whereArgs: [id, userId],
+      );
+      
+      if (maps.isNotEmpty) {
+        return LicenseImage.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      throw DatabaseException('Failed to get license image by ID: $e');
+    }
+  }
+
+  /// Get all license images for a specific car
+  Future<List<LicenseImage>> getLicenseImagesForCar(int carId, String userId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        tableLicenseImages,
+        where: 'car_id = ? AND user_id = ?',
+        whereArgs: [carId, userId],
+        orderBy: 'created_at DESC',
+      );
+      
+      return List.generate(maps.length, (i) => LicenseImage.fromMap(maps[i]));
+    } catch (e) {
+      throw DatabaseException('Failed to get license images for car: $e');
+    }
+  }
+
+  /// Get license image by type for a specific car
+  Future<LicenseImage?> getLicenseImageByType(int carId, String licenseType, String userId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        tableLicenseImages,
+        where: 'car_id = ? AND license_type = ? AND user_id = ?',
+        whereArgs: [carId, licenseType, userId],
+      );
+      
+      if (maps.isNotEmpty) {
+        return LicenseImage.fromMap(maps.first);
+      }
+      return null;
+    } catch (e) {
+      throw DatabaseException('Failed to get license image by type: $e');
+    }
+  }
+
+  /// Get all license images for a specific user
+  Future<List<LicenseImage>> getAllLicenseImages(String userId) async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        tableLicenseImages,
+        where: 'user_id = ?',
+        whereArgs: [userId],
+        orderBy: 'created_at DESC',
+      );
+      
+      return List.generate(maps.length, (i) => LicenseImage.fromMap(maps[i]));
+    } catch (e) {
+      throw DatabaseException('Failed to get all license images: $e');
+    }
+  }
+
+  /// Update an existing license image
+  Future<int> updateLicenseImage(LicenseImage licenseImage) async {
+    try {
+      final db = await database;
+      return await db.update(
+        tableLicenseImages,
+        licenseImage.toMap(),
+        where: 'id = ? AND user_id = ?',
+        whereArgs: [licenseImage.id, licenseImage.userId],
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to update license image: $e');
+    }
+  }
+
+  /// Delete a license image
+  Future<int> deleteLicenseImage(int id, String userId) async {
+    try {
+      final db = await database;
+      return await db.delete(
+        tableLicenseImages,
+        where: 'id = ? AND user_id = ?',
+        whereArgs: [id, userId],
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to delete license image: $e');
+    }
+  }
+
+  /// Get license images count for a specific user
+  Future<int> getLicenseImagesCount(String userId) async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery(
+        'SELECT COUNT(*) FROM $tableLicenseImages WHERE user_id = ?',
+        [userId]
+      );
+      return Sqflite.firstIntValue(result) ?? 0;
+    } catch (e) {
+      throw DatabaseException('Failed to get license images count: $e');
+    }
+  }
+
+  /// Clear all license images for a specific user (use with caution)
+  Future<int> clearAllLicenseImages(String userId) async {
+    try {
+      final db = await database;
+      return await db.delete(tableLicenseImages, where: 'user_id = ?', whereArgs: [userId]);
+    } catch (e) {
+      throw DatabaseException('Failed to clear license images: $e');
     }
   }
 }

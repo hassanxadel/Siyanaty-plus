@@ -594,28 +594,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Row(
       children: [
         Expanded(
-          child: ElevatedButton.icon(
-            onPressed: _isEditing ? null : _toggleEditing,
-            icon: Icon(
-              _isEditing ? Icons.edit_off : Icons.edit,
-              color: Colors.white,
-            ),
-            label: Text(
-              _isEditing ? 'Cancel Edit' : 'Edit Profile',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _isEditing 
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: _isEditing 
+                  ? null
+                  : const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.darkAccentGreen,
+                        AppTheme.backgroundGreen,
+                      ],
+                    ),
+              color: _isEditing 
                   ? AppTheme.lightBackground.withOpacity(0.3)
-                  : AppTheme.primaryGreen,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                  : null,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: _isEditing 
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: AppTheme.darkAccentGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+            ),
+            child: ElevatedButton.icon(
+              onPressed: _isEditing ? null : _toggleEditing,
+              icon: Icon(
+                _isEditing ? Icons.edit_off : Icons.edit,
+                color: Colors.white,
+              ),
+              label: Text(
+                _isEditing ? 'Cancel Edit' : 'Edit Profile',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Orbitron',
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -623,35 +650,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (_isEditing) ...[
           const SizedBox(width: 16),
           Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _isLoading ? null : _saveChanges,
-              icon: _isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Icon(
-                      Icons.save,
-                      color: Colors.white,
-                    ),
-              label: Text(
-                _isLoading ? 'Saving...' : 'Save Changes',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Orbitron',
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.primaryGreen,
+                    AppTheme.secondaryGreen,
+                  ],
                 ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.secondaryGreen,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              child: ElevatedButton.icon(
+                onPressed: _isLoading ? null : _saveChanges,
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.save,
+                        color: Colors.white,
+                      ),
+                label: Text(
+                  _isLoading ? 'Saving...' : 'Save Changes',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Orbitron',
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),

@@ -50,32 +50,9 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.backgroundGreen,
-      appBar: AppBar(
-        title: const Text(
-          'Review & Edit',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        backgroundColor: AppTheme.primaryGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: _copyToClipboard,
-            icon: const Icon(Icons.copy),
-            tooltip: 'Copy text',
-          ),
-          IconButton(
-            onPressed: _shareText,
-            icon: const Icon(Icons.share),
-            tooltip: 'Share text',
-          ),
-        ],
-      ),
       body: Column(
         children: [
+          _buildHeader(context),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -141,8 +118,15 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                   // Extracted text editor
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.darkAccentGreen,
+                          AppTheme.backgroundGreen,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.1),
@@ -156,18 +140,25 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryGreen.withOpacity(0.1),
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(15),
-                              topRight: Radius.circular(15),
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.primaryGreen,
+                                AppTheme.darkAccentGreen,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                              topRight: Radius.circular(20),
                             ),
                           ),
                           child: Row(
                             children: [
                               const Icon(
                                 Icons.edit_note,
-                                color: AppTheme.primaryGreen,
+                                color: Colors.white,
                               ),
                               const SizedBox(width: 8),
                               const Text(
@@ -176,7 +167,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                                   fontFamily: 'Orbitron',
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: AppTheme.backgroundGreen,
+                                  color: Colors.white,
                                 ),
                               ),
                               const Spacer(),
@@ -185,7 +176,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                                 style: const TextStyle(
                                   fontFamily: 'Orbitron',
                                   fontSize: 12,
-                                  color: AppTheme.darkAccentGreen,
+                                  color: Colors.white70,
                                 ),
                               ),
                             ],
@@ -201,7 +192,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                               hintText: 'Edit the extracted text here...',
                               hintStyle: TextStyle(
                                 fontFamily: 'Orbitron',
-                                color: Colors.grey,
+                                color: Colors.white54,
                               ),
                               border: InputBorder.none,
                             ),
@@ -209,6 +200,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                               fontFamily: 'Orbitron',
                               fontSize: 14,
                               height: 1.5,
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -223,8 +215,15 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.darkAccentGreen,
+                            AppTheme.backgroundGreen,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.1),
@@ -236,20 +235,20 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          const Row(
                             children: [
                               Icon(
                                 Icons.cloud,
-                                color: Colors.orange[600],
+                                color: Colors.white,
                               ),
-                              const SizedBox(width: 8),
-                              const Text(
+                              SizedBox(width: 8),
+                              Text(
                                 'Enhanced OCR',
                                 style: TextStyle(
                                   fontFamily: 'Orbitron',
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: AppTheme.backgroundGreen,
+                                  color: Colors.white,
                                 ),
                               ),
                             ],
@@ -260,34 +259,58 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                             style: TextStyle(
                               fontFamily: 'Orbitron',
                               fontSize: 12,
-                              color: AppTheme.darkAccentGreen,
+                              color: Colors.white70,
                             ),
                           ),
                           const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _isProcessingCloud ? null : _processWithCloudOcr,
-                              icon: _isProcessingCloud
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                      ),
-                                    )
-                                  : const Icon(Icons.cloud_upload),
-                              label: Text(
-                                _isProcessingCloud ? 'Processing...' : 'Use Cloud OCR',
-                                style: const TextStyle(fontFamily: 'Orbitron'),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.orange,
+                                    Colors.deepOrange,
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(15),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.orange.withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange[600],
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                              child: ElevatedButton.icon(
+                                onPressed: _isProcessingCloud ? null : _processWithCloudOcr,
+                                icon: _isProcessingCloud
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        ),
+                                      )
+                                    : const Icon(Icons.cloud_upload, color: Colors.white),
+                                label: Text(
+                                  _isProcessingCloud ? 'Processing...' : 'Use Cloud OCR',
+                                  style: const TextStyle(
+                                    fontFamily: 'Orbitron',
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
                                 ),
                               ),
                             ),
@@ -306,7 +329,14 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
@@ -320,38 +350,86 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isSaving ? null : _saveLocal,
-                        icon: const Icon(Icons.save),
-                        label: const Text(
-                          'Save Local',
-                          style: TextStyle(fontFamily: 'Orbitron'),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppTheme.backgroundGreen,
+                              AppTheme.primaryGreen,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryGreen.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryGreen,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                        child: ElevatedButton.icon(
+                          onPressed: _isSaving ? null : _saveLocal,
+                          icon: const Icon(Icons.save, color: Colors.white),
+                          label: const Text(
+                            'Save Local',
+                            style: TextStyle(
+                              fontFamily: 'Orbitron',
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isSaving ? null : _saveAndSync,
-                        icon: const Icon(Icons.cloud_upload),
-                        label: const Text(
-                          'Save & Sync',
-                          style: TextStyle(fontFamily: 'Orbitron'),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppTheme.darkAccentGreen,
+                              AppTheme.primaryGreen,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.darkAccentGreen.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.darkAccentGreen,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                        child: ElevatedButton.icon(
+                          onPressed: _isSaving ? null : _saveAndSync,
+                          icon: const Icon(Icons.cloud_upload, color: Colors.white),
+                          label: const Text(
+                            'Save & Sync',
+                            style: TextStyle(
+                              fontFamily: 'Orbitron',
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
                           ),
                         ),
                       ),
@@ -376,7 +454,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                       style: TextStyle(fontFamily: 'Orbitron'),
                     ),
                     style: TextButton.styleFrom(
-                      foregroundColor: AppTheme.primaryGreen,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
@@ -385,6 +463,88 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      height: 200,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.backgroundGreen,
+            AppTheme.darkAccentGreen,
+            AppTheme.primaryGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.arrow_back_ios,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'Review & Edit',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _copyToClipboard,
+                    icon: const Icon(
+                      Icons.copy,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _shareText,
+                    icon: const Icon(
+                      Icons.share,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Review and edit the extracted text',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontFamily: 'Orbitron',
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -463,7 +623,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
         userId: user?.uid,
       );
 
-      await _ocrService.saveScanToDatabase(scan);
+      await _ocrService.saveScanLocal(scan);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -512,7 +672,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
       );
 
       // Save locally first
-      await _ocrService.saveScanToDatabase(scan);
+      await _ocrService.saveScanLocal(scan);
 
       // Then sync to Firestore
       await FirebaseFirestore.instance

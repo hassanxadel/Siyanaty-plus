@@ -32,12 +32,7 @@ class AuthWrapper extends StatelessWidget {
 
         /// Display login screen for unauthenticated users
         if (!authProvider.isAuthenticated) {
-          return ModernLoginScreen(
-            onLogin: () {
-              /// Authentication logic is handled by the provider
-              /// Navigation occurs automatically when auth state changes
-            },
-          );
+          return const LoginScreen();
         }
 
         /// Show main app content for authenticated users

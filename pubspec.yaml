@@ -33,6 +33,7 @@ dependencies:
 
   # UI & Icons
   cupertino_icons: ^1.0.8
+  flutter_svg: ^2.0.10+1
   http: ^1.2.2
   
   # State Management
@@ -40,8 +41,16 @@ dependencies:
   
   # Local Storage
   sqflite: ^2.3.3+1
+  sqflite_sqlcipher: ^2.2.1
   shared_preferences: ^2.3.2
   path_provider: ^2.1.1
+  
+  # Security & Authentication
+  local_auth: ^2.1.8
+  flutter_secure_storage: ^9.2.2
+  crypto: ^3.0.3
+  otp: ^3.1.4
+  device_info_plus: ^10.1.2
   
   # Utilities
   intl: ^0.18.1
@@ -58,6 +67,10 @@ dependencies:
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
   url_launcher: ^6.2.5
+  
+  # Audio Recording and Playback
+  flutter_sound: ^9.2.13
+  permission_handler: ^11.3.1
   
   # Firebase dependencies for advanced features (compatible versions)
   firebase_core: ^2.24.2

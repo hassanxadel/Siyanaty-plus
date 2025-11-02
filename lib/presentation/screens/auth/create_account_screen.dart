@@ -153,27 +153,78 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Create Your Account',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.lightBackground,
-            fontFamily: 'Orbitron',
-            letterSpacing: -0.5,
-          ),
-          textAlign: TextAlign.left,
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppTheme.lightBackground, AppTheme.secondaryGreen],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.lightBackground.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.person_add_rounded,
+                color: AppTheme.backgroundGreen,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Text(
+                'Create Your Account',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.lightBackground,
+                  fontFamily: 'Orbitron',
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Join Siyana+ for smart car maintenance',
-          style: TextStyle(
-            fontSize: 16,
-            color: AppTheme.lightBackground.withOpacity(0.8),
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.w400,
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.lightBackground.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppTheme.lightBackground.withOpacity(0.2),
+              width: 1,
+            ),
           ),
-          textAlign: TextAlign.left,
+          child: Row(
+            children: [
+              Icon(
+                Icons.stars_rounded,
+                color: AppTheme.lightBackground,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Join Siyana+ for smart car maintenance',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppTheme.lightBackground.withOpacity(0.9),
+                    fontFamily: 'Orbitron',
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -678,7 +729,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
   Widget _buildSubmitButton() {
     return Container(
       width: double.infinity,
-      height: 56,
+      height: 58,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         gradient: _isLoading 
@@ -689,6 +740,13 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                 end: Alignment.centerRight,
               ),
         color: _isLoading ? AppTheme.lightBackground.withOpacity(0.3) : null,
+        boxShadow: _isLoading ? null : [
+          BoxShadow(
+            color: AppTheme.lightBackground.withOpacity(0.4),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -705,14 +763,32 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                       valueColor: AlwaysStoppedAnimation<Color>(AppTheme.backgroundGreen),
                     ),
                   )
-                : const Text(
-                    'Create Account',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.lightBackground,
-                      fontFamily: 'Orbitron',
-                    ),
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Create Account',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.backgroundGreen,
+                          fontFamily: 'Orbitron',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.backgroundGreen.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward,
+                          color: AppTheme.backgroundGreen,
+                          size: 18,
+                        ),
+                      ),
+                    ],
                   ),
           ),
         ),
@@ -775,37 +851,91 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         });
 
         if (success) {
-          // Show success feedback
-          HapticFeedback.lightImpact();
+          // Show success feedback with haptic
+          HapticFeedback.mediumImpact();
+          
+          // Show success message with email verification notice
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text(
-                'Account created successfully! Welcome to Siyana+!',
-                style: TextStyle(fontFamily: 'Orbitron'),
+              content: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.mark_email_read,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Welcome! Please check your email to verify your account',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               backgroundColor: AppTheme.primaryGreen,
               behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
           );
 
-          // Navigate to main app
-          if (widget.onRegistration != null) {
-            widget.onRegistration!();
+          // Auto-navigate to main app after brief delay
+          await Future.delayed(const Duration(milliseconds: 1500));
+          
+          if (mounted) {
+            // The AuthWrapper will automatically detect the authentication
+            // and navigate to the appropriate screen (PIN setup or home)
+            Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
           }
         } else {
-          // Show error message
-          HapticFeedback.lightImpact();
+          // Show error message with icon
+          HapticFeedback.heavyImpact();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                authProvider.errorMessage ?? 'Registration failed',
-                style: const TextStyle(fontFamily: 'Orbitron'),
+              content: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.error_outline,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      authProvider.errorMessage ?? 'Registration failed. Please try again.',
+                      style: const TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               backgroundColor: AppTheme.errorColor,
               behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -819,14 +949,39 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
           _isLoading = false;
         });
         
+        HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text(
-              'An unexpected error occurred. Please try again.',
-              style: TextStyle(fontFamily: 'Orbitron'),
+            content: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'An unexpected error occurred. Please try again.',
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
             backgroundColor: AppTheme.errorColor,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../services/local_notification_service.dart';
-import '../../services/notification_database_service.dart';
 import '../../shared/constants/app_theme.dart';
 import '../../test_notification_system.dart';
 
@@ -26,15 +24,15 @@ class _NotificationTestWidgetState extends State<NotificationTestWidget> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            const Row(
               children: [
                 Icon(
                   Icons.notifications_active,
                   color: AppTheme.primaryGreen,
                   size: 24,
                 ),
-                const SizedBox(width: 8),
-                const Text(
+                SizedBox(width: 8),
+                Text(
                   'Notification System Test',
                   style: TextStyle(
                     fontSize: 18,

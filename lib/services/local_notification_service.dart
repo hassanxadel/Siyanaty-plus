@@ -108,7 +108,7 @@ class LocalNotificationService {
             importance: Importance.high,
             priority: Priority.high,
             icon: '@mipmap/ic_launcher',
-            color: const Color(0xFF2E7D32), // AppTheme.primaryGreen equivalent
+            color: Color(0xFF2E7D32), // AppTheme.primaryGreen equivalent
           ),
           iOS: DarwinNotificationDetails(
             presentAlert: true,
@@ -145,7 +145,7 @@ class LocalNotificationService {
           importance: Importance.max,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
-          color: const Color(0xFFD32F2F), // Red color for overdue
+          color: Color(0xFFD32F2F), // Red color for overdue
           playSound: true,
           enableVibration: true,
           ongoing: false, // Allow user to dismiss
@@ -179,7 +179,7 @@ class LocalNotificationService {
           importance: Importance.high,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
-          color: const Color(0xFF2E7D32),
+          color: Color(0xFF2E7D32),
           playSound: true,
           enableVibration: true,
           autoCancel: true,
@@ -210,7 +210,7 @@ class LocalNotificationService {
           importance: Importance.high,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
-          color: const Color(0xFF757575),
+          color: Color(0xFF757575),
           playSound: true,
           enableVibration: true,
           autoCancel: true,

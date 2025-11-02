@@ -6,197 +6,256 @@ class PrivacyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
     return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
-      appBar: AppBar(
-        title: const Text(
-          'Privacy Policy',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: AppTheme.primaryGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+      backgroundColor: AppTheme.backgroundGreen,
+      body: Column(
+        children: [
+          _buildHeader(context),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+                  const Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.privacy_tip,
+                          size: 64,
+                          color: Colors.white,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
               'Your Privacy Matters',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.primaryGreen,
+                            color: Colors.white,
                 fontFamily: 'Orbitron',
               ),
             ),
-            const SizedBox(height: 8),
+                        SizedBox(height: 8),
             Text(
               'Last updated: January 2025',
               style: TextStyle(
                 fontSize: 12,
-                color: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
+                            color: Colors.white70,
                 fontFamily: 'Orbitron',
+                          ),
+                        ),
+                      ],
               ),
             ),
             
-            const SizedBox(height: 24),
+                  const SizedBox(height: 32),
             
             _buildSection(
-              context,
-              '1. Information We Collect',
-              'We collect information you provide directly to us, such as:\n\n'
+                    'Information We Collect',
               '• Vehicle information (make, model, year, mileage)\n'
               '• Maintenance records and service history\n'
-              '• Account information (email, profile details)\n'
-              '• App usage data and preferences\n'
-              '• OBD diagnostic data (when connected)',
-            ),
+                    '• Reminders and notifications preferences\n'
+                    '• Location data (only when using service center locator)\n'
+                    '• Account information (email, name, profile picture)',
+                    Icons.info,
+                  ),
+                  
+                  const SizedBox(height: 20),
             
             _buildSection(
-              context,
-              '2. How We Use Your Information',
-              'We use your information to:\n\n'
-              '• Provide personalized maintenance reminders\n'
-              '• Analyze vehicle performance and health\n'
-              '• Improve our services and user experience\n'
-              '• Send important updates and notifications\n'
-              '• Provide customer support',
-            ),
+                    'How We Use Your Information',
+                    '• To provide and maintain our service\n'
+                    '• To send maintenance reminders and notifications\n'
+                    '• To improve and personalize your experience\n'
+                    '• To analyze usage patterns and optimize features\n'
+                    '• To communicate important updates',
+                    Icons.settings,
+                  ),
+                  
+                  const SizedBox(height: 20),
             
             _buildSection(
-              context,
-              '3. Information Sharing',
-              'We do not sell, trade, or share your personal information with third parties, except:\n\n'
-              '• When required by law or legal process\n'
-              '• To protect our rights and safety\n'
-              '• With your explicit consent\n'
-              '• With trusted service providers who assist our operations',
-            ),
+                    'Data Storage & Security',
+                    'Your data is stored securely using industry-standard encryption. '
+                    'We use Firebase services for cloud storage and authentication. '
+                    'Local data is stored on your device and synced to the cloud only when you choose to enable backup.',
+                    Icons.security,
+                  ),
+                  
+                  const SizedBox(height: 20),
             
             _buildSection(
-              context,
-              '4. Data Security',
-              'We implement industry-standard security measures:\n\n'
-              '• End-to-end encryption for sensitive data\n'
-              '• Secure cloud storage with Firebase\n'
-              '• Regular security audits and updates\n'
-              '• Access controls and authentication\n'
-              '• Automatic logout after inactivity',
-            ),
+                    'Data Sharing',
+                    'We do not sell, trade, or rent your personal information to third parties. '
+                    'Your data is only shared with:\n'
+                    '• Firebase (Google) for cloud storage and authentication\n'
+                    '• Google Maps for location services\n'
+                    '• No other third parties have access to your data',
+                    Icons.share,
+                  ),
+                  
+                  const SizedBox(height: 20),
             
             _buildSection(
-              context,
-              '5. Your Rights',
-              'You have the right to:\n\n'
-              '• Access your personal data\n'
-              '• Correct inaccurate information\n'
-              '• Delete your account and data\n'
-              '• Export your data\n'
-              '• Opt-out of non-essential communications',
-            ),
+                    'Your Rights',
+                    '• Access your personal data at any time\n'
+                    '• Request data deletion from our servers\n'
+                    '• Export your data in a portable format\n'
+                    '• Opt-out of notifications\n'
+                    '• Delete your account and all associated data',
+                    Icons.verified_user,
+                  ),
+                  
+                  const SizedBox(height: 20),
             
             _buildSection(
-              context,
-              '6. Data Retention',
-              'We retain your information for as long as your account is active or as needed to provide services. You may delete your account at any time through the app settings.',
-            ),
-            
-            _buildSection(
-              context,
-              '7. Children\'s Privacy',
-              'Our service is not intended for children under 13. We do not knowingly collect personal information from children under 13.',
-            ),
-            
-            _buildSection(
-              context,
-              '8. Changes to Privacy Policy',
-              'We may update this privacy policy from time to time. We will notify you of any changes by posting the new policy in the app and updating the "Last updated" date.',
-            ),
-            
-            const SizedBox(height: 32),
-            
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryGreen.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppTheme.primaryGreen.withOpacity(0.3),
-                  width: 1,
-                ),
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
                     'Contact Us',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryGreen,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  Text(
-                    'If you have questions about this privacy policy or our practices:',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.lightBackground,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
+                    'If you have any questions about this Privacy Policy, please contact us at:\n\n'
                     'Email: privacy@siyanaplus.com\n'
-                    'Address: 123 Tech Street, Innovation City, IC 12345',
+                    'Website: www.siyanaplus.com',
+                    Icons.contact_mail,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      height: 200,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.backgroundGreen,
+            AppTheme.darkAccentGreen,
+            AppTheme.primaryGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.arrow_back_ios,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'Privacy Policy',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.darkAccentGreen,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                       fontFamily: 'Orbitron',
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'How we protect and handle your data',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontFamily: 'Orbitron',
+                  ),
+                  textAlign: TextAlign.center,
+              ),
             ),
           ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSection(BuildContext context, String title, String content) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+  Widget _buildSection(String title, String content, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppTheme.primaryGreen,
+                      AppTheme.darkAccentGreen,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
             title,
-            style: TextStyle(
-              fontSize: 16,
+                  style: const TextStyle(
+                    fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: isDarkMode ? AppTheme.lightBackground : AppTheme.darkAccentGreen,
+                    color: Colors.white,
               fontFamily: 'Orbitron',
             ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Text(
             content,
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.6,
-              color: isDarkMode ? AppTheme.lightBackground.withOpacity(0.9) : AppTheme.darkAccentGreen.withOpacity(0.9),
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.white70,
               fontFamily: 'Orbitron',
+              height: 1.6,
             ),
           ),
         ],

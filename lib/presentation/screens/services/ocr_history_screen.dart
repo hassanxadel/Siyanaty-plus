@@ -5,7 +5,7 @@ import '../../../shared/constants/app_theme.dart';
 import '../../../services/ocr_service.dart';
 import '../../../models/scan_model.dart';
 import 'ocr_review_screen.dart';
-import 'ocr_scan_screen.dart';
+
 
 class OcrHistoryScreen extends StatefulWidget {
   const OcrHistoryScreen({super.key});
@@ -60,9 +60,9 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        _scans = await _ocrService.getUserScans(user.uid);
+        _scans = await _ocrService.getAllScans(user.uid);
       } else {
-        _scans = await _ocrService.getAllScans();
+        _scans = await _ocrService.getAllScans(null);
       }
       _filterScans();
     } catch (e) {
@@ -78,109 +78,9 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.backgroundGreen,
-      appBar: AppBar(
-        title: const Text(
-          'Scan History',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        backgroundColor: AppTheme.primaryGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: _loadScans,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
       body: Column(
         children: [
-          // Search bar
-          Container(
-            padding: const EdgeInsets.all(20),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search scans...',
-                hintStyle: const TextStyle(fontFamily: 'Orbitron'),
-                prefixIcon: const Icon(Icons.search, color: AppTheme.primaryGreen),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                        },
-                        icon: const Icon(Icons.clear, color: AppTheme.primaryGreen),
-                      )
-                    : null,
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              style: const TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-          
-          // Stats row
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatItem(
-                  icon: Icons.document_scanner,
-                  label: 'Total Scans',
-                  value: _scans.length.toString(),
-                ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: Colors.grey[300],
-                ),
-                _buildStatItem(
-                  icon: Icons.search,
-                  label: 'Filtered',
-                  value: _filteredScans.length.toString(),
-                ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: Colors.grey[300],
-                ),
-                _buildStatItem(
-                  icon: Icons.cloud,
-                  label: 'Cloud OCR',
-                  value: _scans.where((s) => s.source == 'cloud').length.toString(),
-                ),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 20),
-          
-          // Scans list
+          _buildHeader(context),
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -195,7 +95,7 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                           'Loading scans...',
                           style: TextStyle(
                             fontFamily: 'Orbitron',
-                            color: AppTheme.backgroundGreen,
+                            color: Colors.white,
                           ),
                         ),
                       ],
@@ -214,18 +114,171 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const OcrScanScreen(),
-            ),
-          ).then((_) => _loadScans()); // Refresh when returning
-        },
-        backgroundColor: AppTheme.primaryGreen,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.add),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      height: 260,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.backgroundGreen,
+            AppTheme.darkAccentGreen,
+            AppTheme.primaryGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.arrow_back_ios,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'Scan History',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Text(
+                      '${_filteredScans.length} scans',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'View and manage your saved OCR scans',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontFamily: 'Orbitron',
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Search bar
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(25),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search scans...',
+                    hintStyle: const TextStyle(
+                      fontFamily: 'Orbitron',
+                      color: Colors.grey,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: AppTheme.primaryGreen,
+                    ),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            onPressed: () {
+                              _searchController.clear();
+                            },
+                            icon: const Icon(Icons.clear, color: AppTheme.primaryGreen),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  ),
+                  style: const TextStyle(
+                    fontFamily: 'Orbitron',
+                    color: AppTheme.backgroundGreen,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Stats row
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildStatItem(
+                      icon: Icons.document_scanner,
+                      label: 'Total',
+                      value: _scans.length.toString(),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: Colors.white.withOpacity(0.3),
+                    ),
+                    _buildStatItem(
+                      icon: Icons.search,
+                      label: 'Filtered',
+                      value: _filteredScans.length.toString(),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: Colors.white.withOpacity(0.3),
+                    ),
+                    _buildStatItem(
+                      icon: Icons.cloud,
+                      label: 'Cloud',
+                      value: _scans.where((s) => s.source == 'cloud').length.toString(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -239,17 +292,17 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
       children: [
         Icon(
           icon,
-          color: AppTheme.primaryGreen,
-          size: 24,
+          color: Colors.white,
+          size: 20,
         ),
         const SizedBox(height: 4),
         Text(
           value,
           style: const TextStyle(
             fontFamily: 'Orbitron',
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.w700,
-            color: AppTheme.backgroundGreen,
+            color: Colors.white,
           ),
         ),
         Text(
@@ -257,7 +310,7 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
           style: const TextStyle(
             fontFamily: 'Orbitron',
             fontSize: 10,
-            color: AppTheme.darkAccentGreen,
+            color: Colors.white70,
           ),
         ),
       ],
@@ -298,29 +351,47 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
           ),
           if (_searchQuery.isEmpty) ...[
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const OcrScanScreen(),
-                  ),
-                ).then((_) => _loadScans());
-              },
-              icon: const Icon(Icons.camera_alt),
-              label: const Text(
-                'Scan Document',
-                style: TextStyle(fontFamily: 'Orbitron'),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryGreen,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.backgroundGreen,
+                    AppTheme.primaryGreen,
+                    AppTheme.darkAccentGreen,
+                  ],
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.camera_alt, color: Colors.white),
+                label: const Text(
+                  'Scan Document',
+                  style: TextStyle(
+                    fontFamily: 'Orbitron',
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
                 ),
               ),
             ),
@@ -334,8 +405,15 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -346,7 +424,7 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
       ),
       child: InkWell(
         onTap: () => _openScanForReview(scan),
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -357,12 +435,12 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(15),
+                  color: Colors.grey[800],
                 ),
                 child: scan.imagePath != null && File(scan.imagePath!).existsSync()
                     ? ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(15),
                         child: Image.file(
                           File(scan.imagePath!),
                           fit: BoxFit.cover,
@@ -391,7 +469,7 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                         fontFamily: 'Orbitron',
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: AppTheme.backgroundGreen,
+                        color: Colors.white,
                       ),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
@@ -442,7 +520,7 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                           style: const TextStyle(
                             fontFamily: 'Orbitron',
                             fontSize: 10,
-                            color: AppTheme.darkAccentGreen,
+                            color: Colors.white70,
                           ),
                         ),
                       ],
@@ -487,7 +565,7 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                 ],
                 child: const Icon(
                   Icons.more_vert,
-                  color: AppTheme.darkAccentGreen,
+                  color: Colors.white,
                 ),
               ),
             ],
@@ -615,7 +693,7 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
   Future<void> _deleteScan(ScanModel scan) async {
     try {
       if (scan.id != null) {
-        await _ocrService.deleteScan(scan.id!);
+        await _ocrService.deleteScan(scan.id!, null);
         
         // Also delete the image file if it exists
         if (scan.imagePath != null && File(scan.imagePath!).existsSync()) {

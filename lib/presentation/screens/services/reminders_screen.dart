@@ -282,10 +282,20 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              decoration: BoxDecoration(
-            color: isSelected 
-                ? Colors.white.withOpacity(0.25) 
-                : Colors.white.withOpacity(0.15),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isSelected
+                  ? [
+                      AppTheme.primaryGreen.withOpacity(0.4),
+                      AppTheme.darkAccentGreen.withOpacity(0.4),
+                    ]
+                  : [
+                      AppTheme.darkAccentGreen.withOpacity(0.3),
+                      AppTheme.backgroundGreen.withOpacity(0.3),
+                    ],
+            ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected 
@@ -346,7 +356,14 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -486,9 +503,26 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
     final reminder = reminderWithCar.reminder;
     Color priorityColor = _getPriorityColor(reminder.priority);
     
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
       child: InkWell(
         onTap: () => _showReminderDetails(reminder, reminderWithCar.carDisplayName),
         borderRadius: BorderRadius.circular(16),
@@ -869,12 +903,12 @@ class ReminderDetailsDialog extends StatelessWidget {
           padding: const EdgeInsets.all(24),
         constraints: const BoxConstraints(maxWidth: 420, maxHeight: 700),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
+          gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF1A362A), // Dark green
-              const Color(0xFF2E4032), // Slightly lighter dark green
+              Color(0xFF1A362A), // Dark green
+              Color(0xFF2E4032), // Slightly lighter dark green
             ],
           ),
           borderRadius: BorderRadius.circular(24),

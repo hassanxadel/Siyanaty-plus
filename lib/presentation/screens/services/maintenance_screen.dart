@@ -291,7 +291,14 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -445,15 +452,22 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
+          gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF1A362A), // Dark green
-              const Color(0xFF2E4032), // Slightly lighter dark green
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
             ],
           ),
           borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: InkWell(
           onTap: () => _showMaintenanceDetails(maintenanceWithInfo),
@@ -574,7 +588,7 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
                     ElevatedButton(
                       onPressed: () => _showMaintenanceDetails(maintenanceWithInfo),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryGreen,
+                        backgroundColor: const Color.fromARGB(255, 32, 61, 32),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         shape: RoundedRectangleBorder(
@@ -587,6 +601,7 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
+                          fontFamily: 'Orbitron',
                         ),
                       ),
                     ),
@@ -1594,12 +1609,12 @@ class MaintenanceDetailsDialog extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         constraints: const BoxConstraints(maxWidth: 420, maxHeight: 800),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
+          gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF1A362A), // Dark green
-              const Color(0xFF2E4032), // Slightly lighter dark green
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
             ],
           ),
           borderRadius: BorderRadius.circular(24),
@@ -1607,6 +1622,13 @@ class MaintenanceDetailsDialog extends StatelessWidget {
             color: typeColor.withOpacity(0.3),
             width: 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1735,7 +1757,7 @@ class MaintenanceDetailsDialog extends StatelessWidget {
                       child: _buildModernButton(
                         icon: Icons.delete_rounded,
                         label: 'Delete',
-                        color: const Color(0xFFE91E63),
+                        color: const Color.fromARGB(255, 219, 25, 25),
                         onPressed: onDelete,
                       ),
                     ),
