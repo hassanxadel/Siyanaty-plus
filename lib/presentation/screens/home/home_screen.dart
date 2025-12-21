@@ -9,7 +9,7 @@ import '../actions/all_actions_screen.dart';
 import '../services/cars_screen.dart';
 import '../services/vin_lookup_screen.dart';
 import '../services/ocr_scanner_screen.dart';
-import '../services/barcode_scanner_screen.dart';
+import '../health/car_health_dashboard_screen.dart';
 import '../services/voice_notes_screen.dart';
 import '../services/mileage_track_screen.dart';
 import '../services/reminders_screen.dart';
@@ -26,6 +26,7 @@ import '../../../services/maintenance_service.dart';
 import '../../../services/notification_database_service.dart';
 import '../../../models/backup_reminder.dart';
 import '../../../models/backup_maintenance.dart';
+import '../../../services/security/local_unlock_service.dart';
 
 /// Main dashboard screen that serves as the home page
 /// Displays user welcome, quick actions, and vehicle overview
@@ -58,6 +59,8 @@ class _HomeDashboardState extends State<HomeDashboard>
   final MaintenanceService _maintenanceService = MaintenanceService();
   /// Notification database service for checking notification count
   final NotificationDatabaseService _notificationService = NotificationDatabaseService.instance;
+  /// Local unlock service for PIN verification
+  final LocalUnlockService _localUnlockService = LocalUnlockService();
   /// Count of unread notifications for badge
   int _notificationCount = 0;
   /// List of user's cars (max 5 for swipe)
@@ -597,7 +600,7 @@ class _HomeDashboardState extends State<HomeDashboard>
 
         // Car card with swipe functionality
         SizedBox(
-          height: 230, // Increased height to accommodate content
+          height: 250, // Increased height to accommodate content
           child: PageView.builder(
             controller: _carPageController,
             onPageChanged: (index) {
@@ -761,7 +764,7 @@ class _HomeDashboardState extends State<HomeDashboard>
               // Car Image
               Container(
                 width: 120,
-                height: 80,
+                height: 100,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
@@ -895,7 +898,6 @@ class _HomeDashboardState extends State<HomeDashboard>
           
           // Action buttons
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildCarActionButton(
                 Icons.credit_card,
@@ -905,7 +907,7 @@ class _HomeDashboardState extends State<HomeDashboard>
               _buildCarActionButton(
                 Icons.info_outline,
                 'Details',
-                () => _showCarDetails(car),
+                () => _showCarDetailsDialog(car),
               ),
               _buildCarActionButton(
                 Icons.speed,
@@ -920,40 +922,57 @@ class _HomeDashboardState extends State<HomeDashboard>
   }
 
   Widget _buildCarActionButton(IconData icon, String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(50),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.fromARGB(255, 29, 90, 29),
-              Color.fromARGB(255, 11, 67, 35),
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withOpacity(0.15),
+                Colors.white.withOpacity(0.05),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                ),
+              ),
             ],
           ),
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: Colors.white,
-              size: 20,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 10,
-                color: Colors.white,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -1018,13 +1037,60 @@ class _HomeDashboardState extends State<HomeDashboard>
                   fontFamily: 'Orbitron',
                 ),
               ),
-              TextButton(
-                onPressed: _navigateToReminders,
-                child: const Text(
-                  'View All',
-                  style: TextStyle(
-                    color: AppTheme.primaryGreen,
-                    fontFamily: 'Orbitron',
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SmartRemindersScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.2),
+                        Colors.white.withOpacity(0.1),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.5),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'View All',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 12,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1181,13 +1247,60 @@ class _HomeDashboardState extends State<HomeDashboard>
                   fontFamily: 'Orbitron',
                 ),
               ),
-              TextButton(
-                onPressed: _navigateToMaintenance,
-                child: const Text(
-                  'View All',
-                  style: TextStyle(
-                    color: AppTheme.primaryGreen,
-                    fontFamily: 'Orbitron',
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MaintenanceRecordsScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.2),
+                        Colors.white.withOpacity(0.1),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.5),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'View All',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 12,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1370,13 +1483,60 @@ class _HomeDashboardState extends State<HomeDashboard>
                 fontFamily: 'Orbitron',
               ),
             ),
-            TextButton(
-              onPressed: () => _navigateToAllActions(),
-              child: Text(
-                'View All',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareIconColor(context),
-                  fontFamily: 'Orbitron',
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AllActionsScreen(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppTheme.getThemeAwareTextColor(context).withOpacity(0.2),
+                      AppTheme.getThemeAwareTextColor(context).withOpacity(0.1),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'View All',
+                      style: TextStyle(
+                        color: AppTheme.getThemeAwareTextColor(context),
+                        fontFamily: 'Orbitron',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 12,
+                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.9),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1411,7 +1571,7 @@ class _HomeDashboardState extends State<HomeDashboard>
   final actions = [
     {'label': 'VIN Lookup', 'icon': Icons.search, 'color': const Color(0xFFF59E0B)}, // Amber/Orange
     {'label': 'OCR Scanner', 'icon': Icons.document_scanner, 'color': const Color(0xFF06B6D4)}, // Cyan
-    {'label': 'Barcode Scanner', 'icon': Icons.qr_code_scanner, 'color': const Color(0xFF8E44AD)}, // Purple
+    {'label': 'Car Health', 'icon': Icons.health_and_safety, 'color': const Color(0xFF8E44AD)}, // Purple
     {'label': 'Voice Notes', 'icon': Icons.mic, 'color': const Color(0xFFE74C3C)}, // Red
     {'label': 'Mileage Track', 'icon': Icons.track_changes, 'color': const Color(0xFF10B981)}, // Emerald
     {'label': 'Maintenance', 'icon': Icons.home_repair_service_rounded, 'color': const Color(0xFF3B82F6)}, // Blue
@@ -1498,13 +1658,60 @@ class _HomeDashboardState extends State<HomeDashboard>
                 fontFamily: 'Orbitron',
               ),
             ),
-            TextButton(
-              onPressed: () => _navigateToMaintenance(),
-              child: Text(
-                'View All',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareIconColor(context),
-                  fontFamily: 'Orbitron',
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MaintenanceRecordsScreen(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.2),
+                      Colors.white.withOpacity(0.1),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.white.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'View All',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 12,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1838,10 +2045,10 @@ class _HomeDashboardState extends State<HomeDashboard>
             MaterialPageRoute(builder: (context) => const OcrScannerScreen()),
           );
           break;
-      case 'barcode scanner':
+      case 'car health':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+          MaterialPageRoute(builder: (context) => const CarHealthDashboardScreen()),
         );
         break;
       case 'voice notes':
@@ -1857,10 +2064,7 @@ class _HomeDashboardState extends State<HomeDashboard>
         );
         break;
       case 'license':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const LicenseScreen()),
-        );
+        _showPinVerificationForLicense();
         break;
       
       default:
@@ -1939,9 +2143,422 @@ class _HomeDashboardState extends State<HomeDashboard>
 
   void _navigateToLicense() {
     HapticFeedback.lightImpact();
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const LicenseScreen()),
+    _showPinVerificationForLicense();
+  }
+
+  /// Show PIN verification dialog before accessing License screen
+  Future<void> _showPinVerificationForLicense() async {
+    String pin = '';
+    String? errorMessage;
+    bool isLoading = false;
+    int remainingAttempts = 5;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              backgroundColor: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppTheme.getThemeAwareCardBackground(context),
+                      AppTheme.getThemeAwareCardBackground(context).withOpacity(0.95),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header with lock icon
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.primaryGreen,
+                            AppTheme.darkAccentGreen,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryGreen.withOpacity(0.4),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.lock_outline,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Enter PIN',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Orbitron',
+                        color: AppTheme.getThemeAwareTextColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Verify your PIN to access License',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // PIN dots display
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(6, (index) {
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: index < pin.length
+                                ? AppTheme.primaryGreen
+                                : Colors.transparent,
+                            border: Border.all(
+                              color: index < pin.length
+                                  ? AppTheme.primaryGreen
+                                  : AppTheme.getThemeAwareTextColor(context).withOpacity(0.3),
+                              width: 2,
+                            ),
+                            boxShadow: index < pin.length
+                                ? [
+                                    BoxShadow(
+                                      color: AppTheme.primaryGreen.withOpacity(0.5),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Error message
+                    if (errorMessage != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          errorMessage!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                            fontFamily: 'Orbitron',
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+
+                    // Keypad
+                    _buildPinKeypad(
+                      pin: pin,
+                      isLoading: isLoading,
+                      onDigitPressed: (digit) async {
+                        if (isLoading || pin.length >= 6) return;
+                        
+                        HapticFeedback.lightImpact();
+                        setDialogState(() {
+                          pin += digit;
+                          errorMessage = null;
+                        });
+
+                        // Auto-verify at 6 digits
+                        if (pin.length == 6) {
+                          setDialogState(() => isLoading = true);
+                          
+                          final authResult = await _localUnlockService.authenticateWithPin(pin);
+                          
+                          if (authResult == PinAuthResult.success) {
+                            Navigator.of(dialogContext).pop(true);
+                          } else if (authResult == PinAuthResult.lockedOut) {
+                            setDialogState(() {
+                              errorMessage = 'Too many failed attempts. Please try again later.';
+                              pin = '';
+                              isLoading = false;
+                            });
+                          } else {
+                            remainingAttempts = await _localUnlockService.getRemainingAttempts();
+                            setDialogState(() {
+                              errorMessage = 'Incorrect PIN. $remainingAttempts attempts remaining.';
+                              pin = '';
+                              isLoading = false;
+                            });
+                          }
+                        }
+                      },
+                      onBackspacePressed: () {
+                        if (isLoading || pin.isEmpty) return;
+                        HapticFeedback.lightImpact();
+                        setDialogState(() {
+                          pin = pin.substring(0, pin.length - 1);
+                          errorMessage = null;
+                        });
+                      },
+                      onVerifyPressed: () async {
+                        if (isLoading || pin.length < 4) return;
+                        
+                        HapticFeedback.mediumImpact();
+                        setDialogState(() => isLoading = true);
+                        
+                        final authResult = await _localUnlockService.authenticateWithPin(pin);
+                        
+                        if (authResult == PinAuthResult.success) {
+                          Navigator.of(dialogContext).pop(true);
+                        } else if (authResult == PinAuthResult.lockedOut) {
+                          setDialogState(() {
+                            errorMessage = 'Too many failed attempts. Please try again later.';
+                            pin = '';
+                            isLoading = false;
+                          });
+                        } else {
+                          remainingAttempts = await _localUnlockService.getRemainingAttempts();
+                          setDialogState(() {
+                            errorMessage = 'Incorrect PIN. $remainingAttempts attempts remaining.';
+                            pin = '';
+                            isLoading = false;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Verify button (for 4-5 digit PINs)
+                    if (pin.length >= 4 && pin.length < 6)
+                      Container(
+                        width: double.infinity,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppTheme.primaryGreen,
+                              AppTheme.darkAccentGreen,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryGreen.withOpacity(0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: isLoading ? null : () async {
+                              HapticFeedback.mediumImpact();
+                              setDialogState(() => isLoading = true);
+                              
+                              final authResult = await _localUnlockService.authenticateWithPin(pin);
+                              
+                              if (authResult == PinAuthResult.success) {
+                                Navigator.of(dialogContext).pop(true);
+                              } else if (authResult == PinAuthResult.lockedOut) {
+                                setDialogState(() {
+                                  errorMessage = 'Too many failed attempts. Please try again later.';
+                                  pin = '';
+                                  isLoading = false;
+                                });
+                              } else {
+                                remainingAttempts = await _localUnlockService.getRemainingAttempts();
+                                setDialogState(() {
+                                  errorMessage = 'Incorrect PIN. $remainingAttempts attempts remaining.';
+                                  pin = '';
+                                  isLoading = false;
+                                });
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Center(
+                              child: isLoading
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Verify PIN',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        fontFamily: 'Orbitron',
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+
+                    // Cancel button
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    // Navigate to License screen if PIN verified successfully
+    if (result == true && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LicenseScreen()),
+      );
+    }
+  }
+
+  /// Build the PIN keypad widget
+  Widget _buildPinKeypad({
+    required String pin,
+    required bool isLoading,
+    required Function(String) onDigitPressed,
+    required VoidCallback onBackspacePressed,
+    required VoidCallback onVerifyPressed,
+  }) {
+    return Column(
+      children: [
+        _buildKeypadRow(['1', '2', '3'], onDigitPressed, isLoading),
+        const SizedBox(height: 12),
+        _buildKeypadRow(['4', '5', '6'], onDigitPressed, isLoading),
+        const SizedBox(height: 12),
+        _buildKeypadRow(['7', '8', '9'], onDigitPressed, isLoading),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // Empty space
+            const SizedBox(width: 70, height: 70),
+            // Zero button
+            _buildKeypadButton('0', onDigitPressed, isLoading),
+            // Backspace button
+            SizedBox(
+              width: 70,
+              height: 70,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: isLoading ? null : onBackspacePressed,
+                  borderRadius: BorderRadius.circular(35),
+                  child: Center(
+                    child: Icon(
+                      Icons.backspace_outlined,
+                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Build a row of keypad buttons
+  Widget _buildKeypadRow(List<String> digits, Function(String) onPressed, bool isLoading) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: digits.map((digit) => _buildKeypadButton(digit, onPressed, isLoading)).toList(),
+    );
+  }
+
+  /// Build a single keypad button
+  Widget _buildKeypadButton(String digit, Function(String) onPressed, bool isLoading) {
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(35),
+        border: Border.all(
+          color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isLoading ? null : () => onPressed(digit),
+          borderRadius: BorderRadius.circular(35),
+          splashColor: AppTheme.primaryGreen.withOpacity(0.3),
+          highlightColor: AppTheme.primaryGreen.withOpacity(0.1),
+          child: Center(
+            child: Text(
+              digit,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.getThemeAwareTextColor(context),
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1953,87 +2570,163 @@ class _HomeDashboardState extends State<HomeDashboard>
     );
   }
 
-  void _showCarDetails(BackupCar car) {
+  void _showCarDetailsDialog(BackupCar car) {
     HapticFeedback.lightImpact();
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        elevation: 20,
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 700),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                AppTheme.darkAccentGreen,
-                AppTheme.backgroundGreen,
+                Color(0xFF1A362A), // Dark green
+                Color(0xFF2E4032), // Slightly lighter dark green
               ],
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: AppTheme.primaryGreen.withOpacity(0.3),
+              width: 1,
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header with close button
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Car Details',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryGreen.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: car.imagePath != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Image.file(
+                                    File(car.imagePath!),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(
+                                        Icons.directions_car,
+                                        color: AppTheme.primaryGreen,
+                                        size: 24,
+                                      );
+                                    },
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.directions_car,
+                                  color: AppTheme.primaryGreen,
+                                  size: 24,
+                                ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${car.year} ${car.brand} ${car.model}',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Orbitron',
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              if (car.licensePlate.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryGreen.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    car.licensePlate,
+                                    style: const TextStyle(
+                                      color: AppTheme.primaryGreen,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      onPressed: () {
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      },
+                      icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              _buildDetailRow('Brand', car.brand),
-              _buildDetailRow('Model', car.model),
-              _buildDetailRow('Year', car.year.toString()),
-              _buildDetailRow('Mileage', '${car.mileage.toStringAsFixed(0)} km'),
-              _buildDetailRow('VIN', car.vin ?? 'N/A'),
-              _buildDetailRow('License Plate', car.licensePlate ?? 'N/A'),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
+              
+              // Details section with modern styling
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    _buildModernDetailRow('Mileage', '${car.mileage.toStringAsFixed(0)} km', Icons.speed, Colors.blue),
+                    _buildModernDetailRow('Color', car.color.isNotEmpty ? car.color : 'N/A', Icons.color_lens, Colors.purple),
+                    _buildModernDetailRow('Fuel Type', car.fuelType.isNotEmpty ? car.fuelType : 'N/A', Icons.local_gas_station, Colors.orange),
+                    _buildModernDetailRow('Engine', car.engineCC + (car.turbo ? ' Turbo' : ''), Icons.build, Colors.red),
+                    _buildModernDetailRow('VIN', car.vin.isNotEmpty ? car.vin : 'N/A', Icons.qr_code, Colors.cyan),
+                    _buildModernDetailRow('Added', _formatCarDate(car.createdAt), Icons.calendar_today, Colors.green),
+                    if (car.updatedAt != car.createdAt)
+                      _buildModernDetailRow('Last Updated', _formatCarDate(car.updatedAt), Icons.update, Colors.teal),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Action button
               SizedBox(
                 width: double.infinity,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _navigateToCarsList();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
-                    child: const Text(
-                      'Edit Car',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                  ),
+                child: _buildModernActionButton(
+                  icon: Icons.edit_rounded,
+                  label: 'View & Edit in My Cars',
+                  color: AppTheme.primaryGreen,
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _navigateToCarsList();
+                  },
                 ),
               ),
             ],
@@ -2043,32 +2736,117 @@ class _HomeDashboardState extends State<HomeDashboard>
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildModernDetailRow(String label, String value, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.white70,
-              fontFamily: 'Orbitron',
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 16,
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontFamily: 'Orbitron',
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[400],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value.isEmpty ? 'N/A' : value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildModernActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.8),
+            color,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatCarDate(DateTime? date) {
+    if (date == null) return 'N/A';
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   /// Get icon for reminder type

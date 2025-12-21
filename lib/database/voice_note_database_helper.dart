@@ -4,16 +4,17 @@ import '../models/voice_note.dart';
 class VoiceNoteDatabaseHelper {
   static const String tableName = 'voice_notes';
 
+  // Use snake_case for all column names to match VoiceNote.toMap()
   static const String createTableQuery = '''
     CREATE TABLE $tableName (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
-      filePath TEXT NOT NULL,
+      file_path TEXT NOT NULL,
       duration INTEGER NOT NULL,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL,
-      userId TEXT
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      user_id TEXT
     )
   ''';
 
@@ -33,14 +34,14 @@ class VoiceNoteDatabaseHelper {
     if (userId != null) {
       maps = await db.query(
         tableName,
-        where: 'userId = ? OR userId IS NULL',
+        where: 'user_id = ? OR user_id IS NULL',
         whereArgs: [userId],
-        orderBy: 'createdAt DESC',
+        orderBy: 'created_at DESC',
       );
     } else {
       maps = await db.query(
         tableName,
-        orderBy: 'createdAt DESC',
+        orderBy: 'created_at DESC',
       );
     }
 
@@ -86,7 +87,7 @@ class VoiceNoteDatabaseHelper {
     if (userId != null) {
       return await db.delete(
         tableName,
-        where: 'userId = ?',
+        where: 'user_id = ?',
         whereArgs: [userId],
       );
     } else {
@@ -105,16 +106,16 @@ class VoiceNoteDatabaseHelper {
     if (userId != null) {
       maps = await db.query(
         tableName,
-        where: '(userId = ? OR userId IS NULL) AND (title LIKE ? OR description LIKE ?)',
+        where: '(user_id = ? OR user_id IS NULL) AND (title LIKE ? OR description LIKE ?)',
         whereArgs: [userId, '%$query%', '%$query%'],
-        orderBy: 'createdAt DESC',
+        orderBy: 'created_at DESC',
       );
     } else {
       maps = await db.query(
         tableName,
         where: 'title LIKE ? OR description LIKE ?',
         whereArgs: ['%$query%', '%$query%'],
-        orderBy: 'createdAt DESC',
+        orderBy: 'created_at DESC',
       );
     }
 
@@ -135,16 +136,16 @@ class VoiceNoteDatabaseHelper {
     if (userId != null) {
       maps = await db.query(
         tableName,
-        where: '(userId = ? OR userId IS NULL) AND createdAt BETWEEN ? AND ?',
+        where: '(user_id = ? OR user_id IS NULL) AND created_at BETWEEN ? AND ?',
         whereArgs: [userId, startDate.toIso8601String(), endDate.toIso8601String()],
-        orderBy: 'createdAt DESC',
+        orderBy: 'created_at DESC',
       );
     } else {
       maps = await db.query(
         tableName,
-        where: 'createdAt BETWEEN ? AND ?',
+        where: 'created_at BETWEEN ? AND ?',
         whereArgs: [startDate.toIso8601String(), endDate.toIso8601String()],
-        orderBy: 'createdAt DESC',
+        orderBy: 'created_at DESC',
       );
     }
 
@@ -164,7 +165,7 @@ class VoiceNoteDatabaseHelper {
           SUM(duration) as totalDuration,
           AVG(duration) as averageDuration
         FROM $tableName 
-        WHERE userId = ? OR userId IS NULL
+        WHERE user_id = ? OR user_id IS NULL
       ''', [userId]);
     } else {
       result = await db.rawQuery('''

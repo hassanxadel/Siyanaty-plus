@@ -359,7 +359,63 @@ class _UnlockScreenState extends State<UnlockScreen>
         _buildKeypadRow(['7', '8', '9']),
         const SizedBox(height: 16),
         _buildKeypadRow(['biometric', '0', 'backspace']),
+        const SizedBox(height: 24),
+        // Verify button for 4-5 digit PINs
+        if (_pin.length >= 4 && _pin.length < 6)
+          _buildVerifyButton(),
       ],
+    );
+  }
+
+  Widget _buildVerifyButton() {
+    return Container(
+      width: 200,
+      height: 50,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.primaryGreen,
+            AppTheme.darkAccentGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _isLoading ? null : _verifyPin,
+          borderRadius: BorderRadius.circular(25),
+          child: Center(
+            child: _isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text(
+                    'Verify PIN',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -544,8 +600,9 @@ class _UnlockScreenState extends State<UnlockScreen>
       _pin += digit;
     });
 
-    // Auto-verify when PIN is complete
-    if (_pin.length >= 4) {
+    // Auto-verify when PIN reaches 6 digits (full PIN length)
+    // Don't auto-verify at 4 digits as user may have set a 5 or 6 digit PIN
+    if (_pin.length == 6) {
       _verifyPin();
     }
   }

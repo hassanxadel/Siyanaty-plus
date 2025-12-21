@@ -32,7 +32,9 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
   String? _errorMessage;
   int _resendCountdown = 0;
   Timer? _countdownTimer;
-  bool _useEmail = false; // Track whether to use email or SMS
+  // SMS is disabled - always use email verification
+  // ignore: unused_field
+  final bool _useEmail = true; // Always use email (SMS is disabled)
   
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
@@ -88,11 +90,14 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
   }
 
   Future<void> _sendInitialCode() async {
-    final success = await _authManager.sendMfaCode(widget.userId, useEmail: _useEmail);
+    // Always use email verification (SMS is disabled)
+    final success = await _authManager.sendMfaCode(widget.userId, useEmail: true);
     if (success) {
       _startResendCountdown();
+      // Note: Email service may not be configured - code is always logged to console
+      _showSuccessMessage('Verification code generated! Check the debug console for your code.');
     } else {
-      _showError('Failed to send verification code. Please try again.');
+      _showError('Failed to generate verification code. Please try again.');
     }
   }
 
@@ -334,28 +339,36 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
         ),
         const SizedBox(height: 8),
         
-        // Toggle button to switch between SMS and Email
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextButton.icon(
-              onPressed: _isResending ? null : _toggleVerificationMethod,
-              icon: Icon(
-                _useEmail ? Icons.phone : Icons.email,
+        // Info text about email verification
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryGreen.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.email,
                 color: AppTheme.primaryGreen,
-                size: 18,
+                size: 16,
               ),
-              label: Text(
-                _useEmail ? 'Try SMS Instead' : 'Try Email Instead',
+              SizedBox(width: 8),
+              Text(
+                'Check your email inbox & spam folder',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   color: AppTheme.primaryGreen,
                   fontFamily: 'Orbitron',
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+        
+        const SizedBox(height: 12),
         
         if (_resendCountdown > 0)
           Text(
@@ -406,9 +419,9 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : Text(
-                      'Resend ${_useEmail ? "Email" : "SMS"} Code',
-                      style: const TextStyle(
+                  : const Text(
+                      'Resend Email Code',
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         fontFamily: 'Orbitron',
@@ -567,26 +580,20 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
       _errorMessage = null;
     });
 
-    final success = await _authManager.sendMfaCode(widget.userId, useEmail: _useEmail);
+    // Always use email verification (SMS is disabled)
+    final success = await _authManager.sendMfaCode(widget.userId, useEmail: true);
     
     if (success) {
       _startResendCountdown();
-      _showSuccessMessage('Verification code sent successfully');
+      // Note: Email service may not be configured - code is always logged to console
+      _showSuccessMessage('New verification code generated! Check the debug console.');
     } else {
-      _showError('Failed to resend code. Please try again.');
+      _showError('Failed to generate verification code. Please try again.');
     }
 
     setState(() {
       _isResending = false;
     });
-  }
-
-  void _toggleVerificationMethod() {
-    setState(() {
-      _useEmail = !_useEmail;
-      _errorMessage = null;
-    });
-    _sendInitialCode();
   }
 
   void _clearCode() {
@@ -621,7 +628,7 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
     });
   }
 
-  void _onVerificationSuccess() {
+  Future<void> _onVerificationSuccess() async {
     AppLogger.info('_onVerificationSuccess called');
     if (!mounted) {
       AppLogger.warning('_onVerificationSuccess called but widget not mounted');
@@ -631,20 +638,33 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
     AppLogger.info('Widget is mounted, proceeding with success flow');
     HapticFeedback.mediumImpact();
     
-    _showSuccessMessage('Verification successful!');
-    
+    // First call the callback if provided
     if (widget.onVerificationSuccess != null) {
       AppLogger.info('Calling onVerificationSuccess callback');
       widget.onVerificationSuccess!();
     }
     
-    // Pop back to login screen to allow SecurityWrapper to re-initialize
-    // The authStateChanges listener is a fallback if reload works
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (mounted) {
-        AppLogger.info('Popping MFA screen after verification success');
-        Navigator.of(context).pop();
-      }
-    });
+    // Wait for tokens to be stored and verified
+    // The _completeAuthentication method now verifies token storage
+    // We wait longer to ensure the auth state is fully propagated
+    AppLogger.info('Waiting for authentication state to propagate...');
+    
+    // Wait 1.5 seconds to ensure tokens are fully stored and auth state is updated
+    await Future.delayed(const Duration(milliseconds: 1500));
+    
+    if (!mounted) {
+      AppLogger.warning('Widget unmounted during delay');
+      return;
+    }
+    
+    // Verify authentication is complete before popping
+    final isAuth = await _authManager.isAuthenticated();
+    AppLogger.info('Authentication verified before pop: $isAuth');
+    
+    if (mounted) {
+      AppLogger.info('Popping MFA screen after verification success');
+      // Pop with a result to indicate success
+      Navigator.of(context).pop(true);
+    }
   }
 }

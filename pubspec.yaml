@@ -68,9 +68,21 @@ dependencies:
   timezone: ^0.9.4
   url_launcher: ^6.2.5
   
+  # Background Tasks
+  workmanager: ^0.5.2
+  
   # Audio Recording and Playback
   flutter_sound: ^9.2.13
   permission_handler: ^11.3.1
+  
+  # OBD-II Bluetooth Communication
+  flutter_blue_plus: ^1.31.15
+  
+  # Car Health Dashboard
+  fl_chart: ^0.66.0
+  pdf: ^3.10.7
+  share_plus: ^7.2.1
+  printing: ^5.12.0
   
   # Firebase dependencies for advanced features (compatible versions)
   firebase_core: ^2.24.2

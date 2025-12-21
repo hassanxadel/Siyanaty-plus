@@ -694,13 +694,14 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
   void _showReminderDetails(BackupReminder reminder, String carDisplayName) {
     showDialog(
       context: context,
-      builder: (context) => ReminderDetailsDialog(
+      builder: (dialogContext) => ReminderDetailsDialog(
         reminder: reminder,
         carDisplayName: carDisplayName,
          onEdit: () => _showEditReminderDialog(reminder),
          onDelete: () {
-           Navigator.pop(context);
-           _deleteReminder(reminder);
+           // The dialog already pops itself before calling this callback
+           // So just show the delete confirmation
+           _showDeleteConfirmation(reminder);
          },
         onMarkCompleted: () => _markReminderCompleted(reminder),
         onMarkUncompleted: () => _markReminderUncompleted(reminder),
@@ -731,21 +732,26 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
     }
   }
 
-  Future<void> _deleteReminder(BackupReminder reminder) async {
-    Navigator.pop(context); // Close details dialog first
+  /// Shows delete confirmation dialog (called when details dialog is already closed)
+  Future<void> _showDeleteConfirmation(BackupReminder reminder) async {
+    // Wait a frame for any previous dialog to fully close
+    await Future.delayed(const Duration(milliseconds: 150));
+    
+    if (!mounted) return;
     
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Reminder'),
         content: Text('Are you sure you want to delete "${reminder.title}"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
           ),
@@ -754,39 +760,53 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
     );
 
     if (confirmed == true && mounted) {
-      try {
-        final result = await _reminderService.deleteReminder(reminder.id!);
-        if (result.isSuccess) {
-          await _loadReminders();
-          if (mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-                content: Text(result.message),
-                backgroundColor: AppTheme.primaryGreen,
-              ),
-            );
-          }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(result.message),
-                backgroundColor: Colors.red,
-      ),
-    );
+      await _performDelete(reminder);
+    }
   }
-        }
-      } catch (e) {
+
+  /// Performs the actual delete operation
+  Future<void> _performDelete(BackupReminder reminder) async {
+    if (!mounted) return;
+    
+    try {
+      final result = await _reminderService.deleteReminder(reminder.id!);
+      if (!mounted) return;
+      
+      if (result.isSuccess) {
+        await _loadReminders();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error deleting reminder: $e'),
+              content: Text(result.message),
+              backgroundColor: AppTheme.primaryGreen,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
               backgroundColor: Colors.red,
             ),
           );
         }
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting reminder: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
+  }
+
+  /// Legacy delete method - kept for any direct calls
+  Future<void> _deleteReminder(BackupReminder reminder) async {
+    await _showDeleteConfirmation(reminder);
   }
 
   Future<void> _markReminderCompleted(BackupReminder reminder) async {
@@ -1459,23 +1479,16 @@ class _AddReminderFormState extends State<AddReminderForm> {
               SizedBox(
                 width: double.infinity,
                 child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        AppTheme.primaryGreen,
                         AppTheme.darkAccentGreen,
+                        AppTheme.backgroundGreen,
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryGreen.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                   ),
                   child: ElevatedButton(
                     onPressed: _isLoading || selectedCar == null ? null : _saveReminder,
@@ -1483,8 +1496,7 @@ class _AddReminderFormState extends State<AddReminderForm> {
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading 
                       ? const SizedBox(
@@ -1499,8 +1511,8 @@ class _AddReminderFormState extends State<AddReminderForm> {
                   ),
                 ),
               ),
+              const SizedBox(height: 8),
             ],
-            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -1862,23 +1874,16 @@ class _EditReminderFormState extends State<EditReminderForm> {
               SizedBox(
                 width: double.infinity,
                 child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        AppTheme.primaryGreen,
                         AppTheme.darkAccentGreen,
+                        AppTheme.backgroundGreen,
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryGreen.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                   ),
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _updateReminder,
@@ -1886,8 +1891,7 @@ class _EditReminderFormState extends State<EditReminderForm> {
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading 
                       ? const SizedBox(
@@ -1902,8 +1906,8 @@ class _EditReminderFormState extends State<EditReminderForm> {
                   ),
                 ),
               ),
+              const SizedBox(height: 8),
             ],
-            const SizedBox(height: 8),
             ],
           ),
         ),

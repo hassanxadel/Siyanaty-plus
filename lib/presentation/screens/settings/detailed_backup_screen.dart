@@ -7,6 +7,9 @@ import '../../../services/firebase_maintenance_service.dart';
 import '../../../services/comprehensive_backup_service.dart';
 import '../../../services/mileage_service.dart';
 import '../../../services/license_service.dart';
+import '../../../services/ocr_service.dart';
+import '../../../services/firebase_obd_service.dart';
+import '../../../services/obd_service.dart';
 
 class DetailedBackupScreen extends StatefulWidget {
   const DetailedBackupScreen({super.key});
@@ -21,6 +24,9 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
   final ComprehensiveBackupService _comprehensiveService = ComprehensiveBackupService();
   final MileageService _mileageService = MileageService();
   final LicenseService _licenseService = LicenseService();
+  final OcrService _ocrService = OcrService();
+  final FirebaseOBDService _obdFirebaseService = FirebaseOBDService();
+  final OBDService _obdService = OBDService();
   
   bool _isLoading = false;
   BackupStatus? _backupStatus;
@@ -28,8 +34,11 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
   MaintenanceBackupStatus? _maintenanceBackupStatus;
   ComprehensiveBackupStatus? _comprehensiveStatus;
   LicenseBackupStatus? _licenseBackupStatus;
+  OcrBackupStatus? _ocrBackupStatus;
   int _localMileageCount = 0;
   int _cloudMileageCount = 0;
+  int _localOBDScansCount = 0;
+  int _cloudOBDScansCount = 0;
 
   @override
   void initState() {
@@ -51,6 +60,13 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
       // Get license backup status
       final licenseStatus = await _licenseService.getLicenseBackupStatus();
       
+      // Get OCR backup status
+      final ocrStatus = await _ocrService.getOcrBackupStatus();
+      
+      // Get OBD scans counts
+      final localOBDScans = await _obdService.getAllScans();
+      final cloudOBDScans = await _obdFirebaseService.getFirebaseScansCount();
+      
       if (mounted) {
         setState(() {
           _backupStatus = carStatus;
@@ -58,8 +74,11 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
           _maintenanceBackupStatus = maintenanceStatus;
           _comprehensiveStatus = comprehensiveStatus;
           _licenseBackupStatus = licenseStatus;
+          _ocrBackupStatus = ocrStatus;
           _localMileageCount = localMileage.length;
           _cloudMileageCount = cloudMileage.length;
+          _localOBDScansCount = localOBDScans.length;
+          _cloudOBDScansCount = cloudOBDScans;
         });
       }
     } catch (e) {
@@ -115,19 +134,24 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
               // Back button and title
               Row(
                 children: [
-                  IconButton(
+                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+                    icon: const Icon(
+                      Icons.arrow_back_ios,
+                      color: Colors.white,
+                      size: 26,
+                    ),
                   ),
                   const Expanded(
                     child: Text(
                       'Detailed Backup Management',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 26,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         fontFamily: 'Orbitron',
                       ),
+                      textAlign: TextAlign.left,
                     ),
                   ),
                 ],
@@ -136,17 +160,18 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
               
               // Subtitle
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: 14),
                 child: Text(
                   'Manage your data backup and restore',
                   style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white70,
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
+                        fontSize: 16,
+                        color: Colors.white70,
+                        fontFamily: 'Orbitron',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 22),
               
             ],
           ),
@@ -218,6 +243,26 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
                     cloudCount: _licenseBackupStatus?.cloudCount ?? 0,
                     onBackup: _backupLicenseImages,
                     onRestore: _restoreLicenseImages,
+                    isLoading: _isLoading,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDataTypeCard(
+                    title: 'OCR Scans',
+                    icon: Icons.document_scanner,
+                    localCount: _ocrBackupStatus?.localScansCount ?? 0,
+                    cloudCount: _ocrBackupStatus?.cloudScansCount ?? 0,
+                    onBackup: _backupOcrScans,
+                    onRestore: _restoreOcrScans,
+                    isLoading: _isLoading,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDataTypeCard(
+                    title: 'OBD-II Scans',
+                    icon: Icons.bluetooth_searching,
+                    localCount: _localOBDScansCount,
+                    cloudCount: _cloudOBDScansCount,
+                    onBackup: _backupOBDScans,
+                    onRestore: _restoreOBDScans,
                     isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
@@ -300,9 +345,21 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Colors.green, Colors.greenAccent],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.primaryGreen,
+                          AppTheme.darkAccentGreen,
+                        ],
                       ),
                       borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryGreen.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: ElevatedButton.icon(
                       onPressed: isLoading ? null : onBackup,
@@ -330,8 +387,22 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.white, width: 1),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.blue.shade600,
+                          Colors.blue.shade800,
+                        ],
+                      ),
                       borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: ElevatedButton.icon(
                       onPressed: isLoading ? null : onRestore,
@@ -621,6 +692,50 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
     }
   }
 
+  Future<void> _backupOcrScans() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final result = await _ocrService.backupScansToFirebase();
+      
+      if (result.isSuccess) {
+        _showSnackBar('OCR scans backed up successfully! ${result.successCount} scans processed.', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to backup OCR scans: ${result.message}', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error backing up OCR scans: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _restoreOcrScans() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final result = await _ocrService.restoreScansFromFirebase();
+      
+      if (result.isSuccess) {
+        _showSnackBar('OCR scans restored successfully! ${result.successCount} scans processed.', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to restore OCR scans: ${result.message}', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error restoring OCR scans: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Widget _buildComprehensiveBackupCard() {
     return Card(
       elevation: 4,
@@ -710,44 +825,86 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
             Row(
               children: [
                 Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _backupAllData,
-                    icon: const Icon(Icons.cloud_upload, size: 18),
-                    label: const Text(
-                      'Backup All',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontWeight: FontWeight.w600,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.primaryGreen,
+                          AppTheme.darkAccentGreen,
+                        ],
                       ),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryGreen.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryGreen,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                    child: ElevatedButton.icon(
+                      onPressed: _isLoading ? null : _backupAllData,
+                      icon: const Icon(Icons.cloud_upload, size: 18, color: Colors.white),
+                      label: const Text(
+                        'Backup All',
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _restoreAllData,
-                    icon: const Icon(Icons.cloud_download, size: 18),
-                    label: const Text(
-                      'Restore All',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontWeight: FontWeight.w600,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.blue.shade600,
+                          Colors.blue.shade800,
+                        ],
                       ),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryGreen,
-                      side: const BorderSide(color: AppTheme.primaryGreen),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                    child: ElevatedButton.icon(
+                      onPressed: _isLoading ? null : _restoreAllData,
+                      icon: const Icon(Icons.cloud_download, size: 18, color: Colors.white),
+                      label: const Text(
+                        'Restore All',
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
                   ),
@@ -842,6 +999,50 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
       }
     } catch (e) {
       _showSnackBar('Error restoring maintenance: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _backupOBDScans() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final success = await _obdFirebaseService.backupAllScansToFirebase();
+      
+      if (success) {
+        _showSnackBar('OBD scans backed up successfully', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to backup OBD scans', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error backing up OBD scans: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _restoreOBDScans() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      HapticFeedback.lightImpact();
+      final success = await _obdFirebaseService.restoreScansFromFirebase();
+      
+      if (success) {
+        _showSnackBar('OBD scans restored successfully', isError: false);
+        await _loadBackupStatus();
+      } else {
+        _showSnackBar('Failed to restore OBD scans', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error restoring OBD scans: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

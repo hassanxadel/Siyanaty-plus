@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../services/vin_lookup_screen.dart';
 import '../services/ocr_scanner_screen.dart';
-import '../services/barcode_scanner_screen.dart';
+import '../health/car_health_dashboard_screen.dart';
 import '../services/voice_notes_screen.dart';
 import '../services/mileage_track_screen.dart';
 import '../services/reminders_screen.dart';
-import '../services/obd_screen.dart';
+import '../obd/obd_screen.dart';
 import '../services/services_screen.dart';
 import '../services/cars_screen.dart';
 import '../services/maintenance_screen.dart';
@@ -21,7 +21,7 @@ class AllActionsScreen extends StatelessWidget {
     final actions = [
       {'label': 'VIN Lookup', 'subtitle': 'Maintenance Recommendations', 'icon': Icons.search, 'color': AppTheme.primaryGreen},
       {'label': 'OCR Scanner', 'subtitle': 'Extract Data from Service Reports', 'icon': Icons.document_scanner, 'color': const Color(0xFF8E44AD)},
-      {'label': 'Barcode Scanner', 'subtitle': 'Part Details & Product Information', 'icon': Icons.qr_code_scanner, 'color': AppTheme.darkAccentGreen},
+      {'label': 'Car Health Dashboard', 'subtitle': 'Health Score, Analytics & Insights', 'icon': Icons.health_and_safety, 'color': AppTheme.darkAccentGreen},
       {'label': 'Voice Notes', 'subtitle': 'Quick Maintenance Notes', 'icon': Icons.mic, 'color': const Color(0xFF7B2CBF)},
       {'label': 'Mileage Track', 'subtitle': 'Tracking & Predictive Alerts', 'icon': Icons.track_changes, 'color': const Color(0xFFFF6B35)},
       {'label': 'Maintenance', 'subtitle': 'Service History & Records', 'icon': Icons.home_repair_service_rounded, 'color': const Color(0xFF8B5CF6)},
@@ -227,10 +227,10 @@ class AllActionsScreen extends StatelessWidget {
           MaterialPageRoute(builder: (context) => const OcrScannerScreen()),
         );
         break;
-      case 'barcode scanner':
+      case 'car health dashboard':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+          MaterialPageRoute(builder: (context) => const CarHealthDashboardScreen()),
         );
         break;
       case 'voice notes':
@@ -260,7 +260,7 @@ class AllActionsScreen extends StatelessWidget {
       case 'obd-ii diagnostics':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const OBDDashboardScreen()),
+          MaterialPageRoute(builder: (context) => const OBDScreen()),
         );
         break;
       case 'service centers':

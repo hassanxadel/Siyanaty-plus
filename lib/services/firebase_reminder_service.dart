@@ -51,7 +51,7 @@ class FirebaseReminderService {
     }
   }
 
-  /// Backup all reminders to Firebase
+  /// Backup all reminders to Firebase (prevents duplicates by checking local_id)
   Future<ReminderBackupResult> backupAllRemindersToFirebase() async {
     try {
       if (!isUserAuthenticated) {
@@ -64,7 +64,19 @@ class FirebaseReminderService {
         return ReminderBackupResult.success('No reminders to backup.');
       }
 
+      // Get existing cloud reminders to check for duplicates
+      final existingCloudReminders = await _userRemindersCollection.get();
+      final existingLocalIds = <int>{};
+      
+      for (final doc in existingCloudReminders.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['local_id'] != null) {
+          existingLocalIds.add(data['local_id'] as int);
+        }
+      }
+
       int successCount = 0;
+      int skippedCount = 0;
       int failureCount = 0;
       final List<String> errors = [];
 
@@ -74,6 +86,13 @@ class FirebaseReminderService {
       for (final reminderMap in localReminders) {
         try {
           final reminder = BackupReminder.fromMap(reminderMap);
+          
+          // Skip if reminder already exists in cloud (by local_id)
+          if (existingLocalIds.contains(reminder.id)) {
+            skippedCount++;
+            continue;
+          }
+          
           final reminderData = reminder.toFirebaseMap();
           reminderData['local_id'] = reminder.id;
           reminderData['backup_timestamp'] = FieldValue.serverTimestamp();
@@ -93,13 +112,14 @@ class FirebaseReminderService {
 
       if (failureCount > 0) {
         return ReminderBackupResult.error(
-          'Backup completed with errors. $successCount reminders backed up successfully, $failureCount failed. Errors: ${errors.join(', ')}'
+          'Backup completed with errors. $successCount reminders backed up, $failureCount failed, $skippedCount already in cloud.'
         );
       }
 
-      return ReminderBackupResult.success(
-        'All $successCount reminders backed up successfully!'
-      );
+      final message = skippedCount > 0
+          ? '$successCount reminders backed up, $skippedCount already in cloud'
+          : 'All $successCount reminders backed up successfully!';
+      return ReminderBackupResult.success(message);
 
     } catch (e) {
       return ReminderBackupResult.error('Failed to backup reminders: ${e.toString()}');
@@ -129,9 +149,33 @@ class FirebaseReminderService {
           final data = doc.data() as Map<String, dynamic>;
           final reminder = BackupReminder.fromFirebaseMap(data);
           
-          // Insert into local database
-          await _databaseHelper.insertReminder(reminder);
-          successCount++;
+          // Check if the associated car exists locally
+          final car = await _databaseHelper.getCarById(reminder.carId, _currentUserId!);
+          if (car == null) {
+            failureCount++;
+            errors.add('Reminder "${reminder.title}" skipped: associated car not found. Please restore cars first.');
+            continue;
+          }
+          
+          // Check if reminder already exists by local_id
+          final localId = data['local_id'] as int?;
+          BackupReminder? existingReminder;
+          if (localId != null) {
+            existingReminder = await _databaseHelper.getReminderById(localId, _currentUserId!);
+          }
+          
+          if (existingReminder == null) {
+            // Insert new reminder
+            await _databaseHelper.insertReminder(reminder);
+            successCount++;
+          } else {
+            // Update existing reminder if cloud version is newer
+            if (reminder.updatedAt.isAfter(existingReminder.updatedAt)) {
+              final updatedReminder = reminder.copyWith(id: existingReminder.id);
+              await _databaseHelper.updateReminder(updatedReminder);
+              successCount++;
+            }
+          }
         } catch (e) {
           failureCount++;
           errors.add('Failed to restore reminder: ${e.toString()}');

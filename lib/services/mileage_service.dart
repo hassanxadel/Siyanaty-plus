@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/mileage_entry.dart';
 import '../database/database_helper.dart';
 import '../database/mileage_database_helper.dart';
+import 'car_service.dart';
 
 class MileageService {
   static final MileageService _instance = MileageService._internal();
@@ -124,7 +125,7 @@ class MileageService {
 
   // Firebase/Cloud operations
 
-  /// Sync local entries to Firebase
+  /// Sync local entries to Firebase (prevents duplicates by checking local_id)
   Future<bool> syncToFirebase({String? userId}) async {
     try {
       final user = _auth.currentUser;
@@ -135,25 +136,41 @@ class MileageService {
       final uid = userId ?? user!.uid;
       final localEntries = await getAllEntries(userId: uid);
       
-      final batch = _firestore.batch();
       final collection = _firestore
           .collection('users')
           .doc(uid)
           .collection('mileage_entries');
 
-      // Clear existing Firebase entries first
+      // Get existing cloud entries to check for duplicates
       final existingDocs = await collection.get();
+      final existingLocalIds = <int>{};
       for (final doc in existingDocs.docs) {
-        batch.delete(doc.reference);
+        final data = doc.data();
+        if (data['local_id'] != null) {
+          existingLocalIds.add(data['local_id'] as int);
+        }
       }
 
-      // Add all local entries to Firebase
+      final batch = _firestore.batch();
+      int addedCount = 0;
+
+      // Add only new local entries to Firebase
       for (final entry in localEntries) {
+        // Skip if entry already exists in cloud
+        if (entry.id != null && existingLocalIds.contains(entry.id)) {
+          continue;
+        }
+        
         final docRef = collection.doc();
-        batch.set(docRef, entry.toFirestore());
+        final entryData = entry.toFirestore();
+        entryData['local_id'] = entry.id; // Add local_id for duplicate detection
+        batch.set(docRef, entryData);
+        addedCount++;
       }
 
-      await batch.commit();
+      if (addedCount > 0) {
+        await batch.commit();
+      }
       return true;
     } catch (e) {
       print('Error syncing to Firebase: $e');
@@ -161,7 +178,7 @@ class MileageService {
     }
   }
 
-  /// Load entries from Firebase and save to local database
+  /// Load entries from Firebase and save to local database (prevents duplicates)
   Future<bool> syncFromFirebase({String? userId}) async {
     try {
       final user = _auth.currentUser;
@@ -179,13 +196,35 @@ class MileageService {
       
       if (snapshot.docs.isEmpty) return true;
 
-      // Clear local entries for this user first
-      final db = await DatabaseHelper.instance.database;
-      await MileageDatabaseHelper.deleteAllEntries(db, userId: uid);
+      // Get existing local entries to check for duplicates
+      final existingLocalEntries = await getAllEntries(userId: uid);
+      final existingLocalIds = existingLocalEntries.map((e) => e.id).whereType<int>().toSet();
+      
+      // Also track by date + carId to avoid duplicates
+      final existingEntryKeys = existingLocalEntries
+          .map((e) => '${e.carId}_${e.date.millisecondsSinceEpoch}')
+          .toSet();
 
-      // Add Firebase entries to local database
+      final db = await DatabaseHelper.instance.database;
+
+      // Add Firebase entries to local database only if they don't exist
       for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final localId = data['local_id'] as int?;
+        
+        // Skip if entry already exists locally (by local_id)
+        if (localId != null && existingLocalIds.contains(localId)) {
+          continue;
+        }
+        
         final entry = MileageEntry.fromFirestore(doc).copyWith(userId: uid);
+        
+        // Also check by date + carId combination
+        final entryKey = '${entry.carId}_${entry.date.millisecondsSinceEpoch}';
+        if (existingEntryKeys.contains(entryKey)) {
+          continue;
+        }
+        
         await MileageDatabaseHelper.insertEntry(db, entry);
       }
 
@@ -286,6 +325,163 @@ class MileageService {
   Future<void> clearLocalData({String? userId}) async {
     final db = await DatabaseHelper.instance.database;
     await MileageDatabaseHelper.deleteAllEntries(db, userId: userId);
+  }
+
+  /// Calculate total mileage accumulated from entries for a specific car
+  /// Takes into account trip frequency and time elapsed since entry creation
+  Future<double> calculateAccumulatedMileage(String carId, {String? userId}) async {
+    final entries = await getAllEntries(userId: userId);
+    final carEntries = entries.where((e) => e.carId == carId).toList();
+    
+    if (carEntries.isEmpty) return 0;
+    
+    double totalMileage = 0;
+    final now = DateTime.now();
+    
+    for (final entry in carEntries) {
+      switch (entry.tripFrequency) {
+        case TripFrequency.oneTime:
+          // One-time trips are counted once
+          totalMileage += entry.mileage;
+          break;
+          
+        case TripFrequency.daily:
+          // Calculate days since entry was created
+          final daysSinceCreation = now.difference(entry.createdAt).inDays;
+          totalMileage += entry.mileage * (daysSinceCreation + 1); // +1 to include creation day
+          break;
+          
+        case TripFrequency.weekly:
+          // Calculate weeks since entry was created
+          final weeksSinceCreation = (now.difference(entry.createdAt).inDays / 7).floor();
+          totalMileage += entry.mileage * (weeksSinceCreation + 1); // +1 to include creation week
+          break;
+          
+        case TripFrequency.monthly:
+          // Calculate months since entry was created (approximate)
+          final monthsSinceCreation = ((now.year - entry.createdAt.year) * 12 + 
+                                       (now.month - entry.createdAt.month));
+          totalMileage += entry.mileage * (monthsSinceCreation + 1); // +1 to include creation month
+          break;
+      }
+    }
+    
+    return totalMileage;
+  }
+
+  /// Add entry and automatically update car mileage based on trip frequency
+  Future<MileageEntry> addEntryWithAutoMileageUpdate(
+    MileageEntry entry, {
+    bool syncToCloud = false,
+  }) async {
+    // Add entry to local database first
+    final savedEntry = await addEntry(entry);
+
+    // Update car mileage if carId is provided
+    if (entry.carId != null && entry.carId!.isNotEmpty) {
+      try {
+        final carService = CarService();
+        
+        // For one-time trips, add the mileage immediately
+        if (entry.tripFrequency == TripFrequency.oneTime) {
+          await carService.updateCarMileage(
+            int.parse(entry.carId!),
+            entry.mileage,
+          );
+        }
+        // For recurring trips, we'll update mileage based on accumulated trips
+        // The mileage will be calculated and updated when viewing the car details
+        
+      } catch (e) {
+        print('Error updating car mileage: $e');
+        // Continue even if car mileage update fails
+      }
+    }
+
+    // Optionally sync to Firebase
+    if (syncToCloud) {
+      try {
+        final user = _auth.currentUser;
+        if (user != null) {
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('mileage_entries')
+              .add(savedEntry.copyWith(userId: user.uid).toFirestore());
+        }
+      } catch (e) {
+        print('Error syncing entry to Firebase: $e');
+        // Continue even if Firebase sync fails
+      }
+    }
+
+    return savedEntry;
+  }
+
+  /// Update car mileage based on all accumulated trips
+  /// This should be called periodically or when viewing car details
+  Future<bool> syncCarMileageFromEntries(String carId, int initialMileage, {String? userId}) async {
+    try {
+      final accumulatedMileage = await calculateAccumulatedMileage(carId, userId: userId);
+      
+      final carService = CarService();
+      final result = await carService.updateCarMileage(
+        int.parse(carId),
+        accumulatedMileage,
+      );
+      
+      return result.isSuccess;
+    } catch (e) {
+      print('Error syncing car mileage: $e');
+      return false;
+    }
+  }
+
+  /// Get entries for a specific car
+  Future<List<MileageEntry>> getEntriesForCar(String carId, {String? userId}) async {
+    final allEntries = await getAllEntries(userId: userId);
+    return allEntries.where((entry) => entry.carId == carId).toList();
+  }
+
+  /// Get mileage breakdown by trip frequency for a car
+  Future<Map<String, double>> getMileageBreakdownForCar(String carId, {String? userId}) async {
+    final entries = await getEntriesForCar(carId, userId: userId);
+    
+    double oneTimeMileage = 0;
+    double dailyMileage = 0;
+    double weeklyMileage = 0;
+    double monthlyMileage = 0;
+    
+    final now = DateTime.now();
+    
+    for (final entry in entries) {
+      switch (entry.tripFrequency) {
+        case TripFrequency.oneTime:
+          oneTimeMileage += entry.mileage;
+          break;
+        case TripFrequency.daily:
+          final days = now.difference(entry.createdAt).inDays + 1;
+          dailyMileage += entry.mileage * days;
+          break;
+        case TripFrequency.weekly:
+          final weeks = (now.difference(entry.createdAt).inDays / 7).floor() + 1;
+          weeklyMileage += entry.mileage * weeks;
+          break;
+        case TripFrequency.monthly:
+          final months = ((now.year - entry.createdAt.year) * 12 + 
+                         (now.month - entry.createdAt.month)) + 1;
+          monthlyMileage += entry.mileage * months;
+          break;
+      }
+    }
+    
+    return {
+      'oneTime': oneTimeMileage,
+      'daily': dailyMileage,
+      'weekly': weeklyMileage,
+      'monthly': monthlyMileage,
+      'total': oneTimeMileage + dailyMileage + weeklyMileage + monthlyMileage,
+    };
   }
 
   /// Export entries as CSV string

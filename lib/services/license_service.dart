@@ -213,12 +213,24 @@ class LicenseService {
   /// Pick image from gallery
   Future<LicenseOperationResult> pickImageFromGallery() async {
     try {
-      // Check storage permission
-      final storagePermission = await Permission.storage.request();
-      if (!storagePermission.isGranted) {
-        return LicenseOperationResult.error('Storage permission is required');
+      // For Android 13+ (API 33+), use photos permission instead of storage
+      // For older versions, use storage permission
+      // Note: image_picker handles permissions internally on most platforms
+      // but we request explicitly for better UX
+      
+      PermissionStatus permissionStatus;
+      
+      // Try photos permission first (Android 13+)
+      permissionStatus = await Permission.photos.request();
+      
+      // If photos permission is not applicable (older Android), try storage
+      if (permissionStatus.isPermanentlyDenied || permissionStatus.isDenied) {
+        permissionStatus = await Permission.storage.request();
       }
-
+      
+      // On some devices, image_picker works without explicit permission
+      // So we proceed anyway and let image_picker handle it
+      
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 80,

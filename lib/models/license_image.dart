@@ -19,29 +19,31 @@ class LicenseImage {
     this.userId,
   });
 
+  /// Convert to Map for database storage (snake_case to match DB schema)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'carId': carId,
-      'licenseType': licenseType,
-      'imagePath': imagePath,
-      'imageUrl': imageUrl,
-      'createdAt': createdAt.millisecondsSinceEpoch,
-      'updatedAt': updatedAt.millisecondsSinceEpoch,
-      'userId': userId,
+      'car_id': carId,
+      'license_type': licenseType,
+      'image_path': imagePath,
+      'image_url': imageUrl,
+      'created_at': createdAt.millisecondsSinceEpoch,
+      'updated_at': updatedAt.millisecondsSinceEpoch,
+      'user_id': userId,
     };
   }
 
+  /// Create from database Map (supports both snake_case and camelCase for compatibility)
   factory LicenseImage.fromMap(Map<String, dynamic> map) {
     return LicenseImage(
       id: map['id']?.toInt(),
-      carId: map['carId']?.toInt() ?? 0,
-      licenseType: map['licenseType'] ?? '',
-      imagePath: map['imagePath'] ?? '',
-      imageUrl: map['imageUrl'],
-      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] ?? 0),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updatedAt'] ?? 0),
-      userId: map['userId'],
+      carId: map['car_id']?.toInt() ?? map['carId']?.toInt() ?? 0,
+      licenseType: map['license_type'] ?? map['licenseType'] ?? '',
+      imagePath: map['image_path'] ?? map['imagePath'] ?? '',
+      imageUrl: map['image_url'] ?? map['imageUrl'],
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] ?? map['createdAt'] ?? 0),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at'] ?? map['updatedAt'] ?? 0),
+      userId: map['user_id'] ?? map['userId'],
     );
   }
 

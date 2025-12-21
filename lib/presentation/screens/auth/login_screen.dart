@@ -9,7 +9,12 @@ import 'forgot_password_screen.dart';
 import 'create_account_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final VoidCallback? onAuthenticationComplete;
+  
+  const LoginScreen({
+    super.key,
+    this.onAuthenticationComplete,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -120,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   Widget _buildLogo() {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
+      child: SizedBox(
         height: 60,
         width: 180,
         child: Image.asset(
@@ -405,7 +410,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           width: 24,
           height: 24,
         ),
-        label: Text(
+        label: const Text(
           'Sign In with Google',
           style: TextStyle(
             fontSize: 16,
@@ -551,8 +556,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
-  void _navigateToMfaVerification(String userId, String deviceId) {
-    Navigator.of(context).push(
+  Future<void> _navigateToMfaVerification(String userId, String deviceId) async {
+    final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (context) => MfaVerificationScreen(
           userId: userId,
@@ -561,5 +566,21 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         ),
       ),
     );
+    
+    // If MFA was successful (result == true), notify parent and reset state
+    // The SecurityWrapper will re-check authentication and navigate appropriately
+    if (result == true && mounted) {
+      // MFA completed successfully - notify parent to re-check auth
+      widget.onAuthenticationComplete?.call();
+      // Reset loading state so user can try again if needed
+      setState(() {
+        _isLoading = false;
+      });
+    } else if (mounted) {
+      // MFA was cancelled or failed - reset loading state
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 }

@@ -47,7 +47,6 @@ class _BottomNavBarState extends State<BottomNavBar>
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    Color color = isDarkMode ? Colors.transparent : Colors.transparent;
     return Container(
       height: 80,
       decoration: BoxDecoration(

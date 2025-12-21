@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/license_service.dart';
 import '../../../services/car_service.dart';
@@ -126,7 +127,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
                       'Your driver\'s license or ID card',
                       Icons.person,
                       _personalLicense?.imagePath,
-                      () => _showImageOptions(context, 'personal'),
+                      'personal',
                     ),
                     
                     const SizedBox(height: 16),
@@ -138,7 +139,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
                       'Your vehicle registration or title',
                       Icons.directions_car,
                       _vehicleLicense?.imagePath,
-                      () => _showImageOptions(context, 'vehicle'),
+                      'vehicle',
                     ),
                     
                     const SizedBox(height: 24),
@@ -162,7 +163,6 @@ class _LicenseScreenState extends State<LicenseScreen> {
 
   Widget _buildCarSelectionCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -172,84 +172,318 @@ class _LicenseScreenState extends State<LicenseScreen> {
             AppTheme.backgroundGreen,
           ],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.darkAccentGreen.withOpacity(0.3),
+            color: AppTheme.primaryGreen.withOpacity(0.2),
             blurRadius: 8,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.directions_car,
-                color: Colors.white,
-                size: 24,
-              ),
-              SizedBox(width: 12),
-              Text(
-                'Select Vehicle',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontFamily: 'Orbitron',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () => _showCarSelectionDialog(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: _selectedCar != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: _selectedCar!.imagePath != null
+                              ? Image.file(
+                                  File(_selectedCar!.imagePath!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      Icons.directions_car,
+                                      color: Colors.white,
+                                      size: 24,
+                                    );
+                                  },
+                                )
+                              : const Icon(
+                                  Icons.directions_car,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                        )
+                      : const Icon(
+                          Icons.directions_car,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.3),
-                width: 1,
-              ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedCar != null
+                            ? '${_selectedCar!.brand} ${_selectedCar!.model}'
+                            : 'Select Car',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _selectedCar != null
+                            ? 'Year: ${_selectedCar!.year}'
+                            : 'Tap to choose vehicle',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ],
             ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<BackupCar>(
-                value: _selectedCar,
-                isExpanded: true,
-                dropdownColor: AppTheme.darkAccentGreen,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Orbitron',
-                  fontSize: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCarSelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-                items: _cars.map((car) {
-                  return DropdownMenuItem<BackupCar>(
-                    value: car,
-                    child: Text(
-                      '${car.brand} ${car.model} (${car.year})',
-                      style: const TextStyle(
-                        color: Colors.white,
+              ),
+              // Title
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.directions_car,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Select Vehicle',
+                      style: TextStyle(
                         fontFamily: 'Orbitron',
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
-                  );
-                }).toList(),
-                onChanged: (BackupCar? newCar) {
-                  if (newCar != null) {
-                    setState(() {
-                      _selectedCar = newCar;
-                    });
-                    _loadLicenseImages();
-                  }
-                },
+                  ],
+                ),
               ),
-            ),
+              // Car list
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.6,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: _cars.length,
+                  itemBuilder: (context, index) {
+                    final car = _cars[index];
+                    final isSelected = _selectedCar?.id == car.id;
+                    
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedCar = car;
+                        });
+                        Navigator.pop(context);
+                        _loadLicenseImages();
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.primaryGreen,
+                                    AppTheme.darkAccentGreen,
+                                  ],
+                                )
+                              : LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.darkAccentGreen.withOpacity(0.5),
+                                    AppTheme.backgroundGreen.withOpacity(0.5),
+                                  ],
+                                ),
+                          borderRadius: BorderRadius.circular(15),
+                          border: isSelected
+                              ? Border.all(color: Colors.white, width: 2)
+                              : null,
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: AppTheme.primaryGreen.withOpacity(0.4),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.white.withOpacity(0.2)
+                                    : AppTheme.primaryGreen.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: car.imagePath != null
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.file(
+                                        File(car.imagePath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Icon(
+                                            Icons.directions_car,
+                                            color: Colors.white,
+                                            size: isSelected ? 28 : 24,
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.directions_car,
+                                      color: Colors.white,
+                                      size: isSelected ? 28 : 24,
+                                    ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${car.brand} ${car.model}',
+                                    style: TextStyle(
+                                      fontFamily: 'Orbitron',
+                                      fontSize: isSelected ? 18 : 16,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Year: ${car.year}',
+                                    style: TextStyle(
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 13,
+                                      color: Colors.white.withOpacity(0.8),
+                                    ),
+                                  ),
+                                  if (car.licensePlate.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'License: ${car.licensePlate}',
+                                      style: TextStyle(
+                                        fontFamily: 'Orbitron',
+                                        fontSize: 12,
+                                        color: Colors.white.withOpacity(0.6),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: AppTheme.primaryGreen,
+                                  size: 20,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -396,11 +630,12 @@ class _LicenseScreenState extends State<LicenseScreen> {
                     child: Text(
                       'License Management',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 23,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         fontFamily: 'Orbitron',
                       ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                   IconButton(
@@ -438,7 +673,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
     String subtitle,
     IconData icon,
     String? imagePath,
-    VoidCallback onTap,
+    String licenseType,
   ) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -591,14 +826,19 @@ class _LicenseScreenState extends State<LicenseScreen> {
             children: [
               Expanded(
                 child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Colors.green, Colors.greenAccent],
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.darkAccentGreen,
+                        AppTheme.backgroundGreen,
+                      ],
                     ),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                   ),
                   child: ElevatedButton.icon(
-                    onPressed: onTap,
+                    onPressed: () => _requestPermissionsAndShowOptions(context, licenseType: licenseType),
                     icon: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
                     label: Text(
                       imagePath != null ? 'Update Image' : 'Add Image',
@@ -654,6 +894,79 @@ class _LicenseScreenState extends State<LicenseScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _requestPermissionsAndShowOptions(BuildContext context, {required String licenseType}) async {
+    // Request camera permission
+    final cameraStatus = await Permission.camera.request();
+    // Request photos permission (for gallery access)
+    final photosStatus = await Permission.photos.request();
+    
+    if (!mounted) return;
+    
+    if (cameraStatus.isPermanentlyDenied || photosStatus.isPermanentlyDenied) {
+      // Show dialog to open settings
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppTheme.getThemeAwareBackground(context),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Permissions Required',
+            style: TextStyle(
+              fontFamily: 'Orbitron',
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          content: const Text(
+            'Camera and photo library permissions are required to add license images. Please enable them in your device settings.',
+            style: TextStyle(
+              fontFamily: 'Orbitron',
+              color: Colors.white70,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  fontFamily: 'Orbitron',
+                  color: Colors.white70,
+                ),
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  openAppSettings();
+                },
+                child: const Text(
+                  'Open Settings',
+                  style: TextStyle(
+                    fontFamily: 'Orbitron',
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    
+    // Show image options if permissions are granted or can be requested
+    _showImageOptions(context, licenseType);
   }
 
   void _showImageOptions(BuildContext context, String licenseType) {

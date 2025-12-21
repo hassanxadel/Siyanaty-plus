@@ -142,7 +142,9 @@ class AuthenticationManager {
     }
   }
 
-  /// Send MFA code via SMS or Email
+  /// Send MFA code via Email only (SMS is disabled)
+  /// SMS OTP is disabled because Firebase Phone Auth requires additional configuration
+  /// and regional enablement that is not currently set up.
   Future<bool> sendMfaCode(String userId, {bool useEmail = false}) async {
     try {
       final user = _firebaseAuth.currentUser;
@@ -151,15 +153,11 @@ class AuthenticationManager {
         return false;
       }
 
-      _lastSentViaEmail = useEmail; // Track the method used
-
-      // If email fallback is requested
-      if (useEmail) {
-        return await _sendMfaCodeViaEmail(userId, user.email);
-      }
-
-      // Default: Try SMS via Firebase Phone Auth
-      return await _sendMfaCodeViaSMS(userId);
+      // SMS is disabled - always use email verification
+      // SMS requires Firebase Phone Auth regional configuration which is not set up
+      AppLogger.info('Using email verification (SMS is disabled)');
+      _lastSentViaEmail = true;
+      return await _sendMfaCodeViaEmail(userId, user.email);
 
     } catch (e) {
       AppLogger.error('Failed to send MFA code', error: e);
@@ -264,26 +262,71 @@ class AuthenticationManager {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // In production, you should use Firebase Cloud Functions to send email
-      // For now, we'll log it for testing
-      AppLogger.info('MFA Code for $email: $code');
+      // Log the code for testing (visible in console)
+      AppLogger.info('═══════════════════════════════════════════════════');
+      AppLogger.info('📧 MFA VERIFICATION CODE FOR $email');
+      AppLogger.info('═══════════════════════════════════════════════════');
+      AppLogger.info('🔐 CODE: $code');
+      AppLogger.info('═══════════════════════════════════════════════════');
+      AppLogger.info('⏰ This code expires in 5 minutes');
+      AppLogger.info('═══════════════════════════════════════════════════');
       
-      // Send email using Firebase sendEmailVerification or Cloud Functions
-      // For a real implementation, create a Cloud Function
+      // Send email using EmailService
+      // Note: EmailJS needs to be configured with valid credentials for production
+      // For now, the code is logged to console for testing
       try {
-        // This is a placeholder - you need to implement email sending
-        // Either through Firebase Cloud Functions or a service like SendGrid
-        // For testing, log the code
-        AppLogger.info('Email code generated for testing: $code');
-        
-        return true;
-      } catch (e) {
-        AppLogger.error('Failed to send email', error: e);
-        return false;
+        // Import is at the top of the file
+        final emailSent = await _sendEmailWithCode(email, code);
+        if (emailSent) {
+          AppLogger.info('Email sent successfully to $email');
+        } else {
+          AppLogger.warning('Email service not configured - code is in console above');
+        }
+      } catch (emailError) {
+        AppLogger.warning('Email sending failed - code is in console above', error: emailError);
       }
+      
+      // Always return true - the code is logged and stored in Firestore
+      return true;
 
     } catch (e) {
       AppLogger.error('Failed to send email MFA code', error: e);
+      return false;
+    }
+  }
+
+  /// Helper to send email with verification code
+  Future<bool> _sendEmailWithCode(String email, String code) async {
+    try {
+      // Use Firebase Firestore to trigger email via Firebase Extensions
+      // or a Cloud Function that watches the 'mail' collection
+      await _firestore.collection('mail').add({
+        'to': email,
+        'message': {
+          'subject': 'Siyanaty - Your Verification Code',
+          'html': '''
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+              <div style="background-color: #062117; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="margin: 0;">🚗 Siyanaty</h1>
+              </div>
+              <div style="background-color: white; padding: 30px; border-radius: 0 0 10px 10px;">
+                <h2 style="color: #333;">Your Verification Code</h2>
+                <p style="color: #666;">Use this code to verify your identity:</p>
+                <div style="background-color: #062117; color: white; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; border-radius: 8px; letter-spacing: 8px; margin: 20px 0;">
+                  $code
+                </div>
+                <p style="color: #999; font-size: 14px;">This code will expire in 5 minutes.</p>
+                <p style="color: #999; font-size: 12px;">If you didn't request this code, please ignore this email.</p>
+              </div>
+            </div>
+          ''',
+          'text': 'Your Siyanaty verification code is: $code. This code expires in 5 minutes.',
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      AppLogger.warning('Could not queue email for sending', error: e);
       return false;
     }
   }
@@ -447,10 +490,32 @@ class AuthenticationManager {
       final refreshToken = _generateRefreshToken();
       
       // Store tokens and user info
+      AppLogger.info('Storing authentication tokens...');
       await _secureStorage.storeAccessToken(idToken);
       await _secureStorage.storeRefreshToken(refreshToken);
       await _secureStorage.storeUserId(user.uid);
       await _secureStorage.storeDeviceId(deviceId);
+      
+      // Verify tokens are stored correctly with retry
+      bool tokensVerified = false;
+      for (int i = 0; i < 5; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        final storedAccessToken = await _secureStorage.getAccessToken();
+        final storedRefreshToken = await _secureStorage.getRefreshToken();
+        if (storedAccessToken != null && storedRefreshToken != null) {
+          tokensVerified = true;
+          AppLogger.info('Tokens verified as stored (attempt ${i + 1})');
+          break;
+        }
+        AppLogger.info('Waiting for tokens to be stored (attempt ${i + 1})...');
+      }
+      
+      if (!tokensVerified) {
+        AppLogger.warning('Could not verify tokens were stored, but continuing...');
+      }
+      
+      // Ensure PIN belongs to current user (clear if it belongs to different user)
+      await _secureStorage.ensurePinBelongsToCurrentUser();
       
       // Generate database encryption key if not exists
       final existingKey = await _secureStorage.getDatabaseKey();
@@ -460,6 +525,10 @@ class AuthenticationManager {
       
       // Update device info in Firestore
       await _updateDeviceInfo(user.uid, deviceId, deviceName);
+      
+      // Final verification that isAuthenticated returns true
+      final isAuth = await isAuthenticated();
+      AppLogger.info('Final isAuthenticated check after storing tokens: $isAuth');
       
       // Try to reload user to trigger auth state changes (with error handling)
       try {
@@ -480,7 +549,8 @@ class AuthenticationManager {
   Future<String> _getDeviceId() async {
     // Check if we already have a stored device ID
     final existingDeviceId = await _secureStorage.getDeviceId();
-    if (existingDeviceId != null) {
+    if (existingDeviceId != null && existingDeviceId.isNotEmpty) {
+      AppLogger.info('Using existing device ID: $existingDeviceId');
       return existingDeviceId;
     }
 
@@ -490,25 +560,30 @@ class AuthenticationManager {
       
       if (Platform.isAndroid) {
         final androidInfo = await _deviceInfo.androidInfo;
-        deviceId = '${androidInfo.model}_${androidInfo.id}';
+        // Use Android ID which is unique per device and app installation
+        deviceId = 'android_${androidInfo.id}';
       } else if (Platform.isIOS) {
         final iosInfo = await _deviceInfo.iosInfo;
-        deviceId = '${iosInfo.model}_${iosInfo.identifierForVendor}';
+        // Use identifierForVendor which is unique per device and vendor
+        deviceId = 'ios_${iosInfo.identifierForVendor}';
       } else {
-        // Fallback for other platforms
-        deviceId = 'unknown_${DateTime.now().millisecondsSinceEpoch}';
+        // Fallback for other platforms - generate a random but persistent ID
+        final random = Random.secure();
+        deviceId = 'device_${random.nextInt(1000000000)}';
       }
       
-      // Add some randomness to ensure uniqueness
-      final random = Random.secure();
-      final randomSuffix = random.nextInt(10000).toString().padLeft(4, '0');
-      deviceId = '${deviceId}_$randomSuffix';
+      // Store the device ID for future use (persistent across app restarts)
+      await _secureStorage.storeDeviceId(deviceId);
+      AppLogger.info('Generated and stored new device ID: $deviceId');
       
       return deviceId;
     } catch (e) {
+      AppLogger.error('Error generating device ID', error: e);
       // Fallback to random ID
       final random = Random.secure();
-      return 'device_${random.nextInt(1000000)}';
+      final fallbackId = 'device_${random.nextInt(1000000000)}';
+      await _secureStorage.storeDeviceId(fallbackId);
+      return fallbackId;
     }
   }
 
@@ -530,29 +605,40 @@ class AuthenticationManager {
 
   Future<bool> _isMfaRequiredForDevice(String userId, String deviceId) async {
     try {
+      AppLogger.info('Checking if MFA required for device: $deviceId');
       final userDoc = await _firestore.collection('users').doc(userId).get();
+      
       if (!userDoc.exists) {
+        AppLogger.info('User document does not exist - MFA required (first time user)');
         return true; // Require MFA for new users
       }
 
       final data = userDoc.data()!;
       final trustedDevices = List<String>.from(data['trustedDevices'] ?? []);
       
-      return !trustedDevices.contains(deviceId);
+      final isTrusted = trustedDevices.contains(deviceId);
+      AppLogger.info('Device trusted status: $isTrusted (trusted devices: ${trustedDevices.length})');
+      
+      return !isTrusted; // Require MFA if device is not trusted
     } catch (e) {
+      AppLogger.error('Error checking MFA requirement', error: e);
       return true; // Default to requiring MFA on error
     }
   }
 
   Future<void> _markDeviceAsTrusted(String userId, String deviceId) async {
     try {
-      await _firestore.collection('users').doc(userId).update({
+      // Use set with merge to create the document if it doesn't exist
+      await _firestore.collection('users').doc(userId).set({
         'trustedDevices': FieldValue.arrayUnion([deviceId]),
         'lastLoginAt': FieldValue.serverTimestamp(),
-      });
+        'userId': userId,
+      }, SetOptions(merge: true));
       
       await _secureStorage.setTrustedDevice(true);
+      AppLogger.info('Device $deviceId marked as trusted for user $userId');
     } catch (e) {
+      AppLogger.error('Failed to mark device as trusted', error: e);
       // Continue even if Firestore update fails
     }
   }

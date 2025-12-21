@@ -15,13 +15,17 @@ import 'voice_note_database_helper.dart';
 /// Handles car data storage with CRUD operations
 class DatabaseHelper {
   static const String _databaseName = 'syanaty.db';
-  static const int _databaseVersion = 8; // Updated for license images table
+  static const int _databaseVersion = 14; // Add Car Health Dashboard tables
   
   static const String tableCars = 'cars';
   static const String tableReminders = 'reminders';
   static const String tableMaintenance = 'maintenance';
   static const String tableScans = 'scans'; // OCR scans table
   static const String tableLicenseImages = 'license_images'; // License images table
+  static const String tableOBDScans = 'obd_scans'; // OBD-II scans table
+  static const String tableExpenses = 'expenses'; // Car expenses table
+  static const String tableTrips = 'trips'; // Trip logger table
+  static const String tableBudgets = 'budgets'; // Budget tracking table
   
   // Singleton pattern
   DatabaseHelper._privateConstructor();
@@ -138,7 +142,7 @@ class DatabaseHelper {
       await db.execute(OcrDatabaseHelper.createTableSql);
       
       // Create indexes for scans
-      await db.execute('CREATE INDEX idx_scans_user_id ON ${OcrDatabaseHelper.tableName} (userId)');
+      await db.execute('CREATE INDEX idx_scans_user_id ON ${OcrDatabaseHelper.tableName} (user_id)');
       await db.execute('CREATE INDEX idx_scans_timestamp ON ${OcrDatabaseHelper.tableName} (timestamp)');
       await db.execute('CREATE INDEX idx_scans_source ON ${OcrDatabaseHelper.tableName} (source)');
       
@@ -146,7 +150,7 @@ class DatabaseHelper {
       await db.execute(MileageDatabaseHelper.createTableQuery);
       
       // Create indexes for mileage entries
-      await db.execute('CREATE INDEX idx_mileage_user_id ON ${MileageDatabaseHelper.tableName} (userId)');
+      await db.execute('CREATE INDEX idx_mileage_user_id ON ${MileageDatabaseHelper.tableName} (user_id)');
       await db.execute('CREATE INDEX idx_mileage_date ON ${MileageDatabaseHelper.tableName} (date)');
       await db.execute('CREATE INDEX idx_mileage_mileage ON ${MileageDatabaseHelper.tableName} (mileage)');
       
@@ -154,8 +158,8 @@ class DatabaseHelper {
       await db.execute(VoiceNoteDatabaseHelper.createTableQuery);
       
       // Create indexes for voice notes
-      await db.execute('CREATE INDEX idx_voice_notes_user_id ON ${VoiceNoteDatabaseHelper.tableName} (userId)');
-      await db.execute('CREATE INDEX idx_voice_notes_created_at ON ${VoiceNoteDatabaseHelper.tableName} (createdAt)');
+      await db.execute('CREATE INDEX idx_voice_notes_user_id ON ${VoiceNoteDatabaseHelper.tableName} (user_id)');
+      await db.execute('CREATE INDEX idx_voice_notes_created_at ON ${VoiceNoteDatabaseHelper.tableName} (created_at)');
       await db.execute('CREATE INDEX idx_voice_notes_title ON ${VoiceNoteDatabaseHelper.tableName} (title)');
       
       // Create license images table
@@ -178,6 +182,96 @@ class DatabaseHelper {
       await db.execute('CREATE INDEX idx_license_images_car_id ON $tableLicenseImages (car_id)');
       await db.execute('CREATE INDEX idx_license_images_user_id ON $tableLicenseImages (user_id)');
       await db.execute('CREATE INDEX idx_license_images_type ON $tableLicenseImages (license_type)');
+      
+      // Create OBD scans table
+      await db.execute('''
+        CREATE TABLE $tableOBDScans (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          car_id INTEGER NOT NULL,
+          scan_date INTEGER NOT NULL,
+          rpm REAL,
+          speed REAL,
+          coolant_temp REAL,
+          fuel_level REAL,
+          throttle_position REAL,
+          engine_load REAL,
+          error_codes TEXT,
+          notes TEXT,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
+        )
+      ''');
+      
+      // Create indexes for OBD scans
+      await db.execute('CREATE INDEX idx_obd_scans_car_id ON $tableOBDScans (car_id)');
+      await db.execute('CREATE INDEX idx_obd_scans_scan_date ON $tableOBDScans (scan_date)');
+      await db.execute('CREATE INDEX idx_obd_scans_created_at ON $tableOBDScans (created_at)');
+      
+      // Create expenses table
+      await db.execute('''
+        CREATE TABLE $tableExpenses (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          car_id INTEGER NOT NULL,
+          category TEXT NOT NULL,
+          amount REAL NOT NULL,
+          date INTEGER NOT NULL,
+          description TEXT,
+          receipt_image TEXT,
+          created_at INTEGER NOT NULL,
+          user_id TEXT NOT NULL,
+          FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
+        )
+      ''');
+      
+      // Create indexes for expenses
+      await db.execute('CREATE INDEX idx_expenses_car_id ON $tableExpenses (car_id)');
+      await db.execute('CREATE INDEX idx_expenses_category ON $tableExpenses (category)');
+      await db.execute('CREATE INDEX idx_expenses_date ON $tableExpenses (date)');
+      await db.execute('CREATE INDEX idx_expenses_user_id ON $tableExpenses (user_id)');
+      
+      // Create trips table
+      await db.execute('''
+        CREATE TABLE $tableTrips (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          car_id INTEGER NOT NULL,
+          start_time INTEGER NOT NULL,
+          end_time INTEGER,
+          start_location TEXT,
+          end_location TEXT,
+          distance REAL,
+          trip_type TEXT,
+          purpose TEXT,
+          route_data TEXT,
+          created_at INTEGER NOT NULL,
+          user_id TEXT NOT NULL,
+          FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
+        )
+      ''');
+      
+      // Create indexes for trips
+      await db.execute('CREATE INDEX idx_trips_car_id ON $tableTrips (car_id)');
+      await db.execute('CREATE INDEX idx_trips_start_time ON $tableTrips (start_time)');
+      await db.execute('CREATE INDEX idx_trips_trip_type ON $tableTrips (trip_type)');
+      await db.execute('CREATE INDEX idx_trips_user_id ON $tableTrips (user_id)');
+      
+      // Create budgets table
+      await db.execute('''
+        CREATE TABLE $tableBudgets (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          car_id INTEGER NOT NULL,
+          category TEXT NOT NULL,
+          monthly_limit REAL NOT NULL,
+          alert_threshold REAL,
+          created_at INTEGER NOT NULL,
+          user_id TEXT NOT NULL,
+          FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
+        )
+      ''');
+      
+      // Create indexes for budgets
+      await db.execute('CREATE INDEX idx_budgets_car_id ON $tableBudgets (car_id)');
+      await db.execute('CREATE INDEX idx_budgets_category ON $tableBudgets (category)');
+      await db.execute('CREATE INDEX idx_budgets_user_id ON $tableBudgets (user_id)');
       
     } catch (e) {
       throw DatabaseException('Failed to create tables: $e');
@@ -286,7 +380,7 @@ class DatabaseHelper {
         await db.execute(OcrDatabaseHelper.createTableSql);
         
         // Create indexes for scans
-        await db.execute('CREATE INDEX idx_scans_user_id ON ${OcrDatabaseHelper.tableName} (userId)');
+        await db.execute('CREATE INDEX idx_scans_user_id ON ${OcrDatabaseHelper.tableName} (user_id)');
         await db.execute('CREATE INDEX idx_scans_timestamp ON ${OcrDatabaseHelper.tableName} (timestamp)');
         await db.execute('CREATE INDEX idx_scans_source ON ${OcrDatabaseHelper.tableName} (source)');
       }
@@ -296,7 +390,7 @@ class DatabaseHelper {
         await db.execute(MileageDatabaseHelper.createTableQuery);
         
         // Create indexes for mileage entries
-        await db.execute('CREATE INDEX idx_mileage_user_id ON ${MileageDatabaseHelper.tableName} (userId)');
+        await db.execute('CREATE INDEX idx_mileage_user_id ON ${MileageDatabaseHelper.tableName} (user_id)');
         await db.execute('CREATE INDEX idx_mileage_date ON ${MileageDatabaseHelper.tableName} (date)');
         await db.execute('CREATE INDEX idx_mileage_mileage ON ${MileageDatabaseHelper.tableName} (mileage)');
       }
@@ -306,8 +400,8 @@ class DatabaseHelper {
         await db.execute(VoiceNoteDatabaseHelper.createTableQuery);
         
         // Create indexes for voice notes
-        await db.execute('CREATE INDEX idx_voice_notes_user_id ON ${VoiceNoteDatabaseHelper.tableName} (userId)');
-        await db.execute('CREATE INDEX idx_voice_notes_created_at ON ${VoiceNoteDatabaseHelper.tableName} (createdAt)');
+        await db.execute('CREATE INDEX idx_voice_notes_user_id ON ${VoiceNoteDatabaseHelper.tableName} (user_id)');
+        await db.execute('CREATE INDEX idx_voice_notes_created_at ON ${VoiceNoteDatabaseHelper.tableName} (created_at)');
         await db.execute('CREATE INDEX idx_voice_notes_title ON ${VoiceNoteDatabaseHelper.tableName} (title)');
       }
       
@@ -332,6 +426,234 @@ class DatabaseHelper {
         await db.execute('CREATE INDEX idx_license_images_car_id ON $tableLicenseImages (car_id)');
         await db.execute('CREATE INDEX idx_license_images_user_id ON $tableLicenseImages (user_id)');
         await db.execute('CREATE INDEX idx_license_images_type ON $tableLicenseImages (license_type)');
+      }
+      
+      if (oldVersion < 9) {
+        // Version 9: Add car_id and trip_frequency to mileage_entries table
+        await db.execute('ALTER TABLE ${MileageDatabaseHelper.tableName} ADD COLUMN car_id TEXT');
+        await db.execute('ALTER TABLE ${MileageDatabaseHelper.tableName} ADD COLUMN trip_frequency TEXT DEFAULT "oneTime"');
+        
+        // Create indexes for new fields
+        await db.execute('CREATE INDEX idx_mileage_car_id ON ${MileageDatabaseHelper.tableName} (car_id)');
+        await db.execute('CREATE INDEX idx_mileage_trip_frequency ON ${MileageDatabaseHelper.tableName} (trip_frequency)');
+      }
+      
+      if (oldVersion < 10) {
+        // Version 10: Fix voice_notes table column names from camelCase to snake_case
+        // Check if the table exists and needs migration
+        final tables = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='${VoiceNoteDatabaseHelper.tableName}'"
+        );
+        
+        if (tables.isNotEmpty) {
+          // Check if old columns exist
+          final tableInfo = await db.rawQuery('PRAGMA table_info(${VoiceNoteDatabaseHelper.tableName})');
+          final columnNames = tableInfo.map((col) => col['name'] as String).toList();
+          
+          // If we have camelCase columns, we need to migrate
+          if (columnNames.contains('filePath') || columnNames.contains('createdAt')) {
+            // Create new table with correct column names
+            await db.execute('''
+              CREATE TABLE ${VoiceNoteDatabaseHelper.tableName}_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                file_path TEXT NOT NULL,
+                duration INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                user_id TEXT
+              )
+            ''');
+            
+            // Copy data from old table to new table, using the actual camelCase column names
+            await db.execute('''
+              INSERT INTO ${VoiceNoteDatabaseHelper.tableName}_new 
+                (id, title, description, file_path, duration, created_at, updated_at, user_id)
+              SELECT 
+                id, 
+                title, 
+                description, 
+                filePath as file_path,
+                duration,
+                createdAt as created_at,
+                updatedAt as updated_at,
+                userId as user_id
+              FROM ${VoiceNoteDatabaseHelper.tableName}
+            ''');
+            
+            // Drop old table
+            await db.execute('DROP TABLE ${VoiceNoteDatabaseHelper.tableName}');
+            
+            // Rename new table
+            await db.execute('ALTER TABLE ${VoiceNoteDatabaseHelper.tableName}_new RENAME TO ${VoiceNoteDatabaseHelper.tableName}');
+            
+            // Recreate indexes
+            await db.execute('CREATE INDEX idx_voice_notes_user_id ON ${VoiceNoteDatabaseHelper.tableName} (user_id)');
+            await db.execute('CREATE INDEX idx_voice_notes_created_at ON ${VoiceNoteDatabaseHelper.tableName} (created_at)');
+            await db.execute('CREATE INDEX idx_voice_notes_title ON ${VoiceNoteDatabaseHelper.tableName} (title)');
+          }
+        }
+      }
+      
+      if (oldVersion < 11) {
+        // Version 11: Force recreate voice_notes table with correct schema
+        try {
+          // Drop the old table completely
+          await db.execute('DROP TABLE IF EXISTS ${VoiceNoteDatabaseHelper.tableName}');
+          
+          // Create new table with correct column names
+          await db.execute(VoiceNoteDatabaseHelper.createTableQuery);
+          
+          // Create indexes
+          await db.execute('CREATE INDEX idx_voice_notes_user_id ON ${VoiceNoteDatabaseHelper.tableName} (user_id)');
+          await db.execute('CREATE INDEX idx_voice_notes_created_at ON ${VoiceNoteDatabaseHelper.tableName} (created_at)');
+          await db.execute('CREATE INDEX idx_voice_notes_title ON ${VoiceNoteDatabaseHelper.tableName} (title)');
+        } catch (e) {
+          print('Error recreating voice_notes table: $e');
+        }
+      }
+      
+      if (oldVersion < 12) {
+        // Version 12: Final fix for voice_notes table - ensure file_path column exists
+        try {
+          // Check if table exists and has correct columns
+          final tableInfo = await db.rawQuery('PRAGMA table_info(${VoiceNoteDatabaseHelper.tableName})');
+          final columnNames = tableInfo.map((col) => col['name'] as String).toList();
+          
+          // If file_path column doesn't exist, recreate the table
+          if (!columnNames.contains('file_path')) {
+            print('Recreating voice_notes table with correct schema...');
+            
+            // Drop the old table
+            await db.execute('DROP TABLE IF EXISTS ${VoiceNoteDatabaseHelper.tableName}');
+            
+            // Create new table with correct column names (snake_case)
+            await db.execute(VoiceNoteDatabaseHelper.createTableQuery);
+            
+            // Recreate indexes
+            try {
+              await db.execute('CREATE INDEX IF NOT EXISTS idx_voice_notes_user_id ON ${VoiceNoteDatabaseHelper.tableName} (user_id)');
+              await db.execute('CREATE INDEX IF NOT EXISTS idx_voice_notes_created_at ON ${VoiceNoteDatabaseHelper.tableName} (created_at)');
+              await db.execute('CREATE INDEX IF NOT EXISTS idx_voice_notes_title ON ${VoiceNoteDatabaseHelper.tableName} (title)');
+            } catch (indexError) {
+              print('Index creation warning: $indexError');
+            }
+            
+            print('Voice notes table recreated successfully');
+          }
+        } catch (e) {
+          print('Error fixing voice_notes table: $e');
+          // Try to create the table if it doesn't exist at all
+          try {
+            await db.execute(VoiceNoteDatabaseHelper.createTableQuery);
+          } catch (createError) {
+            print('Table creation error (may already exist): $createError');
+          }
+        }
+      }
+      
+      if (oldVersion < 13) {
+        // Version 13: Add OBD scans table
+        try {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS $tableOBDScans (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              car_id INTEGER NOT NULL,
+              scan_date INTEGER NOT NULL,
+              rpm REAL,
+              speed REAL,
+              coolant_temp REAL,
+              fuel_level REAL,
+              throttle_position REAL,
+              engine_load REAL,
+              error_codes TEXT,
+              notes TEXT,
+              created_at INTEGER NOT NULL,
+              FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
+            )
+          ''');
+          
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_obd_scans_car_id ON $tableOBDScans (car_id)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_obd_scans_scan_date ON $tableOBDScans (scan_date)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_obd_scans_created_at ON $tableOBDScans (created_at)');
+          
+          print('OBD scans table created successfully');
+        } catch (e) {
+          print('Error creating OBD scans table: $e');
+        }
+      }
+      
+      if (oldVersion < 14) {
+        // Version 14: Add Car Health Dashboard tables
+        try {
+          // Create expenses table
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS $tableExpenses (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              car_id INTEGER NOT NULL,
+              category TEXT NOT NULL,
+              amount REAL NOT NULL,
+              date INTEGER NOT NULL,
+              description TEXT,
+              receipt_image TEXT,
+              created_at INTEGER NOT NULL,
+              user_id TEXT NOT NULL,
+              FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
+            )
+          ''');
+          
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_expenses_car_id ON $tableExpenses (car_id)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_expenses_category ON $tableExpenses (category)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_expenses_date ON $tableExpenses (date)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_expenses_user_id ON $tableExpenses (user_id)');
+          
+          // Create trips table
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS $tableTrips (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              car_id INTEGER NOT NULL,
+              start_time INTEGER NOT NULL,
+              end_time INTEGER,
+              start_location TEXT,
+              end_location TEXT,
+              distance REAL,
+              trip_type TEXT,
+              purpose TEXT,
+              route_data TEXT,
+              created_at INTEGER NOT NULL,
+              user_id TEXT NOT NULL,
+              FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
+            )
+          ''');
+          
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_trips_car_id ON $tableTrips (car_id)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_trips_start_time ON $tableTrips (start_time)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_trips_trip_type ON $tableTrips (trip_type)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_trips_user_id ON $tableTrips (user_id)');
+          
+          // Create budgets table
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS $tableBudgets (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              car_id INTEGER NOT NULL,
+              category TEXT NOT NULL,
+              monthly_limit REAL NOT NULL,
+              alert_threshold REAL,
+              created_at INTEGER NOT NULL,
+              user_id TEXT NOT NULL,
+              FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
+            )
+          ''');
+          
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_car_id ON $tableBudgets (car_id)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_category ON $tableBudgets (category)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_user_id ON $tableBudgets (user_id)');
+          
+          print('Car Health Dashboard tables created successfully');
+        } catch (e) {
+          print('Error creating Car Health Dashboard tables: $e');
+        }
       }
     } catch (e) {
       throw DatabaseException('Failed to upgrade database: $e');
@@ -1288,6 +1610,393 @@ class DatabaseHelper {
       return await db.delete(tableLicenseImages, where: 'user_id = ?', whereArgs: [userId]);
     } catch (e) {
       throw DatabaseException('Failed to clear license images: $e');
+    }
+  }
+
+  // ==================== OBD SCANS METHODS ====================
+
+  /// Insert a new OBD scan
+  Future<int> insertOBDScan(Map<String, dynamic> obdScan) async {
+    try {
+      final db = await database;
+      return await db.insert(tableOBDScans, obdScan);
+    } catch (e) {
+      throw DatabaseException('Failed to insert OBD scan: $e');
+    }
+  }
+
+  /// Get all OBD scans for a specific car
+  Future<List<Map<String, dynamic>>> getOBDScansByCar(int carId) async {
+    try {
+      final db = await database;
+      return await db.query(
+        tableOBDScans,
+        where: 'car_id = ?',
+        whereArgs: [carId],
+        orderBy: 'scan_date DESC',
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to get OBD scans: $e');
+    }
+  }
+
+  /// Get all OBD scans
+  Future<List<Map<String, dynamic>>> getAllOBDScans() async {
+    try {
+      final db = await database;
+      return await db.query(
+        tableOBDScans,
+        orderBy: 'scan_date DESC',
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to get all OBD scans: $e');
+    }
+  }
+
+  /// Get a specific OBD scan by ID
+  Future<Map<String, dynamic>?> getOBDScanById(int id) async {
+    try {
+      final db = await database;
+      final results = await db.query(
+        tableOBDScans,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      return results.isNotEmpty ? results.first : null;
+    } catch (e) {
+      throw DatabaseException('Failed to get OBD scan: $e');
+    }
+  }
+
+  /// Update an existing OBD scan
+  Future<int> updateOBDScan(int id, Map<String, dynamic> obdScan) async {
+    try {
+      final db = await database;
+      return await db.update(
+        tableOBDScans,
+        obdScan,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to update OBD scan: $e');
+    }
+  }
+
+  /// Delete an OBD scan
+  Future<int> deleteOBDScan(int id) async {
+    try {
+      final db = await database;
+      return await db.delete(
+        tableOBDScans,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to delete OBD scan: $e');
+    }
+  }
+
+  /// Delete all OBD scans for a specific car
+  Future<int> deleteOBDScansByCar(int carId) async {
+    try {
+      final db = await database;
+      return await db.delete(
+        tableOBDScans,
+        where: 'car_id = ?',
+        whereArgs: [carId],
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to delete OBD scans: $e');
+    }
+  }
+
+  /// Get OBD scans count for a specific car
+  Future<int> getOBDScansCount(int carId) async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery(
+        'SELECT COUNT(*) FROM $tableOBDScans WHERE car_id = ?',
+        [carId]
+      );
+      return Sqflite.firstIntValue(result) ?? 0;
+    } catch (e) {
+      throw DatabaseException('Failed to get OBD scans count: $e');
+    }
+  }
+
+  /// Get latest OBD scan for a specific car
+  Future<Map<String, dynamic>?> getLatestOBDScan(int carId) async {
+    try {
+      final db = await database;
+      final results = await db.query(
+        tableOBDScans,
+        where: 'car_id = ?',
+        whereArgs: [carId],
+        orderBy: 'scan_date DESC',
+        limit: 1,
+      );
+      return results.isNotEmpty ? results.first : null;
+    } catch (e) {
+      throw DatabaseException('Failed to get latest OBD scan: $e');
+    }
+  }
+
+  /// Clear all OBD scans (use with caution)
+  Future<int> clearAllOBDScans() async {
+    try {
+      final db = await database;
+      return await db.delete(tableOBDScans);
+    } catch (e) {
+      throw DatabaseException('Failed to clear OBD scans: $e');
+    }
+  }
+
+  // ==================== EXPENSES METHODS ====================
+
+  /// Insert a new expense
+  Future<int> insertExpense(Map<String, dynamic> expense) async {
+    try {
+      final db = await database;
+      return await db.insert(tableExpenses, expense);
+    } catch (e) {
+      throw DatabaseException('Failed to insert expense: $e');
+    }
+  }
+
+  /// Get all expenses for a specific car
+  Future<List<Map<String, dynamic>>> getExpensesByCar(int carId) async {
+    try {
+      final db = await database;
+      return await db.query(
+        tableExpenses,
+        where: 'car_id = ?',
+        whereArgs: [carId],
+        orderBy: 'date DESC',
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to get expenses: $e');
+    }
+  }
+
+  /// Get all expenses
+  Future<List<Map<String, dynamic>>> getAllExpenses() async {
+    try {
+      final db = await database;
+      return await db.query(tableExpenses, orderBy: 'date DESC');
+    } catch (e) {
+      throw DatabaseException('Failed to get all expenses: $e');
+    }
+  }
+
+  /// Get expenses by category
+  Future<List<Map<String, dynamic>>> getExpensesByCategory(int carId, String category) async {
+    try {
+      final db = await database;
+      return await db.query(
+        tableExpenses,
+        where: 'car_id = ? AND category = ?',
+        whereArgs: [carId, category],
+        orderBy: 'date DESC',
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to get expenses by category: $e');
+    }
+  }
+
+  /// Get expenses in date range
+  Future<List<Map<String, dynamic>>> getExpensesInRange(int carId, int startDate, int endDate) async {
+    try {
+      final db = await database;
+      return await db.query(
+        tableExpenses,
+        where: 'car_id = ? AND date >= ? AND date <= ?',
+        whereArgs: [carId, startDate, endDate],
+        orderBy: 'date DESC',
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to get expenses in range: $e');
+    }
+  }
+
+  /// Update an expense
+  Future<int> updateExpense(int id, Map<String, dynamic> expense) async {
+    try {
+      final db = await database;
+      return await db.update(tableExpenses, expense, where: 'id = ?', whereArgs: [id]);
+    } catch (e) {
+      throw DatabaseException('Failed to update expense: $e');
+    }
+  }
+
+  /// Delete an expense
+  Future<int> deleteExpense(int id) async {
+    try {
+      final db = await database;
+      return await db.delete(tableExpenses, where: 'id = ?', whereArgs: [id]);
+    } catch (e) {
+      throw DatabaseException('Failed to delete expense: $e');
+    }
+  }
+
+  /// Get total expenses for a car
+  Future<double> getTotalExpenses(int carId) async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery(
+        'SELECT SUM(amount) as total FROM $tableExpenses WHERE car_id = ?',
+        [carId]
+      );
+      return (result.first['total'] as num?)?.toDouble() ?? 0.0;
+    } catch (e) {
+      throw DatabaseException('Failed to get total expenses: $e');
+    }
+  }
+
+  // ==================== TRIPS METHODS ====================
+
+  /// Insert a new trip
+  Future<int> insertTrip(Map<String, dynamic> trip) async {
+    try {
+      final db = await database;
+      return await db.insert(tableTrips, trip);
+    } catch (e) {
+      throw DatabaseException('Failed to insert trip: $e');
+    }
+  }
+
+  /// Get all trips for a specific car
+  Future<List<Map<String, dynamic>>> getTripsByCar(int carId) async {
+    try {
+      final db = await database;
+      return await db.query(
+        tableTrips,
+        where: 'car_id = ?',
+        whereArgs: [carId],
+        orderBy: 'start_time DESC',
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to get trips: $e');
+    }
+  }
+
+  /// Get all trips
+  Future<List<Map<String, dynamic>>> getAllTrips() async {
+    try {
+      final db = await database;
+      return await db.query(tableTrips, orderBy: 'start_time DESC');
+    } catch (e) {
+      throw DatabaseException('Failed to get all trips: $e');
+    }
+  }
+
+  /// Get trips by type
+  Future<List<Map<String, dynamic>>> getTripsByType(int carId, String tripType) async {
+    try {
+      final db = await database;
+      return await db.query(
+        tableTrips,
+        where: 'car_id = ? AND trip_type = ?',
+        whereArgs: [carId, tripType],
+        orderBy: 'start_time DESC',
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to get trips by type: $e');
+    }
+  }
+
+  /// Update a trip
+  Future<int> updateTrip(int id, Map<String, dynamic> trip) async {
+    try {
+      final db = await database;
+      return await db.update(tableTrips, trip, where: 'id = ?', whereArgs: [id]);
+    } catch (e) {
+      throw DatabaseException('Failed to update trip: $e');
+    }
+  }
+
+  /// Delete a trip
+  Future<int> deleteTrip(int id) async {
+    try {
+      final db = await database;
+      return await db.delete(tableTrips, where: 'id = ?', whereArgs: [id]);
+    } catch (e) {
+      throw DatabaseException('Failed to delete trip: $e');
+    }
+  }
+
+  /// Get total distance for a car
+  Future<double> getTotalDistance(int carId) async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery(
+        'SELECT SUM(distance) as total FROM $tableTrips WHERE car_id = ?',
+        [carId]
+      );
+      return (result.first['total'] as num?)?.toDouble() ?? 0.0;
+    } catch (e) {
+      throw DatabaseException('Failed to get total distance: $e');
+    }
+  }
+
+  // ==================== BUDGETS METHODS ====================
+
+  /// Insert a new budget
+  Future<int> insertBudget(Map<String, dynamic> budget) async {
+    try {
+      final db = await database;
+      return await db.insert(tableBudgets, budget);
+    } catch (e) {
+      throw DatabaseException('Failed to insert budget: $e');
+    }
+  }
+
+  /// Get all budgets for a specific car
+  Future<List<Map<String, dynamic>>> getBudgetsByCar(int carId) async {
+    try {
+      final db = await database;
+      return await db.query(
+        tableBudgets,
+        where: 'car_id = ?',
+        whereArgs: [carId],
+      );
+    } catch (e) {
+      throw DatabaseException('Failed to get budgets: $e');
+    }
+  }
+
+  /// Get budget by category
+  Future<Map<String, dynamic>?> getBudgetByCategory(int carId, String category) async {
+    try {
+      final db = await database;
+      final results = await db.query(
+        tableBudgets,
+        where: 'car_id = ? AND category = ?',
+        whereArgs: [carId, category],
+      );
+      return results.isNotEmpty ? results.first : null;
+    } catch (e) {
+      throw DatabaseException('Failed to get budget by category: $e');
+    }
+  }
+
+  /// Update a budget
+  Future<int> updateBudget(int id, Map<String, dynamic> budget) async {
+    try {
+      final db = await database;
+      return await db.update(tableBudgets, budget, where: 'id = ?', whereArgs: [id]);
+    } catch (e) {
+      throw DatabaseException('Failed to update budget: $e');
+    }
+  }
+
+  /// Delete a budget
+  Future<int> deleteBudget(int id) async {
+    try {
+      final db = await database;
+      return await db.delete(tableBudgets, where: 'id = ?', whereArgs: [id]);
+    } catch (e) {
+      throw DatabaseException('Failed to delete budget: $e');
     }
   }
 }
