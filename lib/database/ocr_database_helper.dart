@@ -12,7 +12,7 @@ class OcrDatabaseHelper {
       imagePath TEXT,
       source TEXT NOT NULL DEFAULT 'mlkit',
       timestamp INTEGER NOT NULL,
-      userId TEXT
+      user_id TEXT
     )
   ''';
 
@@ -41,7 +41,7 @@ class OcrDatabaseHelper {
   static Future<List<ScanModel>> getScansByUser(Database db, String userId) async {
     final List<Map<String, dynamic>> maps = await db.query(
       tableName,
-      where: 'userId = ?',
+      where: 'user_id = ?',
       whereArgs: [userId],
       orderBy: 'timestamp DESC',
     );
@@ -89,7 +89,7 @@ class OcrDatabaseHelper {
   static Future<int> deleteUserScans(Database db, String userId) async {
     return await db.delete(
       tableName,
-      where: 'userId = ?',
+      where: 'user_id = ?',
       whereArgs: [userId],
     );
   }
@@ -117,7 +117,7 @@ class OcrDatabaseHelper {
   // Get scan count for user
   static Future<int> getUserScanCount(Database db, String userId) async {
     final result = await db.rawQuery(
-      'SELECT COUNT(*) FROM $tableName WHERE userId = ?',
+      'SELECT COUNT(*) FROM $tableName WHERE user_id = ?',
       [userId],
     );
     return Sqflite.firstIntValue(result) ?? 0;

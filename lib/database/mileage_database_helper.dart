@@ -12,9 +12,12 @@ class MileageDatabaseHelper {
       cost REAL NOT NULL,
       date TEXT NOT NULL,
       notes TEXT,
-      userId TEXT,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
+      entry_name TEXT,
+      user_id TEXT,
+      car_id TEXT,
+      trip_frequency TEXT DEFAULT 'oneTime',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     )
   ''';
 
@@ -34,14 +37,14 @@ class MileageDatabaseHelper {
     if (userId != null) {
       maps = await db.query(
         tableName,
-        where: 'userId = ? OR userId IS NULL',
+        where: 'user_id = ? OR user_id IS NULL',
         whereArgs: [userId],
-        orderBy: 'date DESC, createdAt DESC',
+        orderBy: 'date DESC, created_at DESC',
       );
     } else {
       maps = await db.query(
         tableName,
-        orderBy: 'date DESC, createdAt DESC',
+        orderBy: 'date DESC, created_at DESC',
       );
     }
 
@@ -87,7 +90,7 @@ class MileageDatabaseHelper {
     if (userId != null) {
       return await db.delete(
         tableName,
-        where: 'userId = ?',
+        where: 'user_id = ?',
         whereArgs: [userId],
       );
     } else {
@@ -107,16 +110,16 @@ class MileageDatabaseHelper {
     if (userId != null) {
       maps = await db.query(
         tableName,
-        where: '(userId = ? OR userId IS NULL) AND date BETWEEN ? AND ?',
+        where: '(user_id = ? OR user_id IS NULL) AND date BETWEEN ? AND ?',
         whereArgs: [userId, startDate.toIso8601String(), endDate.toIso8601String()],
-        orderBy: 'date DESC, createdAt DESC',
+        orderBy: 'date DESC, created_at DESC',
       );
     } else {
       maps = await db.query(
         tableName,
         where: 'date BETWEEN ? AND ?',
         whereArgs: [startDate.toIso8601String(), endDate.toIso8601String()],
-        orderBy: 'date DESC, createdAt DESC',
+        orderBy: 'date DESC, created_at DESC',
       );
     }
 
@@ -138,7 +141,7 @@ class MileageDatabaseHelper {
           MAX(mileage) as maxMileage,
           MIN(mileage) as minMileage
         FROM $tableName 
-        WHERE userId = ? OR userId IS NULL
+        WHERE user_id = ? OR user_id IS NULL
       ''', [userId]);
     } else {
       result = await db.rawQuery('''

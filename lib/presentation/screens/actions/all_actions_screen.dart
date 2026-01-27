@@ -7,11 +7,11 @@ import '../health/car_health_dashboard_screen.dart';
 import '../services/voice_notes_screen.dart';
 import '../services/mileage_track_screen.dart';
 import '../services/reminders_screen.dart';
-import '../obd/obd_screen.dart';
 import '../services/services_screen.dart';
 import '../services/cars_screen.dart';
 import '../services/maintenance_screen.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../services/obd_screen.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class AllActionsScreen extends StatelessWidget {
   const AllActionsScreen({super.key});
@@ -30,8 +30,9 @@ class AllActionsScreen extends StatelessWidget {
       {'label': 'Service Reminders', 'subtitle': 'Maintenance Logs & Reminders', 'icon': Icons.schedule, 'color': const Color(0xFFF59E0B)},
     ];
 
-    return Scaffold(
-      body: Column(
+    return ScreenWithNavBar(
+      child: Scaffold(
+        body: Column(
         children: [
           // Header with gradient background
           _buildHeader(context),
@@ -63,7 +64,7 @@ class AllActionsScreen extends StatelessWidget {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavBar(currentIndex: 0, onTap: (i) {}),
+    ),
     );
   }
 
@@ -103,14 +104,16 @@ class AllActionsScreen extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   const Text(
-                    'All Actions',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
+                          'All Actions',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontFamily: 'Orbitron',
+
+                          ),
+                        ),
                 ],
               ),
               
@@ -260,7 +263,7 @@ class AllActionsScreen extends StatelessWidget {
       case 'obd-ii diagnostics':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const OBDScreen()),
+          MaterialPageRoute(builder: (context) => const OBDDashboardScreen()),
         );
         break;
       case 'service centers':

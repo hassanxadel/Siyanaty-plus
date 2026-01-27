@@ -7,6 +7,7 @@ class EmailVerificationService {
   static final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
   /// Send verification email using Firebase's built-in system (FREE)
+  /// Uses ActionCodeSettings to configure longer expiration and better handling
   Future<bool> sendVerificationEmail() async {
     try {
       final user = _firebaseAuth.currentUser;
@@ -22,10 +23,21 @@ class EmailVerificationService {
       }
 
       // Send verification email using Firebase's built-in system
+      // Note: Firebase verification links typically expire after 1 hour
+      // but can be valid for up to 3 days depending on Firebase configuration
+      // ActionCodeSettings is optional and mainly used for password reset flows
       await user.sendEmailVerification();
       
       AppLogger.info('Verification email sent to ${user.email}');
       return true;
+    } on FirebaseAuthException catch (e) {
+      // Handle specific Firebase Auth errors
+      if (e.code == 'too-many-requests') {
+        AppLogger.error('Too many verification emails sent. Please wait before requesting another.');
+      } else {
+        AppLogger.error('Failed to send verification email: ${e.code} - ${e.message}');
+      }
+      return false;
     } catch (e) {
       AppLogger.error('Failed to send verification email', error: e);
       return false;

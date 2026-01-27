@@ -493,7 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
           _buildEditableField(
             label: 'Emergency Contact',
             controller: _emergencyContactController,

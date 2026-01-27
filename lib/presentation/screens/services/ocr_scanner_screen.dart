@@ -6,7 +6,7 @@ import '../../../services/ocr_service.dart';
 import '../../../services/car_service.dart';
 import 'ocr_review_screen.dart';
 import 'ocr_history_screen.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class OcrScannerScreen extends StatefulWidget {
   const OcrScannerScreen({super.key});
@@ -81,9 +81,11 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _showCamera && _isCameraInitialized
-          ? _buildCameraPreview()
+    return ScreenWithNavBar(
+      showNavBar: !_showCamera,
+      child: Scaffold(
+        body: _showCamera && _isCameraInitialized
+            ? _buildCameraPreview()
           : Column(
               children: [
                 _buildHeader(context),
@@ -92,7 +94,7 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
                 ),
               ],
             ),
-      bottomNavigationBar: _showCamera ? null : BottomNavBar(currentIndex: 0, onTap: (i) {}),
+      ),
     );
   }
 
@@ -131,14 +133,15 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
                   ),
                   const SizedBox(width: 16),
                   const Text(
-                    'OCR Scanner',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
+                          'OCR Scanner',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontFamily: 'Orbitron',
+                          ),
+                        ),
                   const Spacer(),
                   IconButton(
                     onPressed: () {
@@ -445,7 +448,7 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
                     });
                   },
                   icon: const Icon(
-                    Icons.arrow_back,
+                    Icons.arrow_back_ios,
                     color: Colors.white,
                     size: 30,
                   ),
@@ -588,7 +591,7 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
                       color: isEnabled ? Colors.white : Colors.grey[400],
                     ),
                   ),
-                  const SizedBox(height: 4),
+                    const SizedBox(height: 4),
                   Text(
                     subtitle,
                     style: TextStyle(
@@ -770,7 +773,6 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
 
   Widget _buildCarDropdown() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -783,62 +785,322 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
+            color: AppTheme.primaryGreen.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedCarId,
-          hint: const Row(
-            children: [
-              Icon(Icons.directions_car, color: Colors.white70, size: 20),
-              SizedBox(width: 12),
-              Text(
-                'Select Car',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontFamily: 'Orbitron',
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          isExpanded: true,
-          dropdownColor: AppTheme.darkAccentGreen,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-          style: const TextStyle(
-            color: Colors.white,
-            fontFamily: 'Orbitron',
-            fontSize: 14,
-          ),
-                        items: _cars.map((car) {
-                          return DropdownMenuItem<String>(
-                            value: car.id.toString(),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.directions_car, color: Colors.white70, size: 20),
-                                const SizedBox(width: 12),
-                                Text(
-                                  '${car.brand} ${car.model} (${car.year})',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontFamily: 'Orbitron',
-                                  ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () => _showCarSelectionDialog(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: _selectedCarId != null && _cars.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: _cars
+                                      .firstWhere((car) =>
+                                          car.id.toString() == _selectedCarId)
+                                      .imagePath !=
+                                  null
+                              ? Image.file(
+                                  File(_cars
+                                      .firstWhere((car) =>
+                                          car.id.toString() == _selectedCarId)
+                                      .imagePath!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      Icons.directions_car,
+                                      color: Colors.white,
+                                      size: 24,
+                                    );
+                                  },
+                                )
+                              : const Icon(
+                                  Icons.directions_car,
+                                  color: Colors.white,
+                                  size: 24,
                                 ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-          onChanged: (String? newValue) {
-            setState(() {
-              _selectedCarId = newValue;
-            });
-          },
+                        )
+                      : const Icon(
+                          Icons.directions_car,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedCarId != null && _cars.isNotEmpty
+                            ? '${_cars.firstWhere((car) => car.id.toString() == _selectedCarId).brand} ${_cars.firstWhere((car) => car.id.toString() == _selectedCarId).model}'
+                            : 'Select Car',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                        const SizedBox(height: 4),
+                      Text(
+                        _selectedCarId != null && _cars.isNotEmpty
+                            ? 'Year: ${_cars.firstWhere((car) => car.id.toString() == _selectedCarId).year}'
+                            : 'Tap to choose vehicle',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  void _showCarSelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.directions_car,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Select Vehicle',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Car list
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.6,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: _cars.length,
+                  itemBuilder: (context, index) {
+                    final car = _cars[index];
+                    final isSelected = _selectedCarId == car.id.toString();
+                    
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedCarId = car.id.toString();
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.primaryGreen,
+                                    AppTheme.darkAccentGreen,
+                                  ],
+                                )
+                              : LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.darkAccentGreen.withOpacity(0.5),
+                                    AppTheme.backgroundGreen.withOpacity(0.5),
+                                  ],
+                                ),
+                          borderRadius: BorderRadius.circular(15),
+                          border: isSelected
+                              ? Border.all(color: Colors.white, width: 2)
+                              : null,
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: AppTheme.primaryGreen.withOpacity(0.4),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.white.withOpacity(0.2)
+                                    : AppTheme.primaryGreen.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: car.imagePath != null
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.file(
+                                        File(car.imagePath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Icon(
+                                            Icons.directions_car,
+                                            color: Colors.white,
+                                            size: isSelected ? 28 : 24,
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.directions_car,
+                                      color: Colors.white,
+                                      size: isSelected ? 28 : 24,
+                                    ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${car.brand} ${car.model}',
+                                    style: TextStyle(
+                                      fontFamily: 'Orbitron',
+                                      fontSize: isSelected ? 18 : 16,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Year: ${car.year}',
+                                    style: TextStyle(
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 13,
+                                      color: Colors.white.withOpacity(0.8),
+                                    ),
+                                  ),
+                                  if (car.licensePlate != null &&
+                                      car.licensePlate!.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'License: ${car.licensePlate}',
+                                      style: TextStyle(
+                                        fontFamily: 'Orbitron',
+                                        fontSize: 12,
+                                        color: Colors.white.withOpacity(0.6),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: AppTheme.primaryGreen,
+                                  size: 20,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+                const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
     );
   }
 

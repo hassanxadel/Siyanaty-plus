@@ -58,6 +58,7 @@ dependencies:
   image_picker: ^1.0.7
   file_picker: ^8.0.0+1
   geolocator: ^12.0.0
+  connectivity_plus: ^6.0.5
   
   # OCR and Camera
   google_ml_kit: ^0.18.0
@@ -77,6 +78,7 @@ dependencies:
   
   # OBD-II Bluetooth Communication
   flutter_blue_plus: ^1.31.15
+  # flutter_bluetooth_serial: ^0.4.0  # Temporarily disabled - incompatible with compileSdkVersion 35
   
   # Car Health Dashboard
   fl_chart: ^0.66.0
@@ -96,6 +98,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  integration_test:
+    sdk: flutter
+  mockito: ^5.4.4
+  build_runner: ^2.4.8
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../shared/constants/app_theme.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../../../shared/utils/responsive_utils.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 import '../../../services/car_service.dart';
 import '../../../services/reminder_service.dart';
 import '../../../models/backup_car.dart';
@@ -130,17 +131,140 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Car'),
-        content: Text('Are you sure you want to delete ${car.year} ${car.brand} ${car.model}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Column(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.delete_outline,
+                color: Colors.red,
+                size: 40,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Delete Car',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete\n${car.brand} ${car.model} ${car.year}?',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).brightness == Brightness.dark 
+                ? AppTheme.lightBackground.withOpacity(0.8) 
+                : Colors.black87,
+            fontFamily: 'Orbitron',
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+        ),
+        actions: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Cancel button with gradient
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.darkAccentGreen,
+                        AppTheme.backgroundGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Delete button with red gradient
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFD32F2F), // Dark red
+                        Color(0xFFF44336), // Red
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.red.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Delete',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -184,7 +308,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
 
   Widget _buildHeaderWithBackground() {
     return Container(
-      height: 240,
+      height: 220,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -311,9 +435,10 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
-      body: Column(
+    return ScreenWithNavBar(
+      child: Scaffold(
+        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        body: Column(
         children: [
           // Header with gradient background
           _buildHeaderWithBackground(),
@@ -329,10 +454,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 0,
-        onTap: (int i) {},
-      ),
+    ),
     );
   }
 
@@ -383,7 +505,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                     color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
                   ),
                 ),
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
               ],
             ),
           ),
@@ -497,7 +619,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                                   child: const Icon(
                                     IconData(0xe800, fontFamily: 'MyFlutterApp'),
                                     color: AppTheme.primaryGreen,
-                                    size: 30,
+                                    size: 40,
                                   ),
                                 );
                               },
@@ -507,7 +629,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                        child: const Icon(
                          IconData(0xe800, fontFamily: 'MyFlutterApp'),
                          color: AppTheme.primaryGreen,
-                         size: 30,
+                         size: 40,
                               ),
                        ),
                      ),
@@ -518,13 +640,15 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${car.year} ${car.brand} ${car.model}',
+                          '${car.brand} ${car.model} ${car.year}',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                             fontFamily: 'Orbitron',
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -534,22 +658,28 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                             color: Colors.white70,
                           ),
                         ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryGreen.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppTheme.primaryGreen.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            car.licensePlate,
+                            style: const TextStyle(
+                              color: AppTheme.primaryGreen,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                        ),
                       ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryGreen.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      car.licensePlate,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
                     ),
                   ),
                 ],
@@ -1025,30 +1155,34 @@ class CarDetailsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24))),
       elevation: 20,
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 700),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1A362A), // Dark green
-              Color(0xFF2E4032), // Slightly lighter dark green
-            ],
+      child: SingleChildScrollView(
+        child: Container(
+          padding: EdgeInsets.all(context.r(20)),
+          constraints: BoxConstraints(
+            maxWidth: context.r(480),
+            maxHeight: context.screenHeight * 0.95,
           ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: AppTheme.primaryGreen.withOpacity(0.3),
-            width: 1,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF1A362A), // Dark green
+                Color(0xFF2E4032), // Slightly lighter dark green
+              ],
+            ),
+            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24)),
+            border: Border.all(
+              color: AppTheme.primaryGreen.withOpacity(0.3),
+              width: 1,
+            ),
           ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Header with close button
             Row(
               children: [
@@ -1056,16 +1190,31 @@ class CarDetailsDialog extends StatelessWidget {
                   child: Row(
                     children: [
                       Container(
-                        width: 50,
+                        width: 80,
                         height: 50,
                         decoration: BoxDecoration(
                           color: AppTheme.primaryGreen.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: const Icon(
-                          IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                          color: AppTheme.primaryGreen,
-                          size: 24,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: car.imagePath != null && car.imagePath!.isNotEmpty
+                              ? Image.file(
+                                  File(car.imagePath!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                      color: AppTheme.primaryGreen,
+                                      size: 24,
+                                    );
+                                  },
+                                )
+                              : const Icon(
+                                  IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                  color: AppTheme.primaryGreen,
+                                  size: 24,
+                                ),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -1074,30 +1223,16 @@ class CarDetailsDialog extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${car.year} ${car.brand} ${car.model}',
+                               '${car.brand} ${car.model} ${car.year}',
                               style: const TextStyle(
-                                fontSize: 20,
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Orbitron',
                                 color: Colors.white,
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryGreen.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                car.licensePlate,
-                                style: const TextStyle(
-                                  color: AppTheme.primaryGreen,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
+
                           ],
                         ),
                       ),
@@ -1190,9 +1325,10 @@ class CarDetailsDialog extends StatelessWidget {
               ],
             ),
           ],
-        ),
-      ),
-    );
+        ), // Column
+      ), // Container
+      ), // SingleChildScrollView
+    ); // Dialog
   }
 
   Widget _buildModernDetailRow(String label, String value, IconData icon, Color color) {
@@ -1226,7 +1362,7 @@ class CarDetailsDialog extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 2),
+                    const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
@@ -1409,7 +1545,7 @@ class _EditCarFormState extends State<EditCarForm> {
                 Expanded(child: _field(label: 'Mileage (optional)', initialValue: mileage, keyboard: TextInputType.number, onChanged: (v) => mileage = v)),
               ],
             ),
-            const SizedBox(height: 12),
+                  const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(child: _field(label: 'Color (optional)', initialValue: color, onChanged: (v) => color = v)),
@@ -1715,7 +1851,7 @@ class _AddCarFormState extends State<AddCarForm> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
                 const Text('Add New Car', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18)),
                 const SizedBox(height: 8),
                 Text('* Required fields', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
@@ -2031,7 +2167,7 @@ class _AddCarFormState extends State<AddCarForm> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
               ],
             ),
           ),
@@ -2085,7 +2221,7 @@ class _AddCarFormState extends State<AddCarForm> {
           ),
         ),
         if (hasError) ...[
-          const SizedBox(height: 4),
+            const SizedBox(height: 4),
           Text(
             errorText,
             style: const TextStyle(

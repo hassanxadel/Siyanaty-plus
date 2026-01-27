@@ -8,10 +8,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final bool skipInitialEmail;
+  final VoidCallback? onVerificationComplete;
   
   const EmailVerificationScreen({
     super.key,
     this.skipInitialEmail = false,
+    this.onVerificationComplete,
   });
 
   @override
@@ -28,6 +30,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   String? _successMessage;
   int _resendCountdown = 0;
   Timer? _countdownTimer;
+  Timer? _verificationPollTimer; // Timer for automatic verification checking
   
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -62,18 +65,60 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       });
     }
     
-    // Removed automatic polling to avoid Firebase plugin casting errors
-    // Users will manually check verification status
+    // Start automatic polling to check verification status
+    // Poll every 5 seconds to detect when user clicks verification link
+    _startVerificationPolling();
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _verificationPollTimer?.cancel();
     _fadeController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendVerificationEmail() async {
+  /// Start automatic polling to check if email is verified
+  void _startVerificationPolling() {
+    _verificationPollTimer?.cancel();
+    
+    // Poll every 5 seconds to check verification status
+    _verificationPollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      // Only check if not already checking and user is still not verified
+      if (!_isChecking) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null && !user.emailVerified) {
+          // Silently check verification status
+          try {
+            await user.reload();
+            final refreshedUser = FirebaseAuth.instance.currentUser;
+            if (refreshedUser?.emailVerified ?? false) {
+              timer.cancel();
+              if (mounted) {
+                _onVerificationSuccess();
+              }
+            }
+          } catch (e) {
+            // Silently ignore polling errors
+            AppLogger.warning('Polling check warning (ignored)', error: e);
+          }
+        } else if (user?.emailVerified ?? false) {
+          // Already verified, stop polling
+          timer.cancel();
+          if (mounted) {
+            _onVerificationSuccess();
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> _sendVerificationEmail({bool showErrors = false}) async {
     setState(() {
       _errorMessage = null;
       _successMessage = null;
@@ -86,7 +131,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
         _successMessage = 'Verification email sent! Check your inbox.';
       });
       _startResendCountdown();
-    } else if (mounted) {
+    } else if (mounted && showErrors) {
+      // Only show errors if explicitly requested (e.g., from resend button)
       setState(() {
         _errorMessage = 'Failed to send verification email. Please try again.';
       });
@@ -94,10 +140,12 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   }
 
   void _startResendCountdown() {
+    // Reduced countdown from 60 to 30 seconds for faster resends
     setState(() {
-      _resendCountdown = 60;
+      _resendCountdown = 30;
     });
     
+    _countdownTimer?.cancel(); // Cancel any existing timer
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
@@ -123,19 +171,47 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       _successMessage = null;
     });
 
-    final success = await _verificationService.resendVerificationEmail();
-    
-    if (success && mounted) {
-      setState(() {
-        _successMessage = 'Verification email resent!';
-        _isResending = false;
-      });
-      _startResendCountdown();
-    } else if (mounted) {
-      setState(() {
-        _errorMessage = 'Failed to resend email. Please try again.';
-        _isResending = false;
-      });
+    try {
+      // Resend verification email - show errors if it fails
+      final success = await _verificationService.resendVerificationEmail();
+      
+      if (success && mounted) {
+        setState(() {
+          _successMessage = 'Verification email resent! Check your inbox.';
+          _isResending = false;
+        });
+        _startResendCountdown();
+        HapticFeedback.lightImpact();
+      } else if (mounted) {
+        // Provide helpful error message
+        setState(() {
+          _errorMessage = 'Unable to resend email. This may be due to rate limiting. Please wait a moment and try again.';
+          _isResending = false;
+        });
+      }
+    } catch (e) {
+      AppLogger.error('Error in _resendEmail', error: e);
+      
+      // Check for specific Firebase Auth errors
+      String errorMsg = 'Unable to resend email. ';
+      final errorString = e.toString().toLowerCase();
+      
+      if (errorString.contains('too-many-requests') || 
+          errorString.contains('too_many_requests')) {
+        errorMsg += 'Please wait 1-2 minutes before requesting another email.';
+      } else if (errorString.contains('network') || 
+                 errorString.contains('connection')) {
+        errorMsg += 'Please check your internet connection and try again.';
+      } else {
+        errorMsg += 'Please try again in a moment.';
+      }
+      
+      if (mounted) {
+        setState(() {
+          _errorMessage = errorMsg;
+          _isResending = false;
+        });
+      }
     }
   }
 
@@ -149,11 +225,41 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     });
 
     try {
-      final isVerified = await _verificationService.isEmailVerified();
+      // Get current user
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Session expired. Please log in again.';
+            _isChecking = false;
+          });
+        }
+        return;
+      }
+
+      // Force token refresh to get latest verification status
+      try {
+        await user.getIdToken(true); // Force refresh
+      } catch (e) {
+        AppLogger.warning('Token refresh warning', error: e);
+      }
+
+      // Reload user to check verification status
+      try {
+        await user.reload();
+      } catch (reloadError) {
+        // Ignore reload errors (Firebase plugin issue)
+        AppLogger.warning('User reload warning (ignored)', error: reloadError);
+      }
+
+      // Get refreshed user
+      final refreshedUser = FirebaseAuth.instance.currentUser;
+      final isVerified = refreshedUser?.emailVerified ?? false;
       
       if (!mounted) return;
       
       if (isVerified) {
+        AppLogger.info('Email verified successfully!');
         _onVerificationSuccess();
       } else {
         setState(() {
@@ -177,8 +283,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     AppLogger.info('Email verification successful');
     
     if (mounted) {
-      // Pop this screen and let the app continue to PIN setup or home
-      Navigator.of(context).pop(true);
+      // Call the callback to trigger re-initialization in main.dart
+      // This is safer than trying to pop when the screen is returned directly
+      widget.onVerificationComplete?.call();
     }
   }
 
@@ -277,7 +384,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                   
                   // Instructions
                   Text(
-                    'Click the link in the email to verify your account.\nThis screen will automatically update when verified.',
+                    'Click the link in the email to verify your account.\nThe verification link is valid for up to 3 days.\nThis screen will automatically detect when you verify.',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.white.withOpacity(0.7),

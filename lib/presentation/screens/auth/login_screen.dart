@@ -7,6 +7,7 @@ import '../security/mfa_verification_screen.dart';
 import '../../providers/auth_provider.dart';
 import 'forgot_password_screen.dart';
 import 'create_account_screen.dart';
+import '../../../shared/utils/responsive_utils.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onAuthenticationComplete;
@@ -24,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   final AuthenticationManager _authManager = AuthenticationManager();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
@@ -71,47 +72,55 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     _slideController.dispose();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.backgroundGreen,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: FadeTransition(
-                opacity: _fadeAnimation,
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 0),
+              child: Form(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 40),
-                    _buildLogo(),
-                    const SizedBox(height: 40),
-                    _buildTitle(),
-                    const SizedBox(height: 8),
-                    _buildSubtitle(),
-                    const SizedBox(height: 40),
+                    // Logo at top
+                    SizedBox(
+                      height: 100,
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 20, top: 22),
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ),
+                    _buildHeader(),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 40)),
                     _buildEmailField(),
-                    const SizedBox(height: 20),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 20)),
                     _buildPasswordField(),
-                    const SizedBox(height: 8),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 8)),
                     _buildForgotPasswordLink(),
                     if (_errorMessage != null) ...[
-                      const SizedBox(height: 16),
+                      SizedBox(height: ResponsiveUtils.spacing(context, 16)),
                       _buildErrorMessage(),
                     ],
-                    const SizedBox(height: 32),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 32)),
                     _buildSignInButton(),
-                    const SizedBox(height: 24),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 24)),
                     _buildOrDivider(),
-                    const SizedBox(height: 24),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 24)),
                     _buildGoogleSignInButton(),
-                    const SizedBox(height: 32),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 32)),
                     _buildNewUserSection(),
-                    const SizedBox(height: 24),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 24)),
                   ],
                 ),
               ),
@@ -122,42 +131,84 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildLogo() {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: SizedBox(
-        height: 60,
-        width: 180,
-        child: Image.asset(
-          'assets/images/logo.png',
-          fit: BoxFit.contain,
+  Widget _buildHeader() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppTheme.lightBackground, AppTheme.secondaryGreen],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.lightBackground.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(2, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.person_rounded,
+                color: AppTheme.backgroundGreen,
+                size: 28,
+              ),
+            ),
+            SizedBox(width: ResponsiveUtils.spacing(context, 8)),
+            const Expanded(
+              child: Text(
+                'Sign in to Siyanaty+',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.lightBackground,
+                  fontFamily: 'Orbitron',
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildTitle() {
-    return const Text(
-      'Sign in to Siyana+',
-      style: TextStyle(
-        fontSize: 28,
-        fontWeight: FontWeight.bold,
-        color: AppTheme.lightBackground,
-        fontFamily: 'Orbitron',
-      ),
-      textAlign: TextAlign.left,
-    );
-  }
-
-  Widget _buildSubtitle() {
-    return const Text(
-      'Your smart car maintenance companion',
-      style: TextStyle(
-        fontSize: 16,
-        color: AppTheme.lightBackground,
-        fontFamily: 'Orbitron',
-      ),
-      textAlign: TextAlign.left,
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.lightBackground.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppTheme.lightBackground.withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.stars_rounded,
+                color: AppTheme.lightBackground,
+                size: 20,
+              ),
+              SizedBox(height: ResponsiveUtils.spacing(context, 8)),
+              Expanded(
+                child: Text(
+                  'Your smart car maintenance companion',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.lightBackground.withOpacity(0.9),
+                    fontFamily: 'Orbitron',
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -165,19 +216,19 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Email address',
-          style: TextStyle(
+          style: context.responsiveTextStyle(
             fontSize: 16,
             color: AppTheme.lightBackground,
             fontFamily: 'Orbitron',
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: context.r(8)),
         Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(16)),
             border: Border.all(
               color: AppTheme.lightBackground.withOpacity(0.3),
               width: 1.5,
@@ -187,20 +238,24 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           child: TextFormField(
         controller: _emailController,
         keyboardType: TextInputType.emailAddress,
-        style: const TextStyle(
-          color: AppTheme.lightBackground,
+        style: context.responsiveTextStyle(
           fontSize: 16,
+          color: AppTheme.lightBackground,
           fontWeight: FontWeight.w600,
           fontFamily: 'Orbitron',
         ),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Email address',
               hintStyle: TextStyle(
                 color: AppTheme.lightBackground,
                 fontFamily: 'Orbitron',
+                fontSize: context.responsiveFontSize(16),
               ),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: context.r(16), 
+                vertical: context.r(16),
+              ),
             ),
           ),
         ),
@@ -212,19 +267,19 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Password',
-          style: TextStyle(
+          style: context.responsiveTextStyle(
             fontSize: 16,
             color: AppTheme.lightBackground,
             fontFamily: 'Orbitron',
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: context.r(8)),
         Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(16)),
             border: Border.all(
               color: AppTheme.lightBackground.withOpacity(0.3),
               width: 1.5,
@@ -235,17 +290,18 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             controller: _passwordController,
             obscureText: _obscurePassword,
             keyboardType: TextInputType.visiblePassword,
-            style: const TextStyle(
-              color: AppTheme.lightBackground,
+            style: context.responsiveTextStyle(
               fontSize: 16,
+              color: AppTheme.lightBackground,
               fontWeight: FontWeight.w600,
               fontFamily: 'Orbitron',
             ),
             decoration: InputDecoration(
               hintText: 'Password',
-              hintStyle: const TextStyle(
+              hintStyle: TextStyle(
                 color: AppTheme.lightBackground,
                 fontFamily: 'Orbitron',
+                fontSize: context.responsiveFontSize(16),
               ),
               suffixIcon: IconButton(
                 onPressed: () {
@@ -256,10 +312,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                 icon: Icon(
                   _obscurePassword ? Icons.visibility : Icons.visibility_off,
                   color: AppTheme.lightBackground,
+                  size: context.responsiveIconSize(24),
                 ),
               ),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: context.r(16), 
+                vertical: context.r(16),
+              ),
             ),
           ),
         ),
@@ -279,12 +339,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             ),
           );
         },
-        child: const Text(
+        child: Text(
           'Forgot Password?',
-          style: TextStyle(
+          style: context.responsiveTextStyle(
+            fontSize: 14,
             color: AppTheme.lightBackground,
             fontFamily: 'Orbitron',
-            fontSize: 14,
             decoration: TextDecoration.underline,
           ),
         ),
@@ -294,26 +354,29 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
   Widget _buildErrorMessage() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: context.r(16), 
+        vertical: context.r(12),
+      ),
       decoration: BoxDecoration(
         color: Colors.red.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(context.responsiveBorderRadius(12)),
         border: Border.all(color: Colors.red.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline,
             color: Colors.red,
-            size: 20,
+            size: context.responsiveIconSize(20),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: context.r(8)),
           Expanded(
             child: Text(
               _errorMessage!,
-              style: const TextStyle(
-                color: Colors.red,
+              style: context.responsiveTextStyle(
                 fontSize: 14,
+                color: Colors.red,
                 fontFamily: 'Orbitron',
               ),
             ),
@@ -324,70 +387,91 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   }
 
   Widget _buildSignInButton() {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: _isLoading 
+      height: context.responsiveButtonHeight(58),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(context.responsiveBorderRadius(16)),
+        gradient: _isLoading 
             ? null 
             : const LinearGradient(
                 colors: [AppTheme.lightBackground, AppTheme.secondaryGreen],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: ElevatedButton(
-          onPressed: _isLoading ? null : _signIn,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            foregroundColor: Colors.black,
-            shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            elevation: 0,
+        color: _isLoading ? AppTheme.lightBackground.withOpacity(0.3) : null,
+        boxShadow: _isLoading ? null : [
+          BoxShadow(
+            color: AppTheme.lightBackground.withOpacity(0.4),
+            blurRadius: context.r(16),
+            offset: Offset(0, context.r(8)),
           ),
-          child: _isLoading
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(context.responsiveBorderRadius(16)),
+          onTap: _isLoading ? null : _signIn,
+          child: Center(
+            child: _isLoading
+                ? SizedBox(
+                    width: context.r(24),
+                    height: context.r(24),
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.backgroundGreen),
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Sign In',
+                        style: context.responsiveTextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.backgroundGreen,
+                          fontFamily: 'Orbitron',
+                        ),
+                      ),
+                      SizedBox(width: context.r(12)),
+                      Container(
+                        padding: EdgeInsets.all(context.r(6)),
+                        decoration: BoxDecoration(
+                          color: AppTheme.backgroundGreen.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(context.responsiveBorderRadius(20)),
+                        ),
+                        child: Icon(
+                          Icons.arrow_forward_ios,
+                          color: AppTheme.backgroundGreen,
+                          size: context.responsiveIconSize(18),
+                        ),
+                      ),
+                    ],
                   ),
-                )
-              : const Text(
-                  'Sign in',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'Orbitron',
-                    color: AppTheme.backgroundGreen,
-                  ),
-                ),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildOrDivider() {
-    return const Row(
+    return Row(
       children: [
-        Expanded(child: Divider(color: AppTheme.lightBackground,)),
+        const Expanded(child: Divider(color: AppTheme.lightBackground,)),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: context.r(16)),
           child: Text(
             'or',
-            style: TextStyle(
+            style: context.responsiveTextStyle(
+              fontSize: 14,
               color: AppTheme.lightBackground,
               fontFamily: 'Orbitron',
-              fontSize: 14,
             ),
           ),
         ),
-        Expanded(child: Divider(color: AppTheme.lightBackground,)),
+        const Expanded(child: Divider(color: AppTheme.lightBackground,)),
       ],
     );
   }
@@ -401,18 +485,18 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           foregroundColor: Colors.white,
           side: const BorderSide(color: Colors.white54),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(12)),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: EdgeInsets.symmetric(vertical: context.r(16)),
         ),
         icon: SvgPicture.asset(
           'assets/images/google-icon-logo-svgrepo-com.svg',
-          width: 24,
-          height: 24,
+          width: context.r(24),
+          height: context.r(24),
         ),
-        label: const Text(
+        label: Text(
           'Sign In with Google',
-          style: TextStyle(
+          style: context.responsiveTextStyle(
             fontSize: 16,
             fontFamily: 'Orbitron',
             color: AppTheme.lightBackground,
@@ -425,24 +509,24 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   Widget _buildNewUserSection() {
     return Column(
       children: [
-        const Row(
+        Row(
           children: [
-            Expanded(child: Divider(color: AppTheme.lightBackground,)),
+            const Expanded(child: Divider(color: AppTheme.lightBackground,)),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: context.r(16)),
               child: Text(
                 'New to Siyana+?',
-                style: TextStyle(
+                style: context.responsiveTextStyle(
+                  fontSize: 14,
                   color: AppTheme.lightBackground,
                   fontFamily: 'Orbitron',
-                  fontSize: 14,
                 ),
               ),
             ),
-            Expanded(child: Divider(color: AppTheme.lightBackground,)),
+            const Expanded(child: Divider(color: AppTheme.lightBackground,)),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: context.r(8)),
         GestureDetector(
           onTap: () {
             Navigator.push(
@@ -453,20 +537,20 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             );
           },
           child: RichText(
-            text: const TextSpan(
+            text: TextSpan(
               text: 'No account? ',
-              style: TextStyle(
+              style: context.responsiveTextStyle(
+                fontSize: 14,
                 color: AppTheme.lightBackground,
                 fontFamily: 'Orbitron',
-                fontSize: 14,
               ),
               children: [
                 TextSpan(
                   text: 'Join now',
-                  style: TextStyle(
+                  style: context.responsiveTextStyle(
+                    fontSize: 14,
                     color: AppTheme.primaryGreen,
                     fontFamily: 'Orbitron',
-                    fontSize: 14,
                     decoration: TextDecoration.underline,
                   ),
                 ),

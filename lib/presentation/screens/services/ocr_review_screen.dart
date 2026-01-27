@@ -502,14 +502,15 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                   ),
                   const SizedBox(width: 16),
                   const Text(
-                    'Review & Edit',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
+                          'Review & Edit',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontFamily: 'Orbitron',
+                          ),
+                        ),
                   const Spacer(),
                   IconButton(
                     onPressed: _copyToClipboard,
@@ -529,7 +530,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
@@ -660,6 +661,9 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         _showErrorDialog('Please sign in to sync with cloud');
+        setState(() {
+          _isSaving = false;
+        });
         return;
       }
 
@@ -671,10 +675,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
         userId: user.uid,
       );
 
-      // Save locally first
-      await _ocrService.saveScanLocal(scan);
-
-      // Then sync to Firestore
+      // Save ONLY to Firestore (cloud), not locally
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -685,7 +686,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Scan saved and synced!',
+              'Scan saved to cloud!',
               style: TextStyle(fontFamily: 'Orbitron'),
             ),
             backgroundColor: AppTheme.primaryGreen,
@@ -694,7 +695,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      _showErrorDialog('Failed to save and sync: $e');
+      _showErrorDialog('Failed to save to cloud: $e');
     } finally {
       setState(() {
         _isSaving = false;

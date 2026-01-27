@@ -162,18 +162,16 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
                 size: 24,
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 28,),
+            Center(
+              child: Image.asset(
+                'assets/images/logo.png',
+                width: 160,
+                height: 60,
+                fit: BoxFit.contain,
+              ),
+            ),
           ],
-        ),
-        const SizedBox(height: 8),
-        // App Logo
-        Center(
-          child: Image.asset(
-            'assets/images/logo.png',
-            width: 80,
-            height: 80,
-            fit: BoxFit.contain,
-          ),
         ),
         const SizedBox(height: 16),
         Container(
@@ -499,6 +497,72 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
           ),
           textAlign: TextAlign.center,
         ),
+          const SizedBox(height: 24),
+        // Sign out option
+        TextButton.icon(
+          onPressed: () async {
+            // Show confirmation dialog
+            final shouldSignOut = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: const Text(
+                  'Sign Out?',
+                  style: TextStyle(
+                    fontFamily: 'Orbitron',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                content: const Text(
+                  'Are you sure you want to sign out? You will need to log in again.',
+                  style: TextStyle(fontFamily: 'Orbitron'),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontFamily: 'Orbitron'),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text(
+                      'Sign Out',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            if (shouldSignOut == true && mounted) {
+              // Sign out from Firebase
+              await _authManager.signOut();
+              // Pop back to login screen (pop all routes until we reach the first route)
+              if (mounted) {
+                Navigator.of(context).popUntil((route) {
+                  // Pop until we reach the first route (login screen)
+                  return route.isFirst;
+                });
+              }
+            }
+          },
+          icon: const Icon(Icons.logout, color: Colors.white70, size: 18),
+          label: const Text(
+            'Sign out and start over',
+            style: TextStyle(
+              color: Colors.white70,
+              fontFamily: 'Orbitron',
+              fontSize: 14,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -638,12 +702,6 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
     AppLogger.info('Widget is mounted, proceeding with success flow');
     HapticFeedback.mediumImpact();
     
-    // First call the callback if provided
-    if (widget.onVerificationSuccess != null) {
-      AppLogger.info('Calling onVerificationSuccess callback');
-      widget.onVerificationSuccess!();
-    }
-    
     // Wait for tokens to be stored and verified
     // The _completeAuthentication method now verifies token storage
     // We wait longer to ensure the auth state is fully propagated
@@ -665,6 +723,19 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
       AppLogger.info('Popping MFA screen after verification success');
       // Pop with a result to indicate success
       Navigator.of(context).pop(true);
+      
+      // Call the callback AFTER popping to ensure navigation is complete
+      // Use a post-frame callback to ensure it happens after the navigation completes
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (widget.onVerificationSuccess != null) {
+          AppLogger.info('Calling onVerificationSuccess callback after navigation');
+          try {
+            widget.onVerificationSuccess!();
+          } catch (e) {
+            AppLogger.error('Error in onVerificationSuccess callback', error: e);
+          }
+        }
+      });
     }
   }
 }

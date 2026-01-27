@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,10 +10,12 @@ import 'services/reminder_service.dart';
 import 'services/mileage_background_service.dart';
 import 'services/security/local_unlock_service.dart';
 import 'services/security/authentication_manager.dart';
+import 'services/global_navigation_service.dart';
 import 'presentation/providers/theme_provider.dart';
 import 'presentation/providers/auth_provider.dart' as app_auth;
 import 'presentation/widgets/bottom_nav_bar.dart';
 import 'presentation/widgets/auth_wrapper.dart';
+import 'presentation/widgets/responsive_wrapper.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/services/reminders_screen.dart';
 import 'presentation/screens/services/obd_screen.dart';
@@ -118,6 +121,34 @@ class _AppState extends State<App> {
     const SettingsScreen(),       // App settings and user preferences
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    // Set up global navigation callback
+    GlobalNavigationService.onNavigateToTab = _navigateToTab;
+  }
+
+  @override
+  void dispose() {
+    // Clean up global navigation callback
+    GlobalNavigationService.onNavigateToTab = null;
+    super.dispose();
+  }
+
+  /// Navigate to a specific tab and pop all routes if needed
+  void _navigateToTab(int index) {
+    // Pop all routes to get back to main app
+    final navigator = GlobalNavigationService.navigatorKey.currentState;
+    if (navigator != null && navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
+    
+    // Update selected index
+    if (mounted) {
+      setState(() => _selectedIndex = index);
+    }
+  }
+
   /// Build the main app with theme support and authentication wrapper
   @override
   Widget build(BuildContext context) {
@@ -129,6 +160,16 @@ class _AppState extends State<App> {
           darkTheme: AppTheme.darkTheme,
           themeMode: themeProvider.themeMode,
           debugShowCheckedModeBanner: false,
+          navigatorKey: GlobalNavigationService.navigatorKey,
+          builder: (context, child) {
+            // Wrap the entire app with ResponsiveWrapper to enforce text scaling limits
+            // This prevents render overflow errors on smaller devices
+            return ResponsiveWrapper(
+              minTextScaleFactor: 0.8,
+              maxTextScaleFactor: 1.3,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
           home: SecurityWrapper(
             child: AuthWrapper(
               child: _buildMainApp(),
@@ -146,7 +187,7 @@ class _AppState extends State<App> {
       body: _mainScreens[_selectedIndex],
       bottomNavigationBar: BottomNavBar(
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: _navigateToTab,
       ),
     );
   }
@@ -169,56 +210,65 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
   final LocalUnlockService _localUnlockService = LocalUnlockService();
   final AuthenticationManager _authManager = AuthenticationManager();
   
-  bool _isInitializing = true;
+  bool _isInitializing = false; // Changed to false - will be set to true when initialization starts
   bool _isAuthenticated = false;
   bool _needsLocalUnlock = false;
-  bool _needsLogin = true;
+  bool _needsLogin = false; // Changed to false initially - will be determined by initialization
   bool _needsPinSetup = false;
   bool _needsEmailVerification = false;
   bool _isReinitializing = false; // Prevent multiple simultaneous reinitializations
   bool _justCompletedMFA = false; // Track if user just completed MFA to skip duplicate email
+  bool _showLoadingScreen = true; // Show loading screen until initialization completes
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     
-    // Listen to Firebase auth state changes
-    FirebaseAuth.instance.authStateChanges().listen((User? user) async {
-      if (!mounted) return;
-      AppLogger.info('Auth state changed: user=${user?.uid}, _isAuthenticated=$_isAuthenticated, _needsLogin=$_needsLogin');
-      
-      if (user != null && !_isAuthenticated && !_isReinitializing) {
-        // User signed in - check if they have tokens (MFA completed)
-        // If no tokens, they're in the middle of MFA flow, so don't reinitialize yet
-        final hasTokens = await _authManager.isAuthenticated();
-        if (hasTokens) {
-          AppLogger.info('User signed in with tokens, re-initializing security');
-          _reinitializeSecurity();
-        } else {
-          AppLogger.info('User signed in but no tokens yet (MFA in progress), skipping reinitialize');
-        }
-      } else if (user != null && _needsLogin && !_isReinitializing) {
-        // User is signed in but we're showing login screen (e.g., after MFA success)
-        // Check if they have tokens now before reinitializing
-        final hasTokens = await _authManager.isAuthenticated();
-        if (hasTokens) {
-          AppLogger.info('User signed in with tokens and needsLogin=true, re-initializing security');
-          _reinitializeSecurity();
-        } else {
-          AppLogger.info('User signed in but no tokens yet (MFA in progress), skipping reinitialize');
-        }
-      } else if (user == null && _isAuthenticated) {
-        // User signed out
-        AppLogger.info('User signed out');
-        setState(() {
-          _isAuthenticated = false;
-          _needsLocalUnlock = false;
-          _needsLogin = true;
-          _needsPinSetup = false;
+    // Listen to Firebase auth state changes (only if Firebase is initialized)
+    if (FirebaseService.isInitialized) {
+      try {
+        FirebaseAuth.instance.authStateChanges().listen((User? user) async {
+          if (!mounted) return;
+          AppLogger.info('Auth state changed: user=${user?.uid}, _isAuthenticated=$_isAuthenticated, _needsLogin=$_needsLogin');
+          
+          if (user != null && !_isAuthenticated && !_isReinitializing) {
+            // User signed in - check if they have tokens (MFA completed)
+            // If no tokens, they're in the middle of MFA flow, so don't reinitialize yet
+            final hasTokens = await _authManager.isAuthenticated();
+            if (hasTokens) {
+              AppLogger.info('User signed in with tokens, re-initializing security');
+              _reinitializeSecurity();
+            } else {
+              AppLogger.info('User signed in but no tokens yet (MFA in progress), skipping reinitialize');
+            }
+          } else if (user != null && _needsLogin && !_isReinitializing) {
+            // User is signed in but we're showing login screen (e.g., after MFA success)
+            // Check if they have tokens now before reinitializing
+            final hasTokens = await _authManager.isAuthenticated();
+            if (hasTokens) {
+              AppLogger.info('User signed in with tokens and needsLogin=true, re-initializing security');
+              _reinitializeSecurity();
+            } else {
+              AppLogger.info('User signed in but no tokens yet (MFA in progress), skipping reinitialize');
+            }
+          } else if (user == null && _isAuthenticated) {
+            // User signed out
+            AppLogger.info('User signed out');
+            setState(() {
+              _isAuthenticated = false;
+              _needsLocalUnlock = false;
+              _needsLogin = true;
+              _needsPinSetup = false;
+            });
+          }
         });
+      } catch (e) {
+        AppLogger.warning('Failed to listen to Firebase auth state changes: $e');
       }
-    });
+    } else {
+      AppLogger.info('Firebase not initialized - skipping auth state listener');
+    }
     
     _initializeSecurity();
   }
@@ -228,19 +278,19 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
     if (_isReinitializing) return;
     _isReinitializing = true;
     
-    // Longer delay to allow auth tokens to be properly stored
-    // The token storage happens asynchronously after Firebase auth completes
-    // Increased to 1 second to ensure tokens are fully persisted
-    await Future.delayed(const Duration(milliseconds: 1000));
+    // Don't show loading screen during reinitialize - keep current screen visible
+    // This prevents the black screen issue
+    
+    // Shorter delay - tokens are usually ready immediately
+    await Future.delayed(const Duration(milliseconds: 300));
     
     if (!mounted) {
       _isReinitializing = false;
       return;
     }
     
-    // Try to initialize, with retry if tokens aren't ready yet
-    // Increased to 5 attempts with longer delays
-    for (int attempt = 0; attempt < 5; attempt++) {
+    // Try to initialize, with fewer retries and shorter delays
+    for (int attempt = 0; attempt < 3; attempt++) {
       final isAuthenticated = await _authManager.isAuthenticated();
       AppLogger.info('Reinitialize attempt ${attempt + 1}: isAuthenticated=$isAuthenticated');
       
@@ -251,11 +301,9 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
         return;
       }
       
-      // Wait a bit more before retrying (increasing delay each time)
-      if (attempt < 4) {
-        final delay = 500 + (attempt * 200); // 500, 700, 900, 1100ms
-        AppLogger.info('Waiting ${delay}ms before retry...');
-        await Future.delayed(Duration(milliseconds: delay));
+      // Wait a bit before retrying
+      if (attempt < 2) {
+        await Future.delayed(const Duration(milliseconds: 300));
         if (!mounted) {
           _isReinitializing = false;
           return;
@@ -265,7 +313,7 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
     
     // If still not authenticated after retries, initialize anyway
     // (will show login screen)
-    AppLogger.warning('Authentication not confirmed after 5 attempts, showing login screen');
+    AppLogger.warning('Authentication not confirmed after 3 attempts, showing login screen');
     if (mounted) {
       await _initializeSecurity();
     }
@@ -281,22 +329,99 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      // App is going to background, require unlock on resume
+    if (state == AppLifecycleState.paused) {
+      // App is going to background (not closed), require unlock on resume
       if (_isAuthenticated) {
         setState(() {
           _needsLocalUnlock = true;
         });
       }
+    } else if (state == AppLifecycleState.detached) {
+      // App is being closed/terminated, reset authentication state
+      // This ensures fresh authentication check when app is reopened
+      setState(() {
+        _isAuthenticated = false;
+        _needsLocalUnlock = false;
+      });
     } else if (state == AppLifecycleState.resumed) {
-      // App is resuming, check if unlock is needed
-      _checkUnlockRequirement();
+      // App is resuming from background
+      // Only check unlock requirement if app was just backgrounded (not closed and reopened)
+      if (_isAuthenticated) {
+        _checkUnlockRequirement();
+      } else {
+        // App was closed and reopened, re-initialize security from scratch
+        _initializeSecurity();
+      }
+    } else if (state == AppLifecycleState.inactive) {
+      // App is transitioning (e.g., receiving a phone call)
+      // Don't change state, just wait
     }
   }
 
   Future<void> _initializeSecurity() async {
     AppLogger.info('_initializeSecurity called');
+    
+    // Prevent multiple simultaneous initializations
+    if (_isInitializing && !_isReinitializing) {
+      AppLogger.info('Already initializing, skipping duplicate call');
+      return;
+    }
+    
+    // Set flag to indicate initialization is starting
+    // Only show loading screen if this is NOT a reinitialize (i.e., initial app startup)
+    if (mounted) {
+      setState(() {
+        _isInitializing = true;
+        // Only show loading screen on initial startup, not during reinitialize
+        if (!_isReinitializing) {
+          _showLoadingScreen = true;
+        }
+      });
+    }
+    
+    // Add timeout to prevent hanging forever
     try {
+      await _initializeSecurityWithTimeout();
+    } catch (e, stackTrace) {
+      AppLogger.error('Security initialization failed or timed out', error: e);
+      AppLogger.error('Stack trace', error: stackTrace);
+      if (!mounted) return;
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+          _showLoadingScreen = false;
+          _needsLogin = true;
+          _needsPinSetup = false;
+          _needsEmailVerification = false;
+          _needsLocalUnlock = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _initializeSecurityWithTimeout() async {
+    // Wrap entire initialization in a timeout
+    await Future.any([
+      _performSecurityInitialization(),
+      Future.delayed(const Duration(seconds: 10)).then((_) {
+        throw TimeoutException('Security initialization timed out after 10 seconds');
+      }),
+    ]);
+  }
+
+  Future<void> _performSecurityInitialization() async {
+    try {
+      // Reset authentication state at the start to ensure fresh check
+      // This is important when app is closed and reopened
+      if (_isInitializing && !_isReinitializing) {
+        if (mounted) {
+          setState(() {
+            _isAuthenticated = false;
+            _needsLocalUnlock = false;
+          });
+        }
+      }
+      
       // Check if user is authenticated
       final isAuthenticated = await _authManager.isAuthenticated();
       AppLogger.info('isAuthenticated: $isAuthenticated');
@@ -306,12 +431,17 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
       if (!isAuthenticated) {
         AppLogger.info('Not authenticated, showing login screen');
         // No authentication, show login screen
-        setState(() {
-          _isInitializing = false;
-          _needsLogin = true;
-          _needsPinSetup = false;
-          _needsEmailVerification = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isInitializing = false;
+            _showLoadingScreen = false;
+            _isAuthenticated = false;
+            _needsLogin = true;
+            _needsPinSetup = false;
+            _needsEmailVerification = false;
+            _needsLocalUnlock = false;
+          });
+        }
         return;
       }
 
@@ -319,21 +449,26 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
       final user = FirebaseAuth.instance.currentUser;
       if (user != null && !user.emailVerified) {
         AppLogger.info('Email not verified, showing email verification screen');
-        setState(() {
-          _isInitializing = false;
-          _needsLogin = false;
-          _needsPinSetup = false;
-          _needsEmailVerification = true;
-          // _justCompletedMFA flag will be used by EmailVerificationScreen
-        });
+        if (mounted) {
+          setState(() {
+            _isInitializing = false;
+            _showLoadingScreen = false;
+            _needsLogin = false;
+            _needsPinSetup = false;
+            _needsEmailVerification = true;
+            // _justCompletedMFA flag will be used by EmailVerificationScreen
+          });
+        }
         return;
       }
       
       // Email is verified, reset MFA flag
       if (_justCompletedMFA) {
-        setState(() {
-          _justCompletedMFA = false;
-        });
+        if (mounted) {
+          setState(() {
+            _justCompletedMFA = false;
+          });
+        }
       }
 
       // Validate session
@@ -342,12 +477,15 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
       
       if (!sessionResult.isValid) {
         // Session expired, show login screen
-        setState(() {
-          _isInitializing = false;
-          _needsLogin = true;
-          _needsPinSetup = false;
-          _needsEmailVerification = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isInitializing = false;
+            _showLoadingScreen = false;
+            _needsLogin = true;
+            _needsPinSetup = false;
+            _needsEmailVerification = false;
+          });
+        }
         return;
       }
 
@@ -357,14 +495,18 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
       
       if (!hasLocalUnlock) {
         // No local unlock configured, user needs to set it up
-        setState(() {
-          _isInitializing = false;
-          _isAuthenticated = true;
-          _needsLocalUnlock = false;
-          _needsLogin = false;
-          _needsPinSetup = true; // Show PIN setup screen
-          _needsEmailVerification = false;
-        });
+        AppLogger.info('No local unlock configured, showing PIN setup screen');
+        if (mounted) {
+          setState(() {
+            _isInitializing = false;
+            _showLoadingScreen = false;
+            _isAuthenticated = true;
+            _needsLocalUnlock = false;
+            _needsLogin = false;
+            _needsPinSetup = true; // Show PIN setup screen
+            _needsEmailVerification = false;
+          });
+        }
         return;
       }
 
@@ -372,23 +514,33 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
       final shouldLock = await _localUnlockService.shouldLockApp();
       if (!mounted) return;
       
-      setState(() {
-        _isInitializing = false;
-        _isAuthenticated = true;
-        _needsLocalUnlock = shouldLock;
-        _needsLogin = false;
-        _needsPinSetup = false;
-        _needsEmailVerification = false;
-      });
+      AppLogger.info('Security initialization complete, showing main app');
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+          _showLoadingScreen = false;
+          _isAuthenticated = true;
+          _needsLocalUnlock = shouldLock;
+          _needsLogin = false;
+          _needsPinSetup = false;
+          _needsEmailVerification = false;
+        });
+      }
 
-    } catch (e) {
+    } catch (e, stackTrace) {
       AppLogger.error('Security initialization failed', error: e);
+      AppLogger.error('Stack trace', error: stackTrace);
       if (!mounted) return;
-      setState(() {
-        _isInitializing = false;
-        _needsLogin = true;
-        _needsPinSetup = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+          _showLoadingScreen = false;
+          _needsLogin = true;
+          _needsPinSetup = false;
+          _needsEmailVerification = false;
+          _needsLocalUnlock = false;
+        });
+      }
     }
   }
 
@@ -423,6 +575,13 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
     });
   }
 
+  void _onEmailVerificationComplete() {
+    // Re-initialize security to check if email is now verified
+    if (mounted) {
+      _initializeSecurity();
+    }
+  }
+
   // ignore: unused_element
   void _onLogout() {
     // This method is available for settings screen or other widgets to trigger logout
@@ -436,42 +595,94 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
-    if (_isInitializing) {
-      return _buildLoadingScreen();
-    }
+    try {
+      if (_showLoadingScreen) {
+        return _buildLoadingScreen();
+      }
 
-    if (_needsLogin) {
-      return LoginScreen(
-        onAuthenticationComplete: () {
-          // Re-check authentication after MFA completion
-          AppLogger.info('Authentication completed, re-checking security state');
-          setState(() {
-            _justCompletedMFA = true; // Mark that user just completed MFA
-          });
-          _initializeSecurity();
-        },
+      if (_needsLogin) {
+        return LoginScreen(
+          onAuthenticationComplete: () {
+            // Re-check authentication after MFA completion
+            AppLogger.info('Authentication completed, re-checking security state');
+            // Use a post-frame callback to ensure state updates happen after build
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _justCompletedMFA = true; // Mark that user just completed MFA
+                });
+                _initializeSecurity();
+              }
+            });
+          },
+        );
+      }
+
+      if (_needsEmailVerification) {
+        return EmailVerificationScreen(
+          skipInitialEmail: _justCompletedMFA,
+          onVerificationComplete: _onEmailVerificationComplete,
+        );
+      }
+
+      if (_needsPinSetup) {
+        return PinSetupScreen(
+          onPinSetup: _onPinSetupComplete,
+        );
+      }
+
+      if (_needsLocalUnlock) {
+        return UnlockScreen(
+          onUnlockSuccess: _onUnlockSuccess,
+        );
+      }
+
+      return widget.child;
+    } catch (e, stackTrace) {
+      AppLogger.error('Error in SecurityWrapper build method', error: e);
+      AppLogger.error('Stack trace', error: stackTrace);
+      // Return a safe fallback widget
+      return Scaffold(
+        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'An error occurred',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontFamily: 'Orbitron',
+                  color: Colors.red,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _isInitializing = false; 
+                    _showLoadingScreen = true;
+                    _needsLogin = false;
+                    _needsPinSetup = false;
+                    _needsEmailVerification = false;
+                    _needsLocalUnlock = false;
+                    _isAuthenticated = false;
+                  });
+                  _initializeSecurity();
+                },
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
       );
     }
-
-    if (_needsEmailVerification) {
-      return EmailVerificationScreen(
-        skipInitialEmail: _justCompletedMFA,
-      );
-    }
-
-    if (_needsPinSetup) {
-      return PinSetupScreen(
-        onPinSetup: _onPinSetupComplete,
-      );
-    }
-
-    if (_needsLocalUnlock) {
-      return UnlockScreen(
-        onUnlockSuccess: _onUnlockSuccess,
-      );
-    }
-
-    return widget.child;
   }
 
   Widget _buildLoadingScreen() {

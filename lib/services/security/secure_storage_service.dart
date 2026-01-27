@@ -91,16 +91,46 @@ class SecureStorageService {
   }
 
   // PIN Management
-  Future<void> storePinHash(String pin) async {
+  Future<void> storePinHash(String pin, {String? userId}) async {
+    // Get current user ID if not provided
+    final currentUserId = userId ?? await getUserId();
+    if (currentUserId == null) {
+      throw Exception('Cannot store PIN: User ID not available');
+    }
+
     final salt = _generateSalt();
     final hash = _hashPin(pin, salt);
-    await _storage.write(key: _pinHashKey, value: hash);
-    await _storage.write(key: _pinSaltKey, value: salt);
+    
+    // Store PIN with user ID prefix to make it user-specific
+    final userSpecificHashKey = '${_pinHashKey}_$currentUserId';
+    final userSpecificSaltKey = '${_pinSaltKey}_$currentUserId';
+    
+    await _storage.write(key: userSpecificHashKey, value: hash);
+    await _storage.write(key: userSpecificSaltKey, value: salt);
+    
+    // Also store the user ID associated with this PIN for validation
+    await _storage.write(key: '${_pinHashKey}_owner', value: currentUserId);
   }
 
-  Future<bool> verifyPin(String pin) async {
-    final storedHash = await _storage.read(key: _pinHashKey);
-    final salt = await _storage.read(key: _pinSaltKey);
+  Future<bool> verifyPin(String pin, {String? userId}) async {
+    // Get current user ID if not provided
+    final currentUserId = userId ?? await getUserId();
+    if (currentUserId == null) {
+      return false;
+    }
+
+    // Check if PIN belongs to current user
+    final pinOwner = await _storage.read(key: '${_pinHashKey}_owner');
+    if (pinOwner != currentUserId) {
+      // PIN belongs to a different user, return false
+      return false;
+    }
+
+    final userSpecificHashKey = '${_pinHashKey}_$currentUserId';
+    final userSpecificSaltKey = '${_pinSaltKey}_$currentUserId';
+    
+    final storedHash = await _storage.read(key: userSpecificHashKey);
+    final salt = await _storage.read(key: userSpecificSaltKey);
     
     if (storedHash == null || salt == null) {
       return false;
@@ -110,14 +140,71 @@ class SecureStorageService {
     return storedHash == inputHash;
   }
 
-  Future<bool> hasPinSet() async {
-    final hash = await _storage.read(key: _pinHashKey);
+  Future<bool> hasPinSet({String? userId}) async {
+    // Get current user ID if not provided
+    final currentUserId = userId ?? await getUserId();
+    if (currentUserId == null) {
+      return false;
+    }
+
+    // Check if PIN belongs to current user
+    final pinOwner = await _storage.read(key: '${_pinHashKey}_owner');
+    if (pinOwner != currentUserId) {
+      // PIN belongs to a different user
+      return false;
+    }
+
+    final userSpecificHashKey = '${_pinHashKey}_$currentUserId';
+    final hash = await _storage.read(key: userSpecificHashKey);
     return hash != null && hash.isNotEmpty;
   }
 
-  Future<void> clearPin() async {
+  Future<void> clearPin({String? userId}) async {
+    // If userId is provided, clear that specific user's PIN
+    // Otherwise, clear PIN for current user
+    final currentUserId = userId ?? await getUserId();
+    
+    if (currentUserId != null) {
+      final userSpecificHashKey = '${_pinHashKey}_$currentUserId';
+      final userSpecificSaltKey = '${_pinSaltKey}_$currentUserId';
+      await _storage.delete(key: userSpecificHashKey);
+      await _storage.delete(key: userSpecificSaltKey);
+    }
+    
+    // Also clear the old global PIN keys for backward compatibility/migration
     await _storage.delete(key: _pinHashKey);
     await _storage.delete(key: _pinSaltKey);
+    await _storage.delete(key: '${_pinHashKey}_owner');
+  }
+
+  /// Clear PIN for a specific user ID (useful when switching accounts)
+  Future<void> clearPinForUser(String userId) async {
+    final userSpecificHashKey = '${_pinHashKey}_$userId';
+    final userSpecificSaltKey = '${_pinSaltKey}_$userId';
+    await _storage.delete(key: userSpecificHashKey);
+    await _storage.delete(key: userSpecificSaltKey);
+    
+    // Check if this was the current PIN owner
+    final pinOwner = await _storage.read(key: '${_pinHashKey}_owner');
+    if (pinOwner == userId) {
+      await _storage.delete(key: '${_pinHashKey}_owner');
+    }
+  }
+
+  /// Check if PIN belongs to current user and clear if it doesn't
+  Future<void> ensurePinBelongsToCurrentUser() async {
+    final currentUserId = await getUserId();
+    if (currentUserId == null) {
+      // No user logged in, clear any existing PIN
+      await clearPin();
+      return;
+    }
+
+    final pinOwner = await _storage.read(key: '${_pinHashKey}_owner');
+    if (pinOwner != null && pinOwner != currentUserId) {
+      // PIN belongs to a different user, clear it
+      await clearPinForUser(pinOwner);
+    }
   }
 
   // Biometric Settings

@@ -4,6 +4,7 @@ import '../../shared/services/auth_service.dart';
 import '../../domain/entities/app_user.dart';
 import '../../shared/utils/app_logger.dart';
 import '../../shared/utils/firebase_debug.dart';
+import '../../services/security/secure_storage_service.dart';
 
 // Main authentication manager for the entire app
 class AuthProvider extends ChangeNotifier {
@@ -44,6 +45,11 @@ class AuthProvider extends ChangeNotifier {
     try {
       if (_firebaseUser?.uid != null) {
         await FirebaseDebugUtils.debugCurrentUserState();
+        
+        // Ensure PIN belongs to current user (clear if it belongs to different user)
+        final secureStorage = SecureStorageService();
+        await secureStorage.storeUserId(_firebaseUser!.uid);
+        await secureStorage.ensurePinBelongsToCurrentUser();
         
         _appUser = await AuthService.getUserProfile(_firebaseUser!.uid);
         if (_appUser == null) {
@@ -129,6 +135,22 @@ class AuthProvider extends ChangeNotifier {
       if (result.isSuccess) {
         _clearError();
         AppLogger.info('Account creation successful');
+        
+        // Clear any existing PIN when creating a new account
+        // The new user will need to set up their own PIN
+        try {
+          final secureStorage = SecureStorageService();
+          // Store the new user ID first
+          if (_firebaseUser?.uid != null) {
+            await secureStorage.storeUserId(_firebaseUser!.uid);
+            // Clear any PIN that might belong to a previous user
+            await secureStorage.clearPin();
+          }
+        } catch (e) {
+          AppLogger.warning('Failed to clear PIN for new account', error: e);
+          // Don't fail account creation if PIN clearing fails
+        }
+        
         return true;
       } else {
         _setError(result.message);

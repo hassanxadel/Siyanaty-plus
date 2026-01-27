@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../../shared/utils/responsive_utils.dart';
 
 /// Modern create account screen with animated entrance and form validation
 /// Handles user registration through Firebase Auth
@@ -133,11 +134,11 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                       ),
                     ),
                     _buildHeader(),
-                    const SizedBox(height: 40),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 40)),
                     _buildRegistrationForm(),
-                    const SizedBox(height: 40),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 40)),
                     _buildSubmitButton(),
-                    const SizedBox(height: 20),
+                    SizedBox(height: ResponsiveUtils.spacing(context, 20)),
                     _buildLoginLink(),
                   ],
                 ),
@@ -168,7 +169,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                   BoxShadow(
                     color: AppTheme.lightBackground.withOpacity(0.3),
                     blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    offset: const Offset(2, 4),
                   ),
                 ],
               ),
@@ -178,12 +179,12 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                 size: 28,
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: ResponsiveUtils.spacing(context, 8)),
             const Expanded(
               child: Text(
                 'Create Your Account',
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 24,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.lightBackground,
                   fontFamily: 'Orbitron',
@@ -193,7 +194,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
@@ -206,12 +207,12 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
           ),
           child: Row(
             children: [
-              Icon(
+              const Icon(
                 Icons.stars_rounded,
                 color: AppTheme.lightBackground,
                 size: 20,
               ),
-              const SizedBox(width: 8),
+              SizedBox(height: ResponsiveUtils.spacing(context, 8)),
               Expanded(
                 child: Text(
                   'Join Siyana+ for smart car maintenance',
@@ -244,9 +245,9 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             fontFamily: 'Orbitron',
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
         _buildFullNameField(),
-        const SizedBox(height: 24),
+        SizedBox(height: ResponsiveUtils.spacing(context, 24)),
         
         // Mobile Number Field
         const Text(
@@ -258,9 +259,9 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             fontFamily: 'Orbitron',
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
         _buildMobileField(),
-        const SizedBox(height: 24),
+        SizedBox(height: ResponsiveUtils.spacing(context, 24)),
         
         // Email Field
         const Text(
@@ -272,9 +273,9 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             fontFamily: 'Orbitron',
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
         _buildEmailField(),
-        const SizedBox(height: 24),
+        SizedBox(height: ResponsiveUtils.spacing(context, 24)),
         
         // Password Field
         const Text(
@@ -286,9 +287,9 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             fontFamily: 'Orbitron',
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
         _buildPasswordField(),
-        const SizedBox(height: 24),
+        SizedBox(height: ResponsiveUtils.spacing(context, 24)),
         
         // Confirm Password Field
         const Text(
@@ -300,21 +301,55 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             fontFamily: 'Orbitron',
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
         _buildConfirmPasswordField(),
-        const SizedBox(height: 24),
+        SizedBox(height: ResponsiveUtils.spacing(context, 24)),
         
         // Emergency Contact Section
-        const Text(
-          'Emergency Contact',
+        Row(
+          children: [
+            const Text(
+              'Emergency Contact',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.lightBackground,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+            SizedBox(height: ResponsiveUtils.spacing(context, 8)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.lightBackground.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppTheme.lightBackground.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: const Text(
+                'Optional',
+                style: TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.lightBackground,
+                  fontFamily: 'Orbitron',
+                ),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: ResponsiveUtils.spacing(context, 8)),
+        Text(
+          'You can add this information later in your profile settings',
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.lightBackground,
+            fontSize: 13,
+            color: AppTheme.lightBackground.withOpacity(0.7),
             fontFamily: 'Orbitron',
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
         _buildEmergencyContactSection(),
       ],
     );
@@ -400,7 +435,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
         // Mobile Number Input
         Expanded(
           child: Container(
@@ -415,6 +450,11 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             child: TextFormField(
               controller: _mobileController,
               keyboardType: TextInputType.phone,
+              maxLength: 10,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
               style: const TextStyle(
                 color: AppTheme.lightBackground,
                 fontSize: 16,
@@ -422,7 +462,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                 fontFamily: 'Orbitron',
               ),
               decoration: const InputDecoration(
-                hintText: 'Mobile number',
+                hintText: 'Mobile number (10 digits)',
                 hintStyle: TextStyle(
                   color: AppTheme.lightBackground,
                   fontSize: 16,
@@ -430,13 +470,14 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                 ),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.all(20),
+                counterText: '',
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Please enter your mobile number';
                 }
-                if (value.length < 10) {
-                  return 'Mobile number must be at least 10 digits';
+                if (value.length != 10) {
+                  return 'Mobile number must be exactly 10 digits';
                 }
                 return null;
               },
@@ -628,9 +669,11 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
               contentPadding: EdgeInsets.all(20),
             ),
             validator: (value) {
+              // Empty is allowed - optional field
               if (value == null || value.isEmpty) {
-                return 'Please enter emergency contact name';
+                return null;
               }
+              // If provided, must be at least 2 characters
               if (value.length < 2) {
                 return 'Name must be at least 2 characters';
               }
@@ -638,7 +681,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             },
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: ResponsiveUtils.spacing(context, 16)),
         // Emergency Contact Phone
         Row(
           children: [
@@ -677,7 +720,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(height: ResponsiveUtils.spacing(context, 12)),
             // Emergency Contact Phone Number Input
             Expanded(
               child: Container(
@@ -698,8 +741,13 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                     fontWeight: FontWeight.w600,
                     fontFamily: 'Orbitron',
                   ),
+                  maxLength: 10,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
                   decoration: const InputDecoration(
-                    hintText: 'Emergency contact phone',
+                    hintText: 'Emergency contact phone (10 digits)',
                     hintStyle: TextStyle(
                       color: AppTheme.lightBackground,
                       fontSize: 16,
@@ -707,13 +755,16 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                     ),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.all(20),
+                    counterText: '',
                   ),
                   validator: (value) {
+                    // Empty is allowed - optional field
                     if (value == null || value.isEmpty) {
-                      return 'Please enter emergency contact phone';
+                      return null;
                     }
-                    if (value.length < 10) {
-                      return 'Phone number must be at least 10 digits';
+                    // If provided, must be exactly 10 digits
+                    if (value.length != 10) {
+                      return 'Phone number must be exactly 10 digits';
                     }
                     return null;
                   },
@@ -775,7 +826,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                           fontFamily: 'Orbitron',
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(height: ResponsiveUtils.spacing(context, 12)),
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
@@ -783,7 +834,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Icon(
-                          Icons.arrow_forward,
+                          Icons.arrow_forward_ios,
                           color: AppTheme.backgroundGreen,
                           size: 18,
                         ),
@@ -804,14 +855,14 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
           'Already have an account? ',
           style: TextStyle(
             color: AppTheme.lightBackground.withOpacity(0.6),
-            fontSize: 14,
+            fontSize: 12,
             fontFamily: 'Orbitron',
           ),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text(
-            'Sign In',
+            'Login',
             style: TextStyle(
               color: AppTheme.secondaryGreen,
               fontSize: 14,
@@ -836,13 +887,17 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       
+      // Prepare emergency contact info (only if provided)
+      final emergencyName = _emergencyContactNameController.text.trim();
+      final emergencyPhone = _emergencyContactPhoneController.text.trim();
+      
       final success = await authProvider.createAccount(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         fullName: _fullNameController.text.trim(),
         phoneNumber: '$_selectedCountryCode${_mobileController.text.trim()}',
-        emergencyContactName: _emergencyContactNameController.text.trim(),
-        emergencyContactPhone: '$_selectedCountryCode${_emergencyContactPhoneController.text.trim()}',
+        emergencyContactName: emergencyName.isEmpty ? null : emergencyName,
+        emergencyContactPhone: emergencyPhone.isEmpty ? null : '$_selectedCountryCode$emergencyPhone',
       );
 
       if (mounted) {
@@ -871,7 +926,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                       size: 24,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(height: ResponsiveUtils.spacing(context, 12)),
                   const Expanded(
                     child: Text(
                       'Welcome! Please check your email to verify your account',
@@ -920,7 +975,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                       size: 24,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(height: ResponsiveUtils.spacing(context, 12)),
                   Expanded(
                     child: Text(
                       authProvider.errorMessage ?? 'Registration failed. Please try again.',
@@ -966,7 +1021,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                     size: 24,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(height: ResponsiveUtils.spacing(context, 12)),
                 const Expanded(
                   child: Text(
                     'An unexpected error occurred. Please try again.',

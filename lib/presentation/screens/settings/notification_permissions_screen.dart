@@ -366,7 +366,7 @@ class _NotificationPermissionsScreenState extends State<NotificationPermissionsS
                       fontFamily: 'Orbitron',
                     ),
                   ),
-                  const SizedBox(height: 4),
+                    const SizedBox(height: 4),
                   Text(
                     description,
                     style: TextStyle(

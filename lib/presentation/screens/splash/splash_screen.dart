@@ -291,7 +291,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                               ],
                             ),
                             
-                            const SizedBox(height: 40),
+                              const SizedBox(height: 40),
                             
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),

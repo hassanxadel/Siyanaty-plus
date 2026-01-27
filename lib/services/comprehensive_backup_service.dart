@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_backup_service.dart';
 import 'firebase_reminder_service.dart';
 import 'firebase_maintenance_service.dart';
+import 'mileage_service.dart';
+import 'license_service.dart';
 import '../shared/utils/app_logger.dart';
 
 /// Comprehensive backup service that handles all data types
@@ -14,6 +16,8 @@ class ComprehensiveBackupService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseBackupService _carBackupService = FirebaseBackupService();
   final FirebaseReminderService _reminderBackupService = FirebaseReminderService();
+  final MileageService _mileageService = MileageService();
+  final LicenseService _licenseService = LicenseService();
 
   /// Get current user ID
   String? get _currentUserId => _auth.currentUser?.uid;
@@ -82,6 +86,49 @@ class ComprehensiveBackupService {
         totalFailureCount += maintenanceResult.failureCount;
       }
 
+      // 4. Backup Mileage Data
+      AppLogger.info('Backing up mileage data...');
+      try {
+        final mileageSuccess = await _mileageService.syncToFirebase();
+        final localMileage = await _mileageService.getAllEntries();
+        results['mileage'] = {
+          'success': mileageSuccess,
+          'message': mileageSuccess ? 'Mileage data synced successfully' : 'Failed to sync mileage data',
+          'count': localMileage.length,
+          'errors': mileageSuccess ? [] : ['Failed to sync mileage data'],
+        };
+        if (mileageSuccess) {
+          totalSuccessCount += localMileage.length;
+        } else {
+          totalFailureCount += 1;
+          allErrors.add('Failed to sync mileage data');
+        }
+      } catch (e) {
+        results['mileage'] = {
+          'success': false,
+          'message': 'Error backing up mileage data: $e',
+          'count': 0,
+          'errors': ['Error: $e'],
+        };
+        allErrors.add('Mileage backup error: $e');
+        totalFailureCount += 1;
+      }
+
+      // 5. Backup License Images
+      AppLogger.info('Backing up license images...');
+      final licenseResult = await _licenseService.backupLicenseImagesToFirebase();
+      results['licenses'] = {
+        'success': licenseResult.isSuccess,
+        'message': licenseResult.message,
+        'count': licenseResult.successCount,
+        'errors': licenseResult.errors,
+      };
+      totalSuccessCount += licenseResult.successCount;
+      if (licenseResult.failureCount > 0) {
+        allErrors.add('${licenseResult.failureCount} license images failed');
+        totalFailureCount += licenseResult.failureCount;
+      }
+
       // Update maintenance backup timestamp
       await FirebaseMaintenanceService.updateLastBackupTime();
 
@@ -116,21 +163,37 @@ class ComprehensiveBackupService {
       int totalFailureCount = 0;
       final List<String> allErrors = [];
 
-      // 1. Restore Cars (Note: FirebaseBackupService doesn't have restore method, skipping for now)
+      // 1. Restore Cars
+      AppLogger.info('Restoring cars...');
+      final carResult = await _carBackupService.restoreCarsFromFirebase();
       results['cars'] = {
-        'success': true,
-        'message': 'Car restore not implemented yet',
-        'count': 0,
-        'errors': [],
+        'success': carResult.isSuccess,
+        'message': carResult.message,
+        'count': carResult.isSuccess ? 1 : 0,
+        'errors': carResult.errors ?? [],
       };
+      if (carResult.isSuccess) {
+        totalSuccessCount += 1;
+      } else {
+        totalFailureCount += 1;
+        allErrors.add(carResult.message);
+      }
 
-      // 2. Restore Reminders (Note: FirebaseReminderService doesn't have restore method, skipping for now)
+      // 2. Restore Reminders
+      AppLogger.info('Restoring reminders...');
+      final reminderResult = await _reminderBackupService.restoreRemindersFromFirebase();
       results['reminders'] = {
-        'success': true,
-        'message': 'Reminder restore not implemented yet',
-        'count': 0,
-        'errors': [],
+        'success': reminderResult.isSuccess,
+        'message': reminderResult.message,
+        'count': reminderResult.isSuccess ? 1 : 0,
+        'errors': reminderResult.isSuccess ? [] : [reminderResult.message],
       };
+      if (reminderResult.isSuccess) {
+        totalSuccessCount += 1;
+      } else {
+        totalFailureCount += 1;
+        allErrors.add(reminderResult.message);
+      }
 
       // 3. Restore Maintenance Records
       AppLogger.info('Restoring maintenance records...');
@@ -145,6 +208,49 @@ class ComprehensiveBackupService {
       if (maintenanceResult.failureCount > 0) {
         allErrors.add('$maintenanceResult.failureCount maintenance records failed');
         totalFailureCount += maintenanceResult.failureCount;
+      }
+
+      // 4. Restore Mileage Data
+      AppLogger.info('Restoring mileage data...');
+      try {
+        final mileageSuccess = await _mileageService.syncFromFirebase();
+        final cloudMileage = await _mileageService.getEntriesFromFirebase();
+        results['mileage'] = {
+          'success': mileageSuccess,
+          'message': mileageSuccess ? 'Mileage data synced successfully' : 'Failed to sync mileage data',
+          'count': cloudMileage.length,
+          'errors': mileageSuccess ? [] : ['Failed to sync mileage data'],
+        };
+        if (mileageSuccess) {
+          totalSuccessCount += cloudMileage.length;
+        } else {
+          totalFailureCount += 1;
+          allErrors.add('Failed to sync mileage data');
+        }
+      } catch (e) {
+        results['mileage'] = {
+          'success': false,
+          'message': 'Error restoring mileage data: $e',
+          'count': 0,
+          'errors': ['Error: $e'],
+        };
+        allErrors.add('Mileage restore error: $e');
+        totalFailureCount += 1;
+      }
+
+      // 5. Restore License Images
+      AppLogger.info('Restoring license images...');
+      final licenseResult = await _licenseService.restoreLicenseImagesFromFirebase();
+      results['licenses'] = {
+        'success': licenseResult.isSuccess,
+        'message': licenseResult.message,
+        'count': licenseResult.successCount,
+        'errors': licenseResult.errors,
+      };
+      totalSuccessCount += licenseResult.successCount;
+      if (licenseResult.failureCount > 0) {
+        allErrors.add('${licenseResult.failureCount} license images failed');
+        totalFailureCount += licenseResult.failureCount;
       }
 
       AppLogger.info('Comprehensive restore completed. Success: $totalSuccessCount, Failures: $totalFailureCount');

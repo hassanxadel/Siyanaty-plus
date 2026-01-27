@@ -23,7 +23,7 @@ class ScanModel {
       'imagePath': imagePath,
       'source': source,
       'timestamp': timestamp.millisecondsSinceEpoch,
-      'userId': userId,
+      'user_id': userId, // Changed to snake_case for database
     };
   }
 
@@ -35,7 +35,7 @@ class ScanModel {
       imagePath: map['imagePath'],
       source: map['source'] ?? 'mlkit',
       timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp']),
-      userId: map['userId'],
+      userId: map['user_id'] ?? map['userId'], // Support both snake_case and camelCase
     );
   }
 

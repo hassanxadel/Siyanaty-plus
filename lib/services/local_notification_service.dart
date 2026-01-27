@@ -225,6 +225,37 @@ class LocalNotificationService {
     );
   }
 
+  /// Send a test notification to verify notifications are working
+  Future<void> sendTestNotification() async {
+    if (!_isInitialized) await initialize();
+
+    await _notifications.show(
+      'test_notification'.hashCode,
+      '🔔 Test Notification',
+      'This is a test notification from Siyanaty+. Your notifications are working correctly!',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'reminder_channel',
+          'Reminder Notifications',
+          channelDescription: 'Notifications for car maintenance reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+          color: Color(0xFF2E7D32),
+          playSound: true,
+          enableVibration: true,
+          autoCancel: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: 'test_notification',
+    );
+  }
+
   /// Cancel a scheduled notification for a reminder
   Future<void> cancelReminderNotification(int reminderId) async {
     if (!_isInitialized) return;

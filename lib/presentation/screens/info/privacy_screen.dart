@@ -106,7 +106,7 @@ class PrivacyScreen extends StatelessWidget {
                     Icons.verified_user,
                   ),
                   
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 20),
             
             _buildSection(
                     'Contact Us',

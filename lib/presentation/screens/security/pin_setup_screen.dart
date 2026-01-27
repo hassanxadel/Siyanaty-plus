@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../../shared/utils/responsive_utils.dart';
 import '../../../services/security/local_unlock_service.dart';
 
 class PinSetupScreen extends StatefulWidget {
   final bool isChangingPin;
+  final bool isResettingPin; // When true, skip current PIN verification (forgot PIN flow)
   final VoidCallback? onPinSetup;
 
   const PinSetupScreen({
     super.key,
     this.isChangingPin = false,
+    this.isResettingPin = false,
     this.onPinSetup,
   });
 
@@ -37,6 +40,12 @@ class _PinSetupScreenState extends State<PinSetupScreen>
     super.initState();
     _isChangingPin = widget.isChangingPin;
     
+    // If resetting PIN (forgot PIN flow), skip current PIN verification
+    // by setting _oldPin to a placeholder value
+    if (widget.isResettingPin) {
+      _oldPin = 'RESET_MODE';
+    }
+    
     _shakeController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
@@ -63,31 +72,29 @@ class _PinSetupScreenState extends State<PinSetupScreen>
       backgroundColor: AppTheme.getThemeAwareBackground(context),
       resizeToAvoidBottomInset: false, // Don't resize when keyboard appears
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 20),
-                  _buildPinDisplay(),
-                  const SizedBox(height: 20),
-                  _buildNumericKeypad(),
-                  if (_errorMessage != null) ...[
-                    const SizedBox(height: 15),
-                    _buildErrorMessage(),
+        child: Padding(
+          padding: context.responsivePadding(horizontal: 16, vertical: 12),
+          child: Column(
+            children: [
+              _buildHeader(),
+              SizedBox(height: context.r(12)),   
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildPinDisplay(),
+                    SizedBox(height: context.r(16)),
+                    _buildNumericKeypad(),
+                    if (_errorMessage != null) ...[
+                      SizedBox(height: context.r(10)),
+                      _buildErrorMessage(),
+                    ],
                   ],
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.05), // Flexible bottom spacing
-                  _buildFooter(),
-                  const SizedBox(height: 20),
-                ],
+                ),
               ),
-            ),
+              _buildFooter(),
+              SizedBox(height: context.r(12)),
+            ],
           ),
         ),
       ),
@@ -98,15 +105,20 @@ class _PinSetupScreenState extends State<PinSetupScreen>
     String title;
     String subtitle;
     
-    if (_isChangingPin && !_isConfirmingPin && _oldPin.isEmpty) {
+    // Check if we're in reset mode (forgot PIN flow) - skip current PIN entry
+    final isResetMode = widget.isResettingPin;
+    
+    if (_isChangingPin && !_isConfirmingPin && _oldPin.isEmpty && !isResetMode) {
       title = 'Enter Current PIN';
       subtitle = 'Please enter your current PIN to continue';
     } else if (_isConfirmingPin) {
       title = 'Confirm Your PIN';
       subtitle = 'Please re-enter your PIN to confirm';
     } else {
-      title = _isChangingPin ? 'Set New PIN' : 'Set Up PIN';
-      subtitle = 'Create a 4-6 digit PIN to secure your app';
+      title = (_isChangingPin || isResetMode) ? 'Set New PIN' : 'Set Up PIN';
+      subtitle = isResetMode 
+          ? 'Create a new 4-6 digit PIN for your app'
+          : 'Create a 4-6 digit PIN to secure your app';
     }
 
     return Column(
@@ -116,19 +128,20 @@ class _PinSetupScreenState extends State<PinSetupScreen>
             if (Navigator.canPop(context))
               IconButton(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(
+                icon: Icon(
                   Icons.arrow_back_ios,
                   color: AppTheme.primaryGreen,
-                  size: 24,
+                  size: context.responsiveIconSize(20),
                 ),
               ),
             const Spacer(),
             if (_isChangingPin && _oldPin.isNotEmpty)
               TextButton(
                 onPressed: _resetPinSetup,
-                child: const Text(
+                child: Text(
                   'Reset',
-                  style: TextStyle(
+                  style: context.responsiveTextStyle(
+                    fontSize: 14,
                     color: AppTheme.primaryGreen,
                     fontFamily: 'Orbitron',
                   ),
@@ -136,10 +149,10 @@ class _PinSetupScreenState extends State<PinSetupScreen>
               ),
           ],
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: context.r(8)),
         Container(
-          width: 80,
-          height: 80,
+          width: context.r(60),
+          height: context.r(60),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
@@ -149,41 +162,45 @@ class _PinSetupScreenState extends State<PinSetupScreen>
                 AppTheme.darkAccentGreen,
               ],
             ),
-            borderRadius: BorderRadius.circular(40),
+            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(30)),
             boxShadow: [
               BoxShadow(
                 color: AppTheme.primaryGreen.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                blurRadius: context.r(15),
+                offset: Offset(0, context.r(8)),
               ),
             ],
           ),
-          child: const Icon(
+          child: Icon(
             Icons.lock_outline,
             color: Colors.white,
-            size: 40,
+            size: context.responsiveIconSize(30),
           ),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: context.r(12)),
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 24,
+          style: context.responsiveTextStyle(
+            fontSize: 20,
             fontWeight: FontWeight.bold,
             fontFamily: 'Orbitron',
             color: AppTheme.primaryGreen,
           ),
           textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: context.r(6)),
         Text(
           subtitle,
-          style: TextStyle(
-            fontSize: 14,
+          style: context.responsiveTextStyle(
+            fontSize: 12,
             color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
             fontFamily: 'Orbitron',
           ),
           textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -204,9 +221,9 @@ class _PinSetupScreenState extends State<PinSetupScreen>
               bool isActive = index == currentPinLength;
               
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                width: 20,
-                height: 20,
+                margin: EdgeInsets.symmetric(horizontal: context.r(6)),
+                width: context.r(16),
+                height: context.r(16),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: isFilled 
@@ -220,10 +237,10 @@ class _PinSetupScreenState extends State<PinSetupScreen>
                   ),
                 ),
                 child: isFilled
-                    ? const Icon(
+                    ? Icon(
                         Icons.circle,
                         color: Colors.white,
-                        size: 12,
+                        size: context.responsiveIconSize(10),
                       )
                     : null,
               );
@@ -238,11 +255,11 @@ class _PinSetupScreenState extends State<PinSetupScreen>
     return Column(
       children: [
         _buildKeypadRow(['1', '2', '3']),
-        const SizedBox(height: 16),
+        SizedBox(height: context.r(8)),
         _buildKeypadRow(['4', '5', '6']),
-        const SizedBox(height: 16),
+        SizedBox(height: context.r(8)),
         _buildKeypadRow(['7', '8', '9']),
-        const SizedBox(height: 16),
+        SizedBox(height: context.r(8)),
         _buildKeypadRow(['', '0', 'backspace']),
       ],
     );
@@ -256,13 +273,16 @@ class _PinSetupScreenState extends State<PinSetupScreen>
   }
 
   Widget _buildKeypadButton(String key) {
+    final buttonSize = context.r(60);
+    final borderRadius = context.responsiveBorderRadius(30);
+    
     if (key.isEmpty) {
-      return const SizedBox(width: 80, height: 80);
+      return SizedBox(width: buttonSize, height: buttonSize);
     }
 
     return Container(
-      width: 80,
-      height: 80,
+      width: buttonSize,
+      height: buttonSize,
       decoration: BoxDecoration(
         gradient: key == 'backspace'
             ? null
@@ -274,14 +294,14 @@ class _PinSetupScreenState extends State<PinSetupScreen>
                   AppTheme.backgroundGreen,
                 ],
               ),
-        borderRadius: BorderRadius.circular(40),
+        borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: key == 'backspace'
             ? null
             : [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
+                  blurRadius: context.r(10),
+                  offset: Offset(0, context.r(5)),
                 ),
               ],
       ),
@@ -289,18 +309,18 @@ class _PinSetupScreenState extends State<PinSetupScreen>
         color: Colors.transparent,
         child: InkWell(
           onTap: () => _onKeypadTap(key),
-          borderRadius: BorderRadius.circular(40),
+          borderRadius: BorderRadius.circular(borderRadius),
           child: Center(
             child: key == 'backspace'
                 ? Icon(
                     Icons.backspace_outlined,
                     color: AppTheme.getThemeAwareTextColor(context),
-                    size: 24,
+                    size: context.responsiveIconSize(22),
                   )
                 : Text(
                     key,
-                    style: const TextStyle(
-                      fontSize: 24,
+                    style: context.responsiveTextStyle(
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       fontFamily: 'Orbitron',
@@ -495,8 +515,11 @@ class _PinSetupScreenState extends State<PinSetupScreen>
     });
 
     try {
-      if (_isChangingPin && _oldPin.isEmpty) {
-        // Verify old PIN first
+      // Check if we're in reset mode (forgot PIN flow) - skip current PIN verification
+      final isResetMode = widget.isResettingPin;
+      
+      if (_isChangingPin && _oldPin.isEmpty && !isResetMode) {
+        // Verify old PIN first (only when not in reset mode)
         final isValid = await _localUnlockService.authenticateWithPin(_currentPin);
         if (isValid == PinAuthResult.success) {
           setState(() {
@@ -505,19 +528,26 @@ class _PinSetupScreenState extends State<PinSetupScreen>
             _isLoading = false;
           });
         } else {
-      _showError('Incorrect current PIN');
-      _performShakeAnimation();
-      setState(() {
-        _currentPin = '';
-        _isLoading = false;
-      });
+          _showError('Incorrect current PIN');
+          _performShakeAnimation();
+          setState(() {
+            _currentPin = '';
+            _isLoading = false;
+          });
         }
       } else if (_isConfirmingPin) {
         // Confirm PIN matches
         if (_currentPin == _confirmPin) {
-          final success = _isChangingPin
-              ? await _localUnlockService.changePin(_oldPin, _currentPin)
-              : await _localUnlockService.setupPin(_currentPin);
+          bool success;
+          
+          if (isResetMode) {
+            // For reset mode, directly set up new PIN (overwrite)
+            success = await _localUnlockService.setupPin(_currentPin);
+          } else if (_isChangingPin) {
+            success = await _localUnlockService.changePin(_oldPin, _currentPin);
+          } else {
+            success = await _localUnlockService.setupPin(_currentPin);
+          }
 
           if (success) {
             _showSuccessAndNavigate();
@@ -576,12 +606,35 @@ class _PinSetupScreenState extends State<PinSetupScreen>
   }
 
   void _showSuccessAndNavigate() {
-    // Show success message
+    // For resetting PIN (forgot PIN flow), navigate to home
+    if (widget.isResettingPin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'PIN reset successfully',
+            style: TextStyle(fontFamily: 'Orbitron'),
+          ),
+          backgroundColor: AppTheme.primaryGreen,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      // Navigate to home and clear all previous screens
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+      return;
+    }
+    
+    // For changing PIN from settings, navigate back with success result
+    if (_isChangingPin) {
+      Navigator.pop(context, true);
+      return;
+    }
+    
+    // For initial PIN setup, show success message
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text(
-          _isChangingPin ? 'PIN changed successfully' : 'PIN set up successfully',
-          style: const TextStyle(fontFamily: 'Orbitron'),
+          'PIN set up successfully',
+          style: TextStyle(fontFamily: 'Orbitron'),
         ),
         backgroundColor: AppTheme.primaryGreen,
         behavior: SnackBarBehavior.floating,
@@ -592,6 +645,5 @@ class _PinSetupScreenState extends State<PinSetupScreen>
     if (widget.onPinSetup != null) {
       widget.onPinSetup!();
     }
-    // Don't call Navigator.pop() - SecurityWrapper handles navigation via state changes
   }
 }

@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/services/location_service.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class ServiceCentersScreen extends StatefulWidget {
   const ServiceCentersScreen({super.key});
@@ -125,9 +126,11 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
-      body: Column(
+    return ScreenWithNavBar(
+      currentIndex: 3, // Service Centers is index 3 in nav bar
+      child: Scaffold(
+        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        body: Column(
         children: [
           // Header with gradient background
           _buildHeaderWithBackground(),
@@ -259,6 +262,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -599,7 +603,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                   CircularProgressIndicator(
                     valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
                   ),
-                  SizedBox(height: 16),
+                      SizedBox(height: 16),
                   Text(
                     'Loading map...',
                     style: TextStyle(
@@ -869,7 +873,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                     ),
                   ],
                   
-                  const SizedBox(height: 12),
+                      const SizedBox(height: 12),
                   
                   // Action buttons
                   Row(
@@ -1124,7 +1128,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                     ],
                   ),
                   
-                  const SizedBox(height: 8),
+                      const SizedBox(height: 8),
                   
                   // Rating and Distance Row
                   Row(
@@ -1416,7 +1420,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                        const SizedBox(height: 12),
                 Text(
                   center['address'],
                   style: TextStyle(
@@ -1604,7 +1608,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
       if (position.latitude == 37.4219983 && position.longitude == -122.084) {
         // Override with specific Cairo coordinates for testing
         setState(() {
-          _currentLocation = const LatLng(29.973360, 31.259310); // Specific Cairo coordinates
+          _currentLocation = const LatLng(30.185748275735428, 31.488412945497956);
         });
         
         if (mounted) {
@@ -1635,7 +1639,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
       setState(() {
         _isLoadingLocation = false;
         // Set a fallback location (Specific Cairo coordinates)
-        _currentLocation = const LatLng(29.973360, 31.259310);
+        _currentLocation = const LatLng(30.185748275735428, 31.488412945497956);
       });
       
       if (mounted) {
@@ -1761,7 +1765,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 12),
+                  const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -2185,95 +2189,174 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
             ),
             
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.build,
-                          color: AppTheme.primaryGreen,
-                          size: 28,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            center.name,
-                            style: const TextStyle(
-                              fontFamily: 'Orbitron',
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.backgroundGreen,
-                            ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppTheme.backgroundGreen,
+                      AppTheme.darkAccentGreen,
+                    ],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.build,
+                            color: AppTheme.primaryGreen,
+                            size: 28,
                           ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Details
-                    _buildServiceCenterDetail(Icons.location_on, center.address),
-                    
-                    if (center.rating != null)
-                      _buildServiceCenterDetail(
-                        Icons.star,
-                        '${center.rating!.toStringAsFixed(1)} rating',
-                      ),
-                    
-                    if (center.phoneNumber != null)
-                      _buildServiceCenterDetail(Icons.phone, center.phoneNumber!),
-                    
-                    _buildServiceCenterDetail(
-                      center.isOpen ? Icons.schedule : Icons.schedule_outlined,
-                      center.isOpen ? 'Open now' : 'Closed',
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Action buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => _addToFavorites(center),
-                            icon: Icon(
-                              _isFavorite(center.id) ? Icons.favorite : Icons.favorite_border,
-                            ),
-                            label: Text(
-                              _isFavorite(center.id) ? 'Favorited' : 'Add to Favorites',
-                              style: const TextStyle(fontFamily: 'Orbitron'),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _isFavorite(center.id) 
-                                  ? Colors.red 
-                                  : AppTheme.primaryGreen,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              center.name,
+                              style: const TextStyle(
+                                fontFamily: 'Orbitron',
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
                               ),
                             ),
                           ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Details
+                      _buildServiceCenterDetail(Icons.location_on, center.address),
+                      
+                      if (center.rating != null)
+                        _buildServiceCenterDetail(
+                          Icons.star,
+                          '${center.rating!.toStringAsFixed(1)} rating',
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
+                      
+                      if (center.phoneNumber != null)
+                        _buildServiceCenterDetail(Icons.phone, center.phoneNumber!),
+                      
+                      _buildServiceCenterDetail(
+                        center.isOpen ? Icons.schedule : Icons.schedule_outlined,
+                        center.isOpen ? 'Open now' : 'Closed',
+                      ),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // Action buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: _isFavorite(center.id)
+                                      ? [Colors.red.shade600, Colors.red.shade800]
+                                      : [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (_isFavorite(center.id) ? Colors.red : AppTheme.primaryGreen).withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ElevatedButton.icon(
+                                onPressed: () => _addToFavorites(center),
+                                icon: Icon(
+                                  _isFavorite(center.id) ? Icons.favorite : Icons.favorite_border,
+                                  color: Colors.white,
+                                ),
+                                label: Text(
+                                  _isFavorite(center.id) ? 'Favorited' : 'Favorites',
+                                  style: const TextStyle(
+                                    fontFamily: 'Orbitron',
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [Colors.blue.shade600, Colors.blue.shade800],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.blue.withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ElevatedButton.icon(
+                                onPressed: () => _navigateToServiceCenter(center),
+                                icon: const Icon(Icons.directions, color: Colors.white),
+                                label: const Text(
+                                  'Navigate',
+                                  style: TextStyle(
+                                    fontFamily: 'Orbitron',
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    
+                      const SizedBox(height: 12),
+                      
+                      if (center.phoneNumber != null)
+                        SizedBox(
+                          width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: () => _navigateToServiceCenter(center),
-                            icon: const Icon(Icons.directions),
+                            onPressed: () => _callServiceCenter(center),
+                            icon: const Icon(Icons.phone),
                             label: const Text(
-                              'Navigate',
+                              'Call Service Center',
                               style: TextStyle(fontFamily: 'Orbitron'),
                             ),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.darkAccentGreen,
+                              backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
@@ -2282,32 +2365,8 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 12),
-                    
-                    if (center.phoneNumber != null)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () => _callServiceCenter(center),
-                          icon: const Icon(Icons.phone),
-                          label: const Text(
-                            'Call Service Center',
-                            style: TextStyle(fontFamily: 'Orbitron'),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2330,7 +2389,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
               style: const TextStyle(
                 fontFamily: 'Orbitron',
                 fontSize: 14,
-                color: AppTheme.backgroundGreen,
+                color: Colors.white,
               ),
             ),
           ),
@@ -2587,45 +2646,81 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                 Row(
                   children: [
                     Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[600],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Colors.grey.shade600, Colors.grey.shade800],
                           ),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontFamily: 'Orbitron',
-                            fontWeight: FontWeight.w600,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontFamily: 'Orbitron',
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _addToFavorites(center); // This will remove it since it's already favorited
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Colors.red.shade600, Colors.red.shade800],
                           ),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        child: const Text(
-                          'Remove',
-                          style: TextStyle(
-                            fontFamily: 'Orbitron',
-                            fontWeight: FontWeight.w600,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _addToFavorites(center); // This will remove it since it's already favorited
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Remove',
+                            style: TextStyle(
+                              fontFamily: 'Orbitron',
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),

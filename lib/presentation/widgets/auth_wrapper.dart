@@ -94,7 +94,7 @@ class AuthWrapper extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               
-              const SizedBox(height: 32),
+                  const SizedBox(height: 32),
               
               /// Retry button for authentication
               ElevatedButton(

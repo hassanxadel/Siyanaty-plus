@@ -124,7 +124,7 @@ class TermsScreen extends StatelessWidget {
                     Icons.edit,
                   ),
                   
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 20),
                   
                   _buildSection(
                     'Contact Information',

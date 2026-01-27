@@ -174,14 +174,25 @@ class AuthService {
         // The user is actually created, check if current user exists
         if (_auth.currentUser != null) {
           try {
+            // Send email verification even in recovery path
+            try {
+              await _auth.currentUser!.sendEmailVerification();
+              AppLogger.info('Email verification sent to: $email (recovery path)');
+            } catch (verifyError) {
+              AppLogger.warning('Failed to send email verification in recovery path', error: verifyError);
+              // Continue with profile creation even if verification email fails
+            }
+            
             await _createUserProfile(
               uid: _auth.currentUser!.uid,
               email: email.trim().toLowerCase(),
               fullName: fullName,
               phoneNumber: phoneNumber,
+              emergencyContactName: emergencyContactName,
+              emergencyContactPhone: emergencyContactPhone,
             );
             AppLogger.info('Successful registration for: $email (recovered from plugin error)');
-            return AuthResult.success('Account created successfully! Welcome to Siyana+', _auth.currentUser);
+            return AuthResult.success('Account created successfully! Please check your email to verify your account.', _auth.currentUser);
           } catch (profileError) {
             AppLogger.error('Profile creation failed after plugin error recovery', error: profileError);
             return AuthResult.failure('Account created but profile setup failed. Please contact support.');

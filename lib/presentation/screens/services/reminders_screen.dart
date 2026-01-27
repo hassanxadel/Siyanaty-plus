@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/reminder_service.dart';
 import '../../../models/backup_reminder.dart';
 import '../../../models/backup_car.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class SmartRemindersScreen extends StatefulWidget {
   const SmartRemindersScreen({super.key});
@@ -115,9 +117,11 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Column(
+    return ScreenWithNavBar(
+      currentIndex: 1, // Reminders is index 1 in nav bar
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Column(
         children: [
           _buildHeaderWithBackground(),
           if (_isSearching) _buildSearchBar(),
@@ -128,6 +132,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -335,7 +340,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
+                const SizedBox(height: 6),
               Text(
                 title,
                 style: TextStyle(
@@ -619,7 +624,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+                const SizedBox(height: 8),
               Row(
                 children: [
                   if (reminder.status != ReminderStatus.completed)
@@ -887,10 +892,21 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => AddReminderForm(onReminderAdded: _loadReminders),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => AddReminderForm(
+          onReminderAdded: _loadReminders,
+          scrollController: scrollController,
+        ),
+      ),
     );
   }
 }
@@ -1198,7 +1214,7 @@ class ReminderDetailsDialog extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 2),
+                  const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
@@ -1295,8 +1311,13 @@ class ReminderDetailsDialog extends StatelessWidget {
 // Add Reminder Form
 class AddReminderForm extends StatefulWidget {
   final VoidCallback onReminderAdded;
+  final ScrollController? scrollController;
   
-  const AddReminderForm({super.key, required this.onReminderAdded});
+  const AddReminderForm({
+    super.key, 
+    required this.onReminderAdded,
+    this.scrollController,
+  });
   
   @override
   State<AddReminderForm> createState() => _AddReminderFormState();
@@ -1304,22 +1325,33 @@ class AddReminderForm extends StatefulWidget {
 
 class _AddReminderFormState extends State<AddReminderForm> {
   final ReminderService _reminderService = ReminderService();
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _targetMileageController = TextEditingController();
   
-  String title = '';
-  String description = '';
   ReminderType selectedType = ReminderType.maintenance;
   ReminderPriority selectedPriority = ReminderPriority.medium;
   DateTime? targetDate;
-  int? targetMileage;
   BackupCar? selectedCar;
   List<BackupCar> userCars = [];
   bool _isLoading = false;
   bool _isLoadingCars = true;
+  String? _carError;
+  String? _dateError;
 
   @override
   void initState() {
     super.initState();
     _loadUserCars();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _targetMileageController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserCars() async {
@@ -1347,9 +1379,12 @@ class _AddReminderFormState extends State<AddReminderForm> {
         left: 16,
         right: 16,
         bottom: media.viewInsets.bottom + 16,
-        top: 16,
+        top: 8,
       ),
       child: SingleChildScrollView(
+        controller: widget.scrollController,
+        child: Form(
+          key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1364,11 +1399,11 @@ class _AddReminderFormState extends State<AddReminderForm> {
                 ),
               ),
             ),
+            const SizedBox(height: 10),
+            const Text('Add New Reminder', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 6),
+            Text('* Required fields', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
             const SizedBox(height: 12),
-            const Text('Add New Reminder', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18)),
-            const SizedBox(height: 8),
-            Text('* Required fields', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-            const SizedBox(height: 16),
             
             // Car selection
             if (_isLoadingCars)
@@ -1387,19 +1422,39 @@ class _AddReminderFormState extends State<AddReminderForm> {
                 ),
               )
             else ...[
-              _buildDropdown<BackupCar>(
-                label: 'Select Car*',
-                value: selectedCar,
-                items: userCars,
-                onChanged: (car) => setState(() => selectedCar = car),
-                itemBuilder: (car) => '${car.year} ${car.brand} ${car.model}',
-              ),
+              _buildCarSelector(),
+              if (_carError != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _carError!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: 12,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               
               // Title and Type
               Row(
                       children: [
-                  Expanded(child: _field(label: 'Title*', onChanged: (v) => title = v)),
+                  Expanded(child: _field(
+                    label: 'Title*', 
+                    controller: _titleController,
+                    customValidator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'This field is required';
+                      }
+                      if (value.trim().length < 3) {
+                        return 'Title must be at least 3 characters long';
+                      }
+                      if (value.trim().length > 100) {
+                        return 'Title must be less than 100 characters';
+                      }
+                      return null;
+                    },
+                  )),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _buildDropdown<ReminderType>(
@@ -1416,23 +1471,30 @@ class _AddReminderFormState extends State<AddReminderForm> {
               
               // Description
               _field(
-                label: 'Description*',
-                onChanged: (v) => description = v,
+                label: 'Description (optional)',
+                controller: _descriptionController,
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
               
               // Priority
-              _buildDropdown<ReminderPriority>(
-                label: 'Priority*',
-                value: selectedPriority,
-                items: ReminderPriority.values,
-                onChanged: (priority) => setState(() => selectedPriority = priority!),
-                itemBuilder: (priority) => priority.displayName,
-              ),
+              _buildPrioritySelector(),
               const SizedBox(height: 16),
               
               // Target Date
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Target Date*',
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.lightBackground,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
               InkWell(
                 onTap: () async {
                   final date = await showDatePicker(
@@ -1442,36 +1504,62 @@ class _AddReminderFormState extends State<AddReminderForm> {
                     lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
                   );
                   if (date != null) {
-                    setState(() => targetDate = date);
+                        setState(() {
+                          targetDate = date;
+                          _dateError = null; // Clear error when date is selected
+                        });
                   }
                 },
                 child: Container(
-                  padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
+                        border: Border.all(
+                          color: _dateError != null ? Colors.red : AppTheme.primaryGreen,
+                          width: _dateError != null ? 2 : 1,
+                        ),
                     borderRadius: BorderRadius.circular(8),
                   ),
                     child: Row(
                       children: [
-                      const Icon(Icons.calendar_today),
+                          Icon(
+                            Icons.calendar_today,
+                            color: _dateError != null ? Colors.red : AppTheme.primaryGreen,
+                            size: 20,
+                          ),
                       const SizedBox(width: 8),
                       Text(
                         targetDate != null
                             ? 'Target Date: ${targetDate!.day}/${targetDate!.month}/${targetDate!.year}'
                             : 'Select Target Date',
-                        style: const TextStyle(fontFamily: 'Orbitron'),
+                            style: TextStyle(
+                              fontFamily: 'Orbitron',
+                              color: _dateError != null ? Colors.red : AppTheme.lightBackground,
+                            ),
                       ),
                       ],
                     ),
                   ),
+                  ),
+                  if (_dateError != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _dateError!,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 12,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 16),
               
               // Target Mileage
               _field(
                 label: 'Target Mileage (optional)',
+                controller: _targetMileageController,
                 keyboard: TextInputType.number,
-                onChanged: (v) => targetMileage = int.tryParse(v),
               ),
               const SizedBox(height: 24),
               
@@ -1514,6 +1602,7 @@ class _AddReminderFormState extends State<AddReminderForm> {
               const SizedBox(height: 8),
             ],
           ],
+          ),
         ),
       ),
     );
@@ -1521,9 +1610,10 @@ class _AddReminderFormState extends State<AddReminderForm> {
 
   Widget _field({
     required String label,
+    required TextEditingController controller,
     TextInputType? keyboard,
-    required Function(String) onChanged,
     int maxLines = 1,
+    String? Function(String?)? customValidator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1538,8 +1628,8 @@ class _AddReminderFormState extends State<AddReminderForm> {
         ),
         const SizedBox(height: 4),
         TextFormField(
+          controller: controller,
           keyboardType: keyboard,
-          onChanged: onChanged,
           maxLines: maxLines,
           style: const TextStyle(fontFamily: 'Orbitron'),
           decoration: InputDecoration(
@@ -1551,10 +1641,325 @@ class _AddReminderFormState extends State<AddReminderForm> {
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
             ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
+          validator: customValidator ?? (label.contains('*') 
+              ? (value) => value?.isEmpty == true ? 'This field is required' : null
+              : null),
           ),
         ],
+    );
+  }
+
+  Widget _buildCarSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Select Car*',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.darkAccentGreen,
+                AppTheme.backgroundGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryGreen.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showCarSelectionDialog(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: selectedCar != null && selectedCar!.imagePath != null && selectedCar!.imagePath!.isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(selectedCar!.imagePath!),
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                    color: AppTheme.primaryGreen,
+                                    size: 20,
+                                  );
+                                },
+                              ),
+                            )
+                          : const Icon(
+                              IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                              color: AppTheme.primaryGreen,
+                              size: 20,
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            selectedCar != null
+                                ? '${selectedCar!.brand} ${selectedCar!.model}'
+                                : 'Select Car',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Orbitron',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                            const SizedBox(height: 2) ,
+                          Text(
+                            selectedCar != null
+                                ? 'Year: ${selectedCar!.year}'
+                                : 'Tap to choose vehicle',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontFamily: 'Orbitron',
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showCarSelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.directions_car,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Select Vehicle',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Car list
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: userCars.length,
+                  itemBuilder: (context, index) {
+                    final car = userCars[index];
+                    final isSelected = selectedCar?.id == car.id;
+                    
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          selectedCar = car;
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.primaryGreen,
+                                    AppTheme.darkAccentGreen,
+                                  ],
+                                )
+                              : LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.darkAccentGreen.withOpacity(0.5),
+                                    AppTheme.backgroundGreen.withOpacity(0.5),
+                                  ],
+                                ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: isSelected
+                              ? Border.all(color: AppTheme.primaryGreen, width: 2)
+                              : Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 45,
+                              height: 45,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryGreen.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: car.imagePath != null && car.imagePath!.isNotEmpty
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Image.file(
+                                        File(car.imagePath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return const Icon(
+                                            IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                            color: Colors.white,
+                                            size: 22,
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : const Icon(
+                                      IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${car.brand} ${car.model}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Year: ${car.year}',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1603,30 +2008,344 @@ class _AddReminderFormState extends State<AddReminderForm> {
     );
   }
 
-  Future<void> _saveReminder() async {
-    setState(() => _isLoading = true);
-    
-    // Validation
-    if (title.isEmpty || description.isEmpty || selectedCar == null) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill in all required fields'),
-          backgroundColor: Colors.red,
+  Widget _buildPrioritySelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Priority*',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      );
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.darkAccentGreen,
+                AppTheme.backgroundGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryGreen.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showPrioritySelectionDialog(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        _getPriorityIcon(selectedPriority),
+                        color: _getPriorityColor(selectedPriority),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            selectedPriority.displayName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Orbitron',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _getPriorityDescription(selectedPriority),
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontFamily: 'Orbitron',
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _getPriorityIcon(ReminderPriority priority) {
+    switch (priority) {
+      case ReminderPriority.low:
+        return Icons.arrow_downward;
+      case ReminderPriority.medium:
+        return Icons.remove;
+      case ReminderPriority.high:
+        return Icons.arrow_upward;
+      case ReminderPriority.urgent:
+        return Icons.priority_high;
+    }
+  }
+
+  Color _getPriorityColor(ReminderPriority priority) {
+    switch (priority) {
+      case ReminderPriority.low:
+        return Colors.blue;
+      case ReminderPriority.medium:
+        return Colors.orange;
+      case ReminderPriority.high:
+        return Colors.red;
+      case ReminderPriority.urgent:
+        return Colors.red.shade900;
+    }
+  }
+
+  String _getPriorityDescription(ReminderPriority priority) {
+    switch (priority) {
+      case ReminderPriority.low:
+        return 'Can be done later';
+      case ReminderPriority.medium:
+        return 'Normal priority';
+      case ReminderPriority.high:
+        return 'Important';
+      case ReminderPriority.urgent:
+        return 'Do immediately';
+    }
+  }
+
+  void _showPrioritySelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.flag,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Select Priority',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Priority list
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Column(
+                  children: ReminderPriority.values.map((priority) {
+                    final isSelected = selectedPriority == priority;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          selectedPriority = priority;
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.primaryGreen,
+                                    AppTheme.darkAccentGreen,
+                                  ],
+                                )
+                              : LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.darkAccentGreen.withOpacity(0.5),
+                                    AppTheme.backgroundGreen.withOpacity(0.5),
+                                  ],
+                                ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: isSelected
+                              ? Border.all(color: AppTheme.primaryGreen, width: 2)
+                              : Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 45,
+                              height: 45,
+                              decoration: BoxDecoration(
+                                color: _getPriorityColor(priority).withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                _getPriorityIcon(priority),
+                                color: _getPriorityColor(priority),
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    priority.displayName,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _getPriorityDescription(priority),
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _saveReminder() async {
+    // Validate form fields
+    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
+      return; // Form validation will show red borders
+    }
+    
+    // Validate car selection
+    if (selectedCar == null) {
+      setState(() {
+        _carError = 'Please select a car';
+      });
       return;
     }
+    
+    // Validate target date (required)
+    if (targetDate == null) {
+      setState(() {
+        _dateError = 'Please select a target date';
+      });
+      return;
+    }
+    
+    setState(() {
+      _isLoading = true;
+      _carError = null;
+      _dateError = null; // Clear any date errors
+    });
     
     try {
       final result = await _reminderService.addReminder(
         carId: selectedCar!.id!,
-        title: title,
-        description: description,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
         type: selectedType,
         priority: selectedPriority,
         targetDate: targetDate,
-        targetMileage: targetMileage,
+        targetMileage: _targetMileageController.text.trim().isEmpty 
+            ? null 
+            : int.tryParse(_targetMileageController.text.trim()),
       );
       
       if (mounted) {
@@ -1680,6 +2399,7 @@ class EditReminderForm extends StatefulWidget {
 
 class _EditReminderFormState extends State<EditReminderForm> {
   final ReminderService _reminderService = ReminderService();
+  final _formKey = GlobalKey<FormState>();
   
   late String title;
   late String description;
@@ -1691,6 +2411,7 @@ class _EditReminderFormState extends State<EditReminderForm> {
   List<BackupCar> userCars = [];
   bool _isLoading = false;
   bool _isLoadingCars = true;
+  String? _dateError;
 
   @override
   void initState() {
@@ -1736,6 +2457,8 @@ class _EditReminderFormState extends State<EditReminderForm> {
         top: 16,
       ),
       child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1773,19 +2496,29 @@ class _EditReminderFormState extends State<EditReminderForm> {
                 ),
               )
             else ...[
-              _buildDropdown<BackupCar>(
-                label: 'Select Car*',
-                value: selectedCar,
-                items: userCars,
-                onChanged: (car) => setState(() => selectedCar = car),
-                itemBuilder: (car) => '${car.year} ${car.brand} ${car.model}',
-              ),
+              _buildCarSelector(),
               const SizedBox(height: 16),
               
               // Title and Type
               Row(
                 children: [
-                  Expanded(child: _field(label: 'Title*', initialValue: title, onChanged: (v) => title = v)),
+                  Expanded(child: _field(
+                    label: 'Title*', 
+                    initialValue: title, 
+                    onChanged: (v) => title = v,
+                    customValidator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'This field is required';
+                      }
+                      if (value.trim().length < 3) {
+                        return 'Title must be at least 3 characters long';
+                      }
+                      if (value.trim().length > 100) {
+                        return 'Title must be less than 100 characters';
+                      }
+                      return null;
+                    },
+                  )),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildDropdown<ReminderType>(
@@ -1803,7 +2536,7 @@ class _EditReminderFormState extends State<EditReminderForm> {
               
               // Description
               _field(
-                label: 'Description*',
+                label: 'Description (optional)',
                 initialValue: description,
                 onChanged: (v) => description = v,
                 maxLines: 3,
@@ -1821,43 +2554,85 @@ class _EditReminderFormState extends State<EditReminderForm> {
               const SizedBox(height: 16),
               
               // Target Date
-              InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: targetDate ?? DateTime.now().add(const Duration(days: 30)),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                  );
-                  if (date != null) {
-                    setState(() => targetDate = date);
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Target Date*',
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.lightBackground,
+                    ),
                   ),
-    child: Row(
-      children: [
-                      const Icon(Icons.calendar_today),
-        const SizedBox(width: 8),
-        Text(
-                        targetDate != null
-                            ? 'Target Date: ${targetDate!.day}/${targetDate!.month}/${targetDate!.year}'
-                            : 'Select Target Date',
-                        style: const TextStyle(fontFamily: 'Orbitron'),
-                      ),
-                      const Spacer(),
-                      if (targetDate != null)
-                        IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => setState(() => targetDate = null),
+                    const SizedBox(height: 4),
+                  InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: targetDate ?? DateTime.now().add(const Duration(days: 30)),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                      );
+                      if (date != null) {
+                        setState(() {
+                          targetDate = date;
+                          _dateError = null; // Clear error when date is selected
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: _dateError != null ? Colors.red : AppTheme.primaryGreen,
+                          width: _dateError != null ? 2 : 1,
                         ),
-                    ],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today,
+                            color: _dateError != null ? Colors.red : AppTheme.primaryGreen,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            targetDate != null
+                                ? 'Target Date: ${targetDate!.day}/${targetDate!.month}/${targetDate!.year}'
+                                : 'Select Target Date',
+                            style: TextStyle(
+                              fontFamily: 'Orbitron',
+                              color: _dateError != null ? Colors.red : AppTheme.lightBackground,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (targetDate != null)
+                            IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => setState(() {
+                                targetDate = null;
+                                _dateError = null;
+                              }),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  if (_dateError != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _dateError!,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 12,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 16),
               
@@ -1910,6 +2685,7 @@ class _EditReminderFormState extends State<EditReminderForm> {
             ],
             ],
           ),
+          ),
         ),
     );
   }
@@ -1920,6 +2696,7 @@ class _EditReminderFormState extends State<EditReminderForm> {
     TextInputType? keyboard,
     required Function(String) onChanged,
     int maxLines = 1,
+    String? Function(String?)? customValidator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1932,7 +2709,7 @@ class _EditReminderFormState extends State<EditReminderForm> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 4),
+            const SizedBox(height: 4),
         TextFormField(
           initialValue: initialValue,
           keyboardType: keyboard,
@@ -1944,14 +2721,333 @@ class _EditReminderFormState extends State<EditReminderForm> {
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppTheme.primaryGreen),
             ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+            ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
             ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+          validator: customValidator ?? (label.contains('*') 
+              ? (value) => value?.isEmpty == true ? 'This field is required' : null
+              : null),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCarSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Select Car*',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.darkAccentGreen,
+                AppTheme.backgroundGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryGreen.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showCarSelectionDialog(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: selectedCar != null && selectedCar!.imagePath != null && selectedCar!.imagePath!.isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(selectedCar!.imagePath!),
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                    color: AppTheme.primaryGreen,
+                                    size: 20,
+                                  );
+                                },
+                              ),
+                            )
+                          : const Icon(
+                              IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                              color: AppTheme.primaryGreen,
+                              size: 20,
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            selectedCar != null
+                                ? '${selectedCar!.brand} ${selectedCar!.model}'
+                                : 'Select Car',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Orbitron',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                            const SizedBox(height: 2),
+                          Text(
+                            selectedCar != null
+                                ? 'Year: ${selectedCar!.year}'
+                                : 'Tap to choose vehicle',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontFamily: 'Orbitron',
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  void _showCarSelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.directions_car,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Select Vehicle',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Car list
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: userCars.length,
+                  itemBuilder: (context, index) {
+                    final car = userCars[index];
+                    final isSelected = selectedCar?.id == car.id;
+                    
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          selectedCar = car;
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.primaryGreen,
+                                    AppTheme.darkAccentGreen,
+                                  ],
+                                )
+                              : LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.darkAccentGreen.withOpacity(0.5),
+                                    AppTheme.backgroundGreen.withOpacity(0.5),
+                                  ],
+                                ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: isSelected
+                              ? Border.all(color: AppTheme.primaryGreen, width: 2)
+                              : Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 65,
+                              height: 45,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryGreen.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: car.imagePath != null && car.imagePath!.isNotEmpty
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Image.file(
+                                        File(car.imagePath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return const Icon(
+                                            IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                            color: Colors.white,
+                                            size: 22,
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : const Icon(
+                                      IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${car.brand} ${car.model}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Year: ${car.year.toString()}',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+                const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1974,7 +3070,7 @@ class _EditReminderFormState extends State<EditReminderForm> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 4),
+          const SizedBox(height: 4),
         DropdownButtonFormField<T>(
           value: value,
           onChanged: onChanged,
@@ -2001,18 +3097,34 @@ class _EditReminderFormState extends State<EditReminderForm> {
   }
 
   Future<void> _updateReminder() async {
-    // Validation
-    if (title.trim().isEmpty || description.trim().isEmpty || selectedCar == null) {
+    // Validate form fields
+    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
+      return; // Form validation will show red borders
+    }
+    
+    // Validate car selection
+    if (selectedCar == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill in all required fields'),
+          content: Text('Please select a car'),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
-
-    setState(() => _isLoading = true);
+    
+    // Validate target date (required)
+    if (targetDate == null) {
+      setState(() {
+        _dateError = 'Please select a target date';
+      });
+      return;
+    }
+    
+    setState(() {
+      _isLoading = true;
+      _dateError = null; // Clear any date errors
+    });
 
     try {
       final result = await _reminderService.updateReminder(

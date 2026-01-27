@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../../shared/utils/responsive_utils.dart';
 import '../../../services/security/local_unlock_service.dart';
 import '../../../services/security/authentication_manager.dart';
+import '../../../services/security/otp_service.dart';
 import '../auth/login_screen.dart';
+import 'otp_verification_screen.dart';
 
 class UnlockScreen extends StatefulWidget {
   final VoidCallback? onUnlockSuccess;
@@ -152,11 +156,11 @@ class _UnlockScreenState extends State<UnlockScreen>
         child: FadeTransition(
           opacity: _fadeAnimation,
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: context.responsivePadding(horizontal: 16, vertical: 12),
             child: Column(
               children: [
                 _buildHeader(),
-                const SizedBox(height: 60),
+                SizedBox(height: context.responsiveSpacing(16)),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -165,11 +169,11 @@ class _UnlockScreenState extends State<UnlockScreen>
                         _buildBiometricPrompt()
                       else ...[
                         _buildPinDisplay(),
-                        const SizedBox(height: 40),
+                        SizedBox(height: _errorMessage != null ? context.r(12) : context.r(16)),
                         _buildNumericKeypad(),
                       ],
                       if (_errorMessage != null) ...[
-                        const SizedBox(height: 20),
+                        SizedBox(height: context.r(10)),
                         _buildErrorMessage(),
                       ],
                     ],
@@ -188,8 +192,8 @@ class _UnlockScreenState extends State<UnlockScreen>
     return Column(
       children: [
         Container(
-          width: 100,
-          height: 100,
+          width: context.r(70),
+          height: context.r(70),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
@@ -199,43 +203,45 @@ class _UnlockScreenState extends State<UnlockScreen>
                 AppTheme.darkAccentGreen,
               ],
             ),
-            borderRadius: BorderRadius.circular(50),
+            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(35)),
             boxShadow: [
               BoxShadow(
                 color: AppTheme.primaryGreen.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                blurRadius: context.r(15),
+                offset: Offset(0, context.r(8)),
               ),
             ],
           ),
-          child: const Icon(
+          child: Icon(
             Icons.lock_outline,
             color: Colors.white,
-            size: 50,
+            size: context.responsiveIconSize(35),
           ),
         ),
-        const SizedBox(height: 24),
-        const Text(
-          'Welcome Back',
-          style: TextStyle(
-            fontSize: 28,
+        SizedBox(height: context.r(12)),
+        Text(
+          'Enter PIN',
+          style: context.responsiveTextStyle(
+            fontSize: 20,
             fontWeight: FontWeight.bold,
             fontFamily: 'Orbitron',
             color: AppTheme.primaryGreen,
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: context.r(6)),
         Text(
           _showBiometricPrompt 
-              ? 'Use your fingerprint or PIN to unlock'
-              : 'Enter your PIN to unlock the app',
-          style: TextStyle(
-            fontSize: 14,
+              ? 'Verify your PIN to access License'
+              : 'Verify your PIN to access License',
+          style: context.responsiveTextStyle(
+            fontSize: 12,
             color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
             fontFamily: 'Orbitron',
           ),
           textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -319,9 +325,9 @@ class _UnlockScreenState extends State<UnlockScreen>
               bool isActive = index == _pin.length;
               
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                width: 20,
-                height: 20,
+                margin: EdgeInsets.symmetric(horizontal: context.r(6)),
+                width: context.r(16),
+                height: context.r(16),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: isFilled 
@@ -335,10 +341,10 @@ class _UnlockScreenState extends State<UnlockScreen>
                   ),
                 ),
                 child: isFilled
-                    ? const Icon(
+                    ? Icon(
                         Icons.circle,
                         color: Colors.white,
-                        size: 12,
+                        size: context.responsiveIconSize(10),
                       )
                     : null,
               );
@@ -353,13 +359,13 @@ class _UnlockScreenState extends State<UnlockScreen>
     return Column(
       children: [
         _buildKeypadRow(['1', '2', '3']),
-        const SizedBox(height: 16),
+        SizedBox(height: context.r(8)),
         _buildKeypadRow(['4', '5', '6']),
-        const SizedBox(height: 16),
+        SizedBox(height: context.r(8)),
         _buildKeypadRow(['7', '8', '9']),
-        const SizedBox(height: 16),
+        SizedBox(height: context.r(8)),
         _buildKeypadRow(['biometric', '0', 'backspace']),
-        const SizedBox(height: 24),
+        SizedBox(height: context.r(12)),
         // Verify button for 4-5 digit PINs
         if (_pin.length >= 4 && _pin.length < 6)
           _buildVerifyButton(),
@@ -369,8 +375,8 @@ class _UnlockScreenState extends State<UnlockScreen>
 
   Widget _buildVerifyButton() {
     return Container(
-      width: 200,
-      height: 50,
+      width: context.r(160),
+      height: context.responsiveButtonHeight(42),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -380,12 +386,12 @@ class _UnlockScreenState extends State<UnlockScreen>
             AppTheme.darkAccentGreen,
           ],
         ),
-        borderRadius: BorderRadius.circular(25),
+        borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24)),
         boxShadow: [
           BoxShadow(
             color: AppTheme.primaryGreen.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            blurRadius: context.r(10),
+            offset: Offset(0, context.r(5)),
           ),
         ],
       ),
@@ -393,21 +399,21 @@ class _UnlockScreenState extends State<UnlockScreen>
         color: Colors.transparent,
         child: InkWell(
           onTap: _isLoading ? null : _verifyPin,
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24)),
           child: Center(
             child: _isLoading
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
+                ? SizedBox(
+                    width: context.r(24),
+                    height: context.r(24),
+                    child: const CircularProgressIndicator(
                       strokeWidth: 2,
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
-                : const Text(
+                : Text(
                     'Verify PIN',
-                    style: TextStyle(
-                      fontSize: 16,
+                    style: context.responsiveTextStyle(
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       fontFamily: 'Orbitron',
@@ -427,12 +433,15 @@ class _UnlockScreenState extends State<UnlockScreen>
   }
 
   Widget _buildKeypadButton(String key) {
+    final buttonSize = context.r(60);
+    final borderRadius = context.responsiveBorderRadius(30);
+    
     if (key == 'biometric') {
       return Container(
-        width: 80,
-        height: 80,
+        width: buttonSize,
+        height: buttonSize,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(40),
+          borderRadius: BorderRadius.circular(borderRadius),
         ),
         child: Material(
           color: Colors.transparent,
@@ -443,12 +452,12 @@ class _UnlockScreenState extends State<UnlockScreen>
               });
               _attemptBiometricAuth();
             },
-            borderRadius: BorderRadius.circular(40),
+            borderRadius: BorderRadius.circular(borderRadius),
             child: Center(
               child: Icon(
                 Icons.fingerprint,
                 color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                size: 32,
+                size: context.responsiveIconSize(28),
               ),
             ),
           ),
@@ -457,8 +466,8 @@ class _UnlockScreenState extends State<UnlockScreen>
     }
 
     return Container(
-      width: 80,
-      height: 80,
+      width: buttonSize,
+      height: buttonSize,
       decoration: BoxDecoration(
         gradient: key == 'backspace'
             ? null
@@ -470,14 +479,14 @@ class _UnlockScreenState extends State<UnlockScreen>
                   AppTheme.backgroundGreen,
                 ],
               ),
-        borderRadius: BorderRadius.circular(40),
+        borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: key == 'backspace'
             ? null
             : [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
+                  blurRadius: context.r(10),
+                  offset: Offset(0, context.r(5)),
                 ),
               ],
       ),
@@ -485,18 +494,18 @@ class _UnlockScreenState extends State<UnlockScreen>
         color: Colors.transparent,
         child: InkWell(
           onTap: () => _onKeypadTap(key),
-          borderRadius: BorderRadius.circular(40),
+          borderRadius: BorderRadius.circular(borderRadius),
           child: Center(
             child: key == 'backspace'
                 ? Icon(
                     Icons.backspace_outlined,
                     color: AppTheme.getThemeAwareTextColor(context),
-                    size: 24,
+                    size: context.responsiveIconSize(22),
                   )
                 : Text(
                     key,
-                    style: const TextStyle(
-                      fontSize: 24,
+                    style: context.responsiveTextStyle(
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       fontFamily: 'Orbitron',
@@ -543,35 +552,62 @@ class _UnlockScreenState extends State<UnlockScreen>
 
   Widget _buildFooter() {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         if (_remainingAttempts < 5)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange.withOpacity(0.3)),
-            ),
-            child: Text(
-              '$_remainingAttempts attempts remaining',
-              style: const TextStyle(
-                color: Colors.orange,
-                fontSize: 12,
-                fontFamily: 'Orbitron',
+          Padding(
+            padding: EdgeInsets.only(bottom: context.r(12)),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: context.r(16), vertical: context.r(8)),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Text(
+                '$_remainingAttempts attempts remaining',
+                style: context.responsiveTextStyle(
+                  fontSize: 12,
+                  color: Colors.orange,
+                  fontFamily: 'Orbitron',
+                ),
               ),
             ),
           ),
-        const SizedBox(height: 16),
-        TextButton(
-          onPressed: _showSignOutDialog,
-          child: const Text(
-            'Sign out and use different account',
-            style: TextStyle(
-              color: AppTheme.primaryGreen,
-              fontFamily: 'Orbitron',
-              fontSize: 12,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextButton(
+              onPressed: _showForgotPinDialog,
+              child: Text(
+                'Forgot PIN?',
+                style: context.responsiveTextStyle(
+                  fontSize: 12,
+                  color: AppTheme.primaryGreen,
+                  fontFamily: 'Orbitron',
+                  decoration: TextDecoration.underline,
+                ),
+              ),
             ),
-          ),
+            Text(
+              ' | ',
+              style: context.responsiveTextStyle(
+                fontSize: 12,
+                color: AppTheme.primaryGreen,
+              ),
+            ),
+            TextButton(
+              onPressed: _showSignOutDialog,
+              child: Text(
+                'Sign Out',
+                style: context.responsiveTextStyle(
+                  fontSize: 12,
+                  color: AppTheme.primaryGreen,
+                  fontFamily: 'Orbitron',
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -712,6 +748,137 @@ class _UnlockScreenState extends State<UnlockScreen>
         ],
       ),
     );
+  }
+
+  void _showForgotPinDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Forgot PIN?',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'To reset your PIN, you need to verify your email. A verification code will be sent to your registered email address.',
+          style: TextStyle(fontFamily: 'Orbitron'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Orbitron'),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _initiateEmailVerificationForPinReset();
+            },
+            child: const Text(
+              'Send Code',
+              style: TextStyle(
+                color: AppTheme.primaryGreen,
+                fontFamily: 'Orbitron',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _initiateEmailVerificationForPinReset() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Get current user email from Firebase Auth directly
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.email == null) {
+        _showError('No user found. Please sign in again.');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final email = user.email!;
+      final otpService = OtpService();
+
+      // Send OTP to email
+      final success = await otpService.sendOtpToEmail(email);
+
+      if (mounted) {
+        if (success) {
+          // Show success message with OTP for development
+          final otp = otpService.currentOtpForTesting;
+          
+          // Navigate to OTP verification screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OtpVerificationScreen(email: email),
+            ),
+          );
+
+          // Show development OTP in snackbar (remove in production)
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'OTP sent successfully!',
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Development OTP: $otp',
+                    style: const TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Sent to: $email',
+                    style: const TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: AppTheme.primaryGreen,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        } else {
+          _showError('Failed to send verification code. Please try again.');
+        }
+
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('An error occurred: ${e.toString()}');
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _showSignOutDialog() {

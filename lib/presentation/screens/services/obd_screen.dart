@@ -1,6 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+// import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';  // Temporarily disabled
+// Use stub
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/services/notification_service.dart';
+import '../../../shared/utils/responsive_utils.dart';
+import '../../../services/bluetooth/bluetooth_service.dart';
+import '../../../services/obd/obd_service.dart';
+import '../../../services/obd/obd_models.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class OBDDashboardScreen extends StatefulWidget {
   const OBDDashboardScreen({super.key});
@@ -10,41 +18,327 @@ class OBDDashboardScreen extends StatefulWidget {
 }
 
 class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
-  bool _isConnected = false;
+  final BluetoothService _bluetoothService = BluetoothService();
+  final ObdService _obdService = ObdService();
+  
   bool _isScanning = false;
+  bool _isConnecting = false;
+  bool _isInitializing = false;
+  ObdConnectionState _connectionState = ObdConnectionState.disconnected;
+  ObdData _currentData = ObdData();
+  List<BluetoothDevice> _availableDevices = [];
+  BluetoothDevice? _connectedDevice;
+  StreamSubscription<ObdData>? _dataSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBluetoothState();
+    _listenToObdData();
+  }
+
+  @override
+  void dispose() {
+    _dataSubscription?.cancel();
+    _obdService.stopPolling();
+    super.dispose();
+  }
+
+  /// Check Bluetooth state on init
+  Future<void> _checkBluetoothState() async {
+    final isEnabled = await _bluetoothService.isBluetoothEnabled();
+    if (!isEnabled && mounted) {
+      _showBluetoothDisabledDialog();
+    }
+  }
+
+  /// Listen to OBD data stream
+  void _listenToObdData() {
+    _dataSubscription = _obdService.obdDataStream.listen((data) {
+      if (mounted) {
+        setState(() {
+          _currentData = data;
+        });
+      }
+    });
+  }
+
+  /// Show dialog to enable Bluetooth
+  void _showBluetoothDisabledDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Bluetooth Disabled'),
+        content: const Text('Please enable Bluetooth to connect to OBD-II devices.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _bluetoothService.requestEnableBluetooth();
+            },
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Scan for OBD devices
+  Future<void> _scanForDevices() async {
+    if (_isScanning) return;
+
+    // Check if Bluetooth is enabled
+    final isEnabled = await _bluetoothService.isBluetoothEnabled();
+    if (!isEnabled) {
+      _showBluetoothDisabledDialog();
+      return;
+    }
+
+    setState(() {
+      _isScanning = true;
+      _availableDevices = [];
+    });
+
+    try {
+      // First, get bonded (paired) devices
+      final bondedDevices = await _bluetoothService.getBondedDevices();
+      final obdDevices = _bluetoothService.filterObdDevices(bondedDevices);
+      
+      if (obdDevices.isNotEmpty && mounted) {
+        setState(() {
+          _availableDevices = obdDevices;
+        });
+        _showDeviceSelectionDialog();
+      } else {
+        // No paired OBD devices, start discovery
+        final discoveryStream = _bluetoothService.startDiscovery();
+        final devices = <BluetoothDevice>[];
+        
+        await for (final result in discoveryStream.timeout(const Duration(seconds: 10))) {
+          if (result.device.name != null) {
+            devices.add(result.device);
+          }
+        }
+        
+        if (mounted) {
+          final obdDevicesDiscovered = _bluetoothService.filterObdDevices(devices);
+          setState(() {
+            _availableDevices = obdDevicesDiscovered;
+          });
+          
+          if (obdDevicesDiscovered.isNotEmpty) {
+            _showDeviceSelectionDialog();
+          } else {
+            _showNoDevicesFoundDialog();
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        NotificationService.instance.showErrorNotification(
+          context,
+          message: 'Failed to scan for devices: ${e.toString()}',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+        });
+      }
+    }
+  }
+
+  /// Show device selection dialog
+  void _showDeviceSelectionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select OBD-II Device'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _availableDevices.length,
+            itemBuilder: (context, index) {
+              final device = _availableDevices[index];
+              return ListTile(
+                leading: const Icon(Icons.bluetooth),
+                title: Text(device.name ?? 'Unknown Device'),
+                subtitle: Text(device.address),
+                onTap: () {
+                  Navigator.pop(context);
+                  _connectToDevice(device);
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show no devices found dialog
+  void _showNoDevicesFoundDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('No Devices Found'),
+        content: const Text(
+          'No OBD-II devices found. Please ensure:\n'
+          '• Your OBD adapter is plugged in\n'
+          '• Your vehicle ignition is on\n'
+          '• The adapter is paired with your phone',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _scanForDevices();
+            },
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Connect to selected device
+  Future<void> _connectToDevice(BluetoothDevice device) async {
+    setState(() {
+      _isConnecting = true;
+      _connectionState = ObdConnectionState.connecting;
+    });
+
+    try {
+      // Connect via Bluetooth
+      final result = await _bluetoothService.connectToDevice(device);
+      
+      if (!result.success) {
+        throw Exception(result.message);
+      }
+
+      // Initialize OBD
+      setState(() {
+        _isInitializing = true;
+        _connectionState = ObdConnectionState.initializing;
+      });
+
+      final initialized = await _obdService.initialize();
+      
+      if (!initialized) {
+        throw Exception('Failed to initialize OBD connection');
+      }
+
+      // Start polling data
+      _obdService.startPolling();
+
+      if (mounted) {
+        setState(() {
+          _connectedDevice = device;
+          _connectionState = ObdConnectionState.connected;
+        });
+
+        NotificationService.instance.showSuccessNotification(
+          context,
+          message: 'Connected to ${device.name}',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _connectionState = ObdConnectionState.error;
+        });
+
+        NotificationService.instance.showErrorNotification(
+          context,
+          message: 'Connection failed: ${e.toString()}',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+          _isInitializing = false;
+        });
+      }
+    }
+  }
+
+  /// Disconnect from device
+  Future<void> _disconnect() async {
+    await _obdService.disconnect();
+    
+    if (mounted) {
+      setState(() {
+        _connectionState = ObdConnectionState.disconnected;
+        _connectedDevice = null;
+        _currentData = ObdData();
+      });
+
+      NotificationService.instance.showInfoNotification(
+        context,
+        message: 'Disconnected from OBD device',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Wrap existing content with Scaffold to add bottom nav bar
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeaderWithBackground(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                children: [
-                  const SizedBox(height: 16),
-                  _buildConnectionCard(),
-                  const SizedBox(height: 16),
-                  _buildConnectionInstructions(),
-                  const SizedBox(height: 16),
-                  if (_isConnected) _buildRealTimeDataSection(),
-                  const SizedBox(height: 100),
-                ],
-              ),
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.height < 700;
+    
+    return ScreenWithNavBar(
+      currentIndex: 2,
+      child: Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(context),
+                Padding(
+                  padding: ResponsiveUtils.responsivePadding(context, horizontal: 20, vertical: 0),
+                  child: Column(
+                    children: [
+                      SizedBox(height: ResponsiveUtils.spacing(context, 16)),
+                      _buildConnectionCard(context),
+                      SizedBox(height: ResponsiveUtils.spacing(context, 16)),
+                      if (_connectionState != ObdConnectionState.connected)
+                        _buildConnectionInstructions(context),
+                      if (_connectionState == ObdConnectionState.connected) ...[
+                        _buildRealTimeDataSection(context),
+                        SizedBox(height: ResponsiveUtils.spacing(context, 16)),
+                      ],
+                      SizedBox(height: isSmallScreen ? 60 : 100),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeaderWithBackground() {
+  Widget _buildHeader(BuildContext context) {
     return Container(
-      height: 200,
+      padding: ResponsiveUtils.responsivePadding(context, horizontal: 0, vertical: 16),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -60,70 +354,81 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
           bottomRight: Radius.circular(40),
         ),
       ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      } else {
-                        // If no previous route, try to navigate to root
-                        Navigator.of(context).popUntil((route) => route.isFirst);
-                      }
-                    },
-                    icon: const Icon(
-                      Icons.arrow_back_ios,
-                      color: Colors.white,
-                      size: 28,
-                    ),
+      child: Padding(
+        padding: ResponsiveUtils.responsivePadding(context, horizontal: 20, vertical: 0),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    } else {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    }
+                  },
+                  icon: const Icon(
+                    Icons.arrow_back_ios,
+                    color: Colors.white,
+                    size: 24,
                   ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Text(
-                      'OBD-II Diagnostics',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(_isConnected ? Icons.bluetooth_connected : Icons.bluetooth),
-                    onPressed: _toggleConnection,
-                    color: _isConnected ? AppTheme.lightBackground : Colors.white70,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Monitor your vehicle\'s health in real-time',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white70,
-                    fontFamily: 'Orbitron',
-                  ),
-                  textAlign: TextAlign.center,
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'OBD-II Diagnostics',
+                    style: TextStyle(
+                      fontSize: ResponsiveUtils.fontSize(context, 20),
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontFamily: 'Orbitron',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    _connectionState == ObdConnectionState.connected
+                        ? Icons.bluetooth_connected
+                        : Icons.bluetooth,
+                  ),
+                  onPressed: _connectionState == ObdConnectionState.connected
+                      ? _disconnect
+                      : _scanForDevices,
+                  color: _connectionState == ObdConnectionState.connected
+                      ? AppTheme.lightBackground
+                      : Colors.white70,
+                ),
+              ],
+            ),
+            SizedBox(height: ResponsiveUtils.spacing(context, 12)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Monitor your vehicle\'s health in real-time',
+                style: TextStyle(
+                  fontSize: ResponsiveUtils.fontSize(context, 14),
+                  color: Colors.white70,
+                  fontFamily: 'Orbitron',
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildConnectionCard() {
+  Widget _buildConnectionCard(BuildContext context) {
+    final isConnected = _connectionState == ObdConnectionState.connected;
+    
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(ResponsiveUtils.spacing(context, 16)),
       decoration: BoxDecoration(
         color: AppTheme.darkGray.withOpacity(0.3),
         borderRadius: BorderRadius.circular(16),
@@ -133,50 +438,67 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            _isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+            isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
             size: 48,
-            color: _isConnected ? AppTheme.successColor : AppTheme.darkAccentGreen,
+            color: isConnected ? AppTheme.successColor : AppTheme.darkAccentGreen,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: ResponsiveUtils.spacing(context, 12)),
           Text(
-            _isConnected ? 'OBD-II Adapter Connected' : 'No OBD-II Connection',
+            isConnected
+                ? 'OBD-II Adapter Connected'
+                : _connectionState == ObdConnectionState.connecting
+                    ? 'Connecting...'
+                    : _connectionState == ObdConnectionState.initializing
+                        ? 'Initializing...'
+                        : 'No OBD-II Connection',
             style: TextStyle(
               fontFamily: 'Orbitron',
-              fontSize: 18,
+              fontSize: ResponsiveUtils.fontSize(context, 16),
               fontWeight: FontWeight.w700,
               color: AppTheme.getThemeAwareTextColor(context),
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: ResponsiveUtils.spacing(context, 8)),
           Text(
-            _isConnected 
-                ? 'Device: ELM327 Bluetooth\nVehicle: 2020 Toyota Camry'
+            isConnected
+                ? 'Device: ${_connectedDevice?.name ?? "Unknown"}'
                 : 'Connect your OBD-II adapter to get started',
             style: TextStyle(
               fontFamily: 'Orbitron',
-              fontSize: 14,
+              fontSize: ResponsiveUtils.fontSize(context, 12),
               color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: ResponsiveUtils.spacing(context, 12)),
           ElevatedButton.icon(
-            onPressed: _isScanning ? null : _toggleConnection,
-            icon: _isScanning 
+            onPressed: (_isScanning || _isConnecting || _isInitializing)
+                ? null
+                : isConnected
+                    ? _disconnect
+                    : _scanForDevices,
+            icon: (_isScanning || _isConnecting || _isInitializing)
                 ? const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Icon(_isConnected ? Icons.bluetooth_disabled : Icons.bluetooth_searching),
+                : Icon(isConnected
+                    ? Icons.bluetooth_disabled
+                    : Icons.bluetooth_searching),
             label: Text(
-              _isScanning 
-                  ? 'Scanning...' 
-                  : _isConnected 
-                      ? 'Disconnect' 
+              (_isScanning || _isConnecting || _isInitializing)
+                  ? (_isInitializing ? 'Initializing...' : 'Scanning...')
+                  : isConnected
+                      ? 'Disconnect'
                       : 'Scan & Connect',
               style: const TextStyle(
                 fontFamily: 'Orbitron',
@@ -184,9 +506,13 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
               ),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _isConnected ? AppTheme.errorColor : AppTheme.primaryGreen,
+              backgroundColor:
+                  isConnected ? AppTheme.errorColor : AppTheme.primaryGreen,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: EdgeInsets.symmetric(
+                horizontal: ResponsiveUtils.spacing(context, 20),
+                vertical: ResponsiveUtils.spacing(context, 10),
+              ),
             ),
           ),
         ],
@@ -194,42 +520,115 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
     );
   }
 
-  Widget _buildRealTimeDataSection() {
+  Widget _buildRealTimeDataSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Real-Time Engine Data',
           style: TextStyle(
             fontFamily: 'Orbitron',
-            fontSize: 20,
+            fontSize: ResponsiveUtils.fontSize(context, 18),
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 16),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.5,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          children: [
-            _buildDataCard('RPM', '2,150', 'rpm', Icons.rotate_right, AppTheme.primaryGreen),
-            _buildDataCard('Speed', '65', 'mph', Icons.speed, AppTheme.secondaryGreen),
-            _buildDataCard('Engine Temp', '192°F', 'Normal', Icons.thermostat, AppTheme.successColor),
-            _buildDataCard('Fuel Level', '75%', 'Good', Icons.local_gas_station, AppTheme.primaryGreen),
-            _buildDataCard('Battery', '12.6V', 'Healthy', Icons.battery_full, AppTheme.successColor),
-            _buildDataCard('Throttle', '25%', 'Position', Icons.tune, AppTheme.secondaryGreen),
-          ],
+        SizedBox(height: ResponsiveUtils.spacing(context, 12)),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: 1.4,
+              crossAxisSpacing: ResponsiveUtils.spacing(context, 12),
+              mainAxisSpacing: ResponsiveUtils.spacing(context, 12),
+              children: [
+                _buildDataCard(
+                  context,
+                  'RPM',
+                  _currentData.rpm?.toString() ?? 'N/A',
+                  'rpm',
+                  Icons.rotate_right,
+                  AppTheme.primaryGreen,
+                ),
+                _buildDataCard(
+                  context,
+                  'Speed',
+                  _currentData.speed != null
+                      ? '${_currentData.speed}'
+                      : 'N/A',
+                  'km/h',
+                  Icons.speed,
+                  AppTheme.secondaryGreen,
+                ),
+                _buildDataCard(
+                  context,
+                  'Engine Temp',
+                  _currentData.coolantTempF != null
+                      ? '${_currentData.coolantTempF!.toStringAsFixed(0)}°F'
+                      : 'N/A',
+                  _currentData.coolantTempStatus,
+                  Icons.thermostat,
+                  _currentData.isCoolantTempNormal
+                      ? AppTheme.successColor
+                      : AppTheme.errorColor,
+                ),
+                _buildDataCard(
+                  context,
+                  'Fuel Level',
+                  _currentData.fuelLevel != null
+                      ? '${_currentData.fuelLevel!.toStringAsFixed(0)}%'
+                      : 'N/A',
+                  _currentData.fuelLevel != null &&
+                          _currentData.fuelLevel! < 20
+                      ? 'Low'
+                      : 'Good',
+                  Icons.local_gas_station,
+                  _currentData.fuelLevel != null && _currentData.fuelLevel! < 20
+                      ? AppTheme.warningColor
+                      : AppTheme.primaryGreen,
+                ),
+                _buildDataCard(
+                  context,
+                  'Battery',
+                  _currentData.batteryVoltage != null
+                      ? '${_currentData.batteryVoltage!.toStringAsFixed(1)}V'
+                      : 'N/A',
+                  _currentData.batteryStatus,
+                  Icons.battery_full,
+                  _currentData.isBatteryHealthy
+                      ? AppTheme.successColor
+                      : AppTheme.warningColor,
+                ),
+                _buildDataCard(
+                  context,
+                  'Throttle',
+                  _currentData.throttlePosition != null
+                      ? '${_currentData.throttlePosition!.toStringAsFixed(0)}%'
+                      : 'N/A',
+                  'Position',
+                  Icons.tune,
+                  AppTheme.secondaryGreen,
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildDataCard(String title, String value, String unit, IconData icon, Color color) {
+  Widget _buildDataCard(
+    BuildContext context,
+    String title,
+    String value,
+    String unit,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(ResponsiveUtils.spacing(context, 12)),
       decoration: BoxDecoration(
         color: AppTheme.darkGray.withOpacity(0.3),
         borderRadius: BorderRadius.circular(16),
@@ -240,313 +639,61 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 8),
+          Icon(icon, color: color, size: 20),
+          SizedBox(height: ResponsiveUtils.spacing(context, 4)),
           Text(
             title,
             style: TextStyle(
               fontFamily: 'Orbitron',
-              fontSize: 10,
+              fontSize: ResponsiveUtils.fontSize(context, 9),
               fontWeight: FontWeight.w500,
               color: Colors.grey[600],
             ),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: ResponsiveUtils.spacing(context, 2)),
           Text(
             value,
             style: TextStyle(
               fontFamily: 'Orbitron',
-              fontSize: 14,
+              fontSize: ResponsiveUtils.fontSize(context, 13),
               fontWeight: FontWeight.w700,
               color: color,
             ),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           Text(
             unit,
             style: TextStyle(
               fontFamily: 'Orbitron',
-              fontSize: 8,
+              fontSize: ResponsiveUtils.fontSize(context, 8),
               color: Colors.grey[500],
             ),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDiagnosticCodesSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: AppTheme.cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Diagnostic Trouble Codes',
-                style: TextStyle(
-                  fontFamily: 'Orbitron',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              ElevatedButton(
-                onPressed: _scanForCodes,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.secondaryGreen,
-                  foregroundColor: AppTheme.backgroundGreen,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-                child: const Text(
-                  'Scan',
-                  style: TextStyle(
-                    fontFamily: 'Orbitron',
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildCodeItem('P0171', 'System Too Lean (Bank 1)', 'Pending', AppTheme.warningColor),
-          _buildCodeItem('B1001', 'Battery Voltage Low', 'Active', AppTheme.errorColor),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.successColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.info, color: AppTheme.successColor, size: 20),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '2 diagnostic codes found. Tap on any code for detailed information.',
-                    style: TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontSize: 12,
-                      color: AppTheme.successColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCodeItem(String code, String description, String status, Color statusColor) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: statusColor.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              code,
-              style: TextStyle(
-                fontFamily: 'OrbitronCondensed',
-                fontWeight: FontWeight.w700,
-                color: statusColor,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  description,
-                  style: const TextStyle(
-                    fontFamily: 'Orbitron',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                Text(
-                  'Status: $status',
-                  style: TextStyle(
-                    fontFamily: 'Orbitron',
-                    fontSize: 12,
-                    color: statusColor,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right, color: Colors.grey[400]),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHealthScoreSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: AppTheme.cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Vehicle Health Score',
-            style: TextStyle(
-              fontFamily: 'Orbitron',
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Overall Health',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: 0.82,
-                      backgroundColor: Colors.grey[300],
-                      valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.successColor),
-                      minHeight: 8,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      '82% - Good Condition',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontSize: 14,
-                        color: AppTheme.successColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 20),
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.successColor.withOpacity(0.1),
-                ),
-                child: const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '82',
-                        style: TextStyle(
-                          fontFamily: 'Orbitron',
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.successColor,
-                        ),
-                      ),
-                      Text(
-                        'SCORE',
-                        style: TextStyle(
-                          fontFamily: 'OrbitronCondensed',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.successColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildHealthCategory('Engine', 0.85, AppTheme.successColor),
-          _buildHealthCategory('Transmission', 0.78, AppTheme.warningColor),
-          _buildHealthCategory('Emissions', 0.90, AppTheme.successColor),
-          _buildHealthCategory('Electrical', 0.75, AppTheme.warningColor),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHealthCategory(String category, double score, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              category,
-              style: const TextStyle(
-                fontFamily: 'Orbitron',
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: LinearProgressIndicator(
-              value: score,
-              backgroundColor: Colors.grey[300],
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-              minHeight: 6,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '${(score * 100).toInt()}%',
-            style: TextStyle(
-              fontFamily: 'OrbitronCondensed',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildConnectionInstructions() {
+  Widget _buildConnectionInstructions(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color cardBg = AppTheme.darkGray.withOpacity(0.3);
-    final Color primaryText = isDark ? AppTheme.lightBackground : Colors.black87;
-    final Color secondaryText = isDark ? AppTheme.lightBackground : Colors.black54;
+    final Color primaryText =
+        isDark ? AppTheme.lightBackground : Colors.black87;
+    final Color secondaryText =
+        isDark ? AppTheme.lightBackground : Colors.black54;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(ResponsiveUtils.spacing(context, 16)),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
@@ -556,47 +703,56 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
             Icons.info_outline,
-            size: 48,
+            size: 40,
             color: AppTheme.primaryGreen,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: ResponsiveUtils.spacing(context, 12)),
           Text(
             'How to Connect OBD-II Adapter',
             style: TextStyle(
               fontFamily: 'Orbitron',
-              fontSize: 18,
+              fontSize: ResponsiveUtils.fontSize(context, 16),
               fontWeight: FontWeight.w700,
               color: primaryText,
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 16),
-          _buildInstructionStep('1', 'Locate your vehicle\'s OBD-II port (usually under dashboard)'),
+          SizedBox(height: ResponsiveUtils.spacing(context, 12)),
+          _buildInstructionStep(
+              '1', 'Locate your vehicle\'s OBD-II port (usually under dashboard)'),
           _buildInstructionStep('2', 'Plug in your Bluetooth OBD-II adapter'),
           _buildInstructionStep('3', 'Turn on your vehicle\'s ignition'),
           _buildInstructionStep('4', 'Tap "Scan & Connect" above'),
-          const SizedBox(height: 16),
+          SizedBox(height: ResponsiveUtils.spacing(context, 12)),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(ResponsiveUtils.spacing(context, 10)),
             decoration: BoxDecoration(
-              color: isDark ? Colors.black12 : AppTheme.darkAccentGreen.withOpacity(0.3),
+              color: isDark
+                  ? Colors.black12
+                  : AppTheme.darkAccentGreen.withOpacity(0.3),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
-                const Icon(Icons.lightbulb_outline, color: AppTheme.secondaryGreen, size: 20),
+                const Icon(Icons.lightbulb_outline,
+                    color: AppTheme.secondaryGreen, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Compatible with ELM327 Bluetooth adapters. Available at auto parts stores.',
                     style: TextStyle(
                       fontFamily: 'Orbitron',
-                      fontSize: 12,
+                      fontSize: ResponsiveUtils.fontSize(context, 11),
                       color: secondaryText,
                     ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -610,13 +766,16 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
   Widget _buildInstructionStep(String number, String instruction) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color stepText = isDark ? AppTheme.lightBackground : Colors.black87;
+    
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(
+        vertical: ResponsiveUtils.spacing(context, 6),
+      ),
       child: Row(
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: 28,
+            height: 28,
             decoration: const BoxDecoration(
               color: AppTheme.primaryGreen,
               shape: BoxShape.circle,
@@ -624,63 +783,30 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
             child: Center(
               child: Text(
                 number,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Orbitron',
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
+                  fontSize: ResponsiveUtils.fontSize(context, 13),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               instruction,
               style: TextStyle(
                 fontFamily: 'Orbitron',
-                fontSize: 14,
+                fontSize: ResponsiveUtils.fontSize(context, 12),
                 color: stepText,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
       ),
-    );
-  }
-
-  void _toggleConnection() {
-    if (_isConnected) {
-      // Disconnect
-      setState(() {
-        _isConnected = false;
-      });
-      NotificationService.instance.showErrorNotification(
-        context,
-        message: 'OBD-II adapter disconnected',
-      );
-    } else {
-      // Simulate scanning and connecting
-      setState(() {
-        _isScanning = true;
-      });
-      
-      Future.delayed(const Duration(seconds: 3), () {
-        setState(() {
-          _isScanning = false;
-          _isConnected = true;
-        });
-        NotificationService.instance.showSuccessNotification(
-          context,
-          message: 'OBD-II adapter connected successfully!',
-        );
-      });
-    }
-  }
-
-  void _scanForCodes() {
-    NotificationService.instance.showInfoNotification(
-      context,
-      message: 'Scanning for diagnostic codes...',
     );
   }
 }

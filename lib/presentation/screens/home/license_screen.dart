@@ -818,7 +818,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
           ],
           
           // Action Buttons

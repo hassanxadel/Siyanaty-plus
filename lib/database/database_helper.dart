@@ -15,7 +15,7 @@ import 'voice_note_database_helper.dart';
 /// Handles car data storage with CRUD operations
 class DatabaseHelper {
   static const String _databaseName = 'syanaty.db';
-  static const int _databaseVersion = 14; // Add Car Health Dashboard tables
+  static const int _databaseVersion = 15; // Add car_id to maintenance table for standalone maintenance
   
   static const String tableCars = 'cars';
   static const String tableReminders = 'reminders';
@@ -118,7 +118,8 @@ class DatabaseHelper {
       await db.execute('''
         CREATE TABLE $tableMaintenance (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          reminder_id INTEGER NOT NULL,
+          reminder_id INTEGER,
+          car_id INTEGER,
           title TEXT NOT NULL,
           description TEXT NOT NULL,
           cost REAL NOT NULL DEFAULT 0.0,
@@ -128,12 +129,14 @@ class DatabaseHelper {
           invoice_number TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
-          FOREIGN KEY (reminder_id) REFERENCES $tableReminders (id) ON DELETE CASCADE
+          FOREIGN KEY (reminder_id) REFERENCES $tableReminders (id) ON DELETE CASCADE,
+          FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
         )
       ''');
       
       // Create indexes for maintenance
       await db.execute('CREATE INDEX idx_maintenance_reminder_id ON $tableMaintenance (reminder_id)');
+      await db.execute('CREATE INDEX idx_maintenance_car_id ON $tableMaintenance (car_id)');
       await db.execute('CREATE INDEX idx_maintenance_type ON $tableMaintenance (type)');
       await db.execute('CREATE INDEX idx_maintenance_date ON $tableMaintenance (maintenance_date)');
       await db.execute('CREATE INDEX idx_maintenance_cost ON $tableMaintenance (cost)');
@@ -354,7 +357,8 @@ class DatabaseHelper {
         await db.execute('''
           CREATE TABLE $tableMaintenance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            reminder_id INTEGER NOT NULL,
+            reminder_id INTEGER,
+            car_id INTEGER,
             title TEXT NOT NULL,
             description TEXT NOT NULL,
             cost REAL NOT NULL DEFAULT 0.0,
@@ -364,12 +368,14 @@ class DatabaseHelper {
             invoice_number TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
-            FOREIGN KEY (reminder_id) REFERENCES $tableReminders (id) ON DELETE CASCADE
+            FOREIGN KEY (reminder_id) REFERENCES $tableReminders (id) ON DELETE CASCADE,
+            FOREIGN KEY (car_id) REFERENCES $tableCars (id) ON DELETE CASCADE
           )
         ''');
         
         // Create indexes for maintenance
         await db.execute('CREATE INDEX idx_maintenance_reminder_id ON $tableMaintenance (reminder_id)');
+        await db.execute('CREATE INDEX idx_maintenance_car_id ON $tableMaintenance (car_id)');
         await db.execute('CREATE INDEX idx_maintenance_type ON $tableMaintenance (type)');
         await db.execute('CREATE INDEX idx_maintenance_date ON $tableMaintenance (maintenance_date)');
         await db.execute('CREATE INDEX idx_maintenance_cost ON $tableMaintenance (cost)');
@@ -653,6 +659,32 @@ class DatabaseHelper {
           print('Car Health Dashboard tables created successfully');
         } catch (e) {
           print('Error creating Car Health Dashboard tables: $e');
+        }
+      }
+      
+      if (oldVersion < 15) {
+        // Version 15: Add car_id column to maintenance table for standalone maintenance
+        try {
+          // Check if car_id column already exists
+          final tableInfo = await db.rawQuery('PRAGMA table_info($tableMaintenance)');
+          final columnNames = tableInfo.map((col) => col['name'] as String).toList();
+          
+          if (!columnNames.contains('car_id')) {
+            // Add car_id column to maintenance table
+            await db.execute('ALTER TABLE $tableMaintenance ADD COLUMN car_id INTEGER');
+            
+            // Create index for car_id
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_maintenance_car_id ON $tableMaintenance (car_id)');
+            
+            print('Added car_id column to maintenance table');
+          }
+          
+          // Make reminder_id nullable (can't alter column type in SQLite, but new records can have NULL)
+          // Existing data with reminder_id will still work, new standalone maintenance can have car_id only
+          
+          print('Maintenance table updated for standalone maintenance support');
+        } catch (e) {
+          print('Error updating maintenance table: $e');
         }
       }
     } catch (e) {
@@ -1189,15 +1221,18 @@ class DatabaseHelper {
   }
 
   /// Get maintenance by ID
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<BackupMaintenance?> getMaintenanceById(int id, String userId) async {
     try {
       final db = await database;
+      // Use UNION to support both reminder-linked and standalone maintenance
       final maps = await db.rawQuery('''
         SELECT m.* FROM $tableMaintenance m
-        INNER JOIN $tableReminders r ON m.reminder_id = r.id
-        INNER JOIN $tableCars c ON r.car_id = c.id
-        WHERE m.id = ? AND c.user_id = ?
-      ''', [id, userId]);
+        LEFT JOIN $tableReminders r ON m.reminder_id = r.id
+        LEFT JOIN $tableCars c1 ON r.car_id = c1.id
+        LEFT JOIN $tableCars c2 ON m.car_id = c2.id
+        WHERE m.id = ? AND (c1.user_id = ? OR c2.user_id = ?)
+      ''', [id, userId, userId]);
       
       if (maps.isNotEmpty) {
         return BackupMaintenance.fromMap(maps.first);
@@ -1209,16 +1244,18 @@ class DatabaseHelper {
   }
 
   /// Get all maintenance records for a specific user
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<List<BackupMaintenance>> getAllMaintenance(String userId) async {
     try {
       final db = await database;
       final maps = await db.rawQuery('''
-        SELECT m.* FROM $tableMaintenance m
-        INNER JOIN $tableReminders r ON m.reminder_id = r.id
-        INNER JOIN $tableCars c ON r.car_id = c.id
-        WHERE c.user_id = ?
+        SELECT DISTINCT m.* FROM $tableMaintenance m
+        LEFT JOIN $tableReminders r ON m.reminder_id = r.id
+        LEFT JOIN $tableCars c1 ON r.car_id = c1.id
+        LEFT JOIN $tableCars c2 ON m.car_id = c2.id
+        WHERE c1.user_id = ? OR c2.user_id = ?
         ORDER BY m.maintenance_date DESC
-      ''', [userId]);
+      ''', [userId, userId]);
       
       return List.generate(maps.length, (i) {
         return BackupMaintenance.fromMap(maps[i]);
@@ -1229,16 +1266,18 @@ class DatabaseHelper {
   }
 
   /// Get maintenance records by type
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<List<BackupMaintenance>> getMaintenanceByType(String userId, MaintenanceType type) async {
     try {
       final db = await database;
       final maps = await db.rawQuery('''
-        SELECT m.* FROM $tableMaintenance m
-        INNER JOIN $tableReminders r ON m.reminder_id = r.id
-        INNER JOIN $tableCars c ON r.car_id = c.id
-        WHERE c.user_id = ? AND m.type = ?
+        SELECT DISTINCT m.* FROM $tableMaintenance m
+        LEFT JOIN $tableReminders r ON m.reminder_id = r.id
+        LEFT JOIN $tableCars c1 ON r.car_id = c1.id
+        LEFT JOIN $tableCars c2 ON m.car_id = c2.id
+        WHERE (c1.user_id = ? OR c2.user_id = ?) AND m.type = ?
         ORDER BY m.maintenance_date DESC
-      ''', [userId, type.name]);
+      ''', [userId, userId, type.name]);
       
       return List.generate(maps.length, (i) {
         return BackupMaintenance.fromMap(maps[i]);
@@ -1269,6 +1308,7 @@ class DatabaseHelper {
   }
 
   /// Update maintenance record
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<int> updateMaintenance(BackupMaintenance maintenance, String userId) async {
     try {
       final db = await database;
@@ -1276,10 +1316,15 @@ class DatabaseHelper {
         UPDATE $tableMaintenance 
         SET title = ?, description = ?, cost = ?, maintenance_date = ?, type = ?, 
             mechanic_name = ?, invoice_number = ?, updated_at = ?
-        WHERE id = ? AND reminder_id IN (
-          SELECT r.id FROM $tableReminders r
-          INNER JOIN $tableCars c ON r.car_id = c.id
-          WHERE c.user_id = ?
+        WHERE id = ? AND (
+          reminder_id IN (
+            SELECT r.id FROM $tableReminders r
+            INNER JOIN $tableCars c ON r.car_id = c.id
+            WHERE c.user_id = ?
+          )
+          OR car_id IN (
+            SELECT id FROM $tableCars WHERE user_id = ?
+          )
         )
       ''', [
         maintenance.title,
@@ -1292,6 +1337,7 @@ class DatabaseHelper {
         maintenance.updatedAt.toIso8601String(),
         maintenance.id,
         userId,
+        userId,
       ]);
     } catch (e) {
       throw DatabaseException('Failed to update maintenance: $e');
@@ -1299,39 +1345,47 @@ class DatabaseHelper {
   }
 
   /// Delete maintenance record
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<int> deleteMaintenance(int id, String userId) async {
     try {
       final db = await database;
       return await db.rawDelete('''
         DELETE FROM $tableMaintenance 
-        WHERE id = ? AND reminder_id IN (
-          SELECT r.id FROM $tableReminders r
-          INNER JOIN $tableCars c ON r.car_id = c.id
-          WHERE c.user_id = ?
+        WHERE id = ? AND (
+          reminder_id IN (
+            SELECT r.id FROM $tableReminders r
+            INNER JOIN $tableCars c ON r.car_id = c.id
+            WHERE c.user_id = ?
+          )
+          OR car_id IN (
+            SELECT id FROM $tableCars WHERE user_id = ?
+          )
         )
-      ''', [id, userId]);
+      ''', [id, userId, userId]);
     } catch (e) {
       throw DatabaseException('Failed to delete maintenance: $e');
     }
   }
 
   /// Search maintenance records
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<List<BackupMaintenance>> searchMaintenance(String userId, String query) async {
     try {
       final db = await database;
       final searchQuery = '%$query%';
       final maps = await db.rawQuery('''
-        SELECT m.* FROM $tableMaintenance m
-        INNER JOIN $tableReminders r ON m.reminder_id = r.id
-        INNER JOIN $tableCars c ON r.car_id = c.id
-        WHERE c.user_id = ? AND (
+        SELECT DISTINCT m.* FROM $tableMaintenance m
+        LEFT JOIN $tableReminders r ON m.reminder_id = r.id
+        LEFT JOIN $tableCars c1 ON r.car_id = c1.id
+        LEFT JOIN $tableCars c2 ON m.car_id = c2.id
+        WHERE (c1.user_id = ? OR c2.user_id = ?) AND (
           m.title LIKE ? OR 
           m.description LIKE ? OR 
           m.mechanic_name LIKE ? OR
           m.invoice_number LIKE ?
         )
         ORDER BY m.maintenance_date DESC
-      ''', [userId, searchQuery, searchQuery, searchQuery, searchQuery]);
+      ''', [userId, userId, searchQuery, searchQuery, searchQuery, searchQuery]);
       
       return List.generate(maps.length, (i) {
         return BackupMaintenance.fromMap(maps[i]);
@@ -1342,31 +1396,54 @@ class DatabaseHelper {
   }
 
   /// Get maintenance count for a specific user
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<int> getMaintenanceCount(String userId) async {
     try {
       final db = await database;
       final result = await db.rawQuery('''
-        SELECT COUNT(*) as count FROM $tableMaintenance m
-        INNER JOIN $tableReminders r ON m.reminder_id = r.id
-        INNER JOIN $tableCars c ON r.car_id = c.id
-        WHERE c.user_id = ?
-      ''', [userId]);
+        SELECT COUNT(DISTINCT m.id) as count FROM $tableMaintenance m
+        LEFT JOIN $tableReminders r ON m.reminder_id = r.id
+        LEFT JOIN $tableCars c1 ON r.car_id = c1.id
+        LEFT JOIN $tableCars c2 ON m.car_id = c2.id
+        WHERE c1.user_id = ? OR c2.user_id = ?
+      ''', [userId, userId]);
       return Sqflite.firstIntValue(result) ?? 0;
     } catch (e) {
       throw DatabaseException('Failed to get maintenance count: $e');
     }
   }
 
+  /// Get maintenance count for a specific car
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
+  Future<int> getMaintenanceCountByCarId(int carId, String userId) async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery('''
+        SELECT COUNT(DISTINCT m.id) as count FROM $tableMaintenance m
+        LEFT JOIN $tableReminders r ON m.reminder_id = r.id
+        LEFT JOIN $tableCars c1 ON r.car_id = c1.id
+        LEFT JOIN $tableCars c2 ON m.car_id = c2.id
+        WHERE (c1.user_id = ? OR c2.user_id = ?)
+          AND (r.car_id = ? OR m.car_id = ?)
+      ''', [userId, userId, carId, carId]);
+      return Sqflite.firstIntValue(result) ?? 0;
+    } catch (e) {
+      throw DatabaseException('Failed to get maintenance count by car: $e');
+    }
+  }
+
   /// Get total maintenance cost for a specific user
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<double> getTotalMaintenanceCost(String userId) async {
     try {
       final db = await database;
       final result = await db.rawQuery('''
         SELECT SUM(m.cost) as total FROM $tableMaintenance m
-        INNER JOIN $tableReminders r ON m.reminder_id = r.id
-        INNER JOIN $tableCars c ON r.car_id = c.id
-        WHERE c.user_id = ?
-      ''', [userId]);
+        LEFT JOIN $tableReminders r ON m.reminder_id = r.id
+        LEFT JOIN $tableCars c1 ON r.car_id = c1.id
+        LEFT JOIN $tableCars c2 ON m.car_id = c2.id
+        WHERE c1.user_id = ? OR c2.user_id = ?
+      ''', [userId, userId]);
       return (result.first['total'] as num?)?.toDouble() ?? 0.0;
     } catch (e) {
       throw DatabaseException('Failed to get total maintenance cost: $e');
@@ -1374,44 +1451,49 @@ class DatabaseHelper {
   }
 
   /// Get maintenance records with full info (maintenance + reminder + car details)
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<List<Map<String, dynamic>>> getAllMaintenanceWithInfo(String userId) async {
     try {
       final db = await database;
       return await db.rawQuery('''
-        SELECT 
+        SELECT DISTINCT
           m.*,
-          r.title as reminder_title,
-          c.brand as car_brand,
-          c.model as car_model,
-          c.year as car_year,
-          c.license_plate as car_license_plate
+          COALESCE(r.title, 'Standalone Maintenance') as reminder_title,
+          COALESCE(c1.brand, c2.brand) as car_brand,
+          COALESCE(c1.model, c2.model) as car_model,
+          COALESCE(c1.year, c2.year) as car_year,
+          COALESCE(c1.license_plate, c2.license_plate) as car_license_plate
         FROM $tableMaintenance m
-        INNER JOIN $tableReminders r ON m.reminder_id = r.id
-        INNER JOIN $tableCars c ON r.car_id = c.id
-        WHERE c.user_id = ?
+        LEFT JOIN $tableReminders r ON m.reminder_id = r.id
+        LEFT JOIN $tableCars c1 ON r.car_id = c1.id
+        LEFT JOIN $tableCars c2 ON m.car_id = c2.id
+        WHERE c1.user_id = ? OR c2.user_id = ?
         ORDER BY m.maintenance_date DESC
-      ''', [userId]);
+      ''', [userId, userId]);
     } catch (e) {
       throw DatabaseException('Failed to get maintenance with info: $e');
     }
   }
 
   /// Get all maintenance for backup (used by backup service)
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<List<Map<String, dynamic>>> getAllMaintenanceForBackup(String userId) async {
     try {
       final db = await database;
       return await db.rawQuery('''
-        SELECT m.* FROM $tableMaintenance m
-        INNER JOIN $tableReminders r ON m.reminder_id = r.id
-        INNER JOIN $tableCars c ON r.car_id = c.id
-        WHERE c.user_id = ?
-      ''', [userId]);
+        SELECT DISTINCT m.* FROM $tableMaintenance m
+        LEFT JOIN $tableReminders r ON m.reminder_id = r.id
+        LEFT JOIN $tableCars c1 ON r.car_id = c1.id
+        LEFT JOIN $tableCars c2 ON m.car_id = c2.id
+        WHERE c1.user_id = ? OR c2.user_id = ?
+      ''', [userId, userId]);
     } catch (e) {
       throw DatabaseException('Failed to get maintenance for backup: $e');
     }
   }
 
   /// Clear all maintenance for a specific user (use with caution)
+  /// Supports both reminder-linked maintenance (via reminder_id) and standalone maintenance (via car_id)
   Future<int> clearAllMaintenance(String userId) async {
     try {
       final db = await database;
@@ -1422,7 +1504,10 @@ class DatabaseHelper {
           INNER JOIN $tableCars c ON r.car_id = c.id
           WHERE c.user_id = ?
         )
-      ''', [userId]);
+        OR car_id IN (
+          SELECT id FROM $tableCars WHERE user_id = ?
+        )
+      ''', [userId, userId]);
     } catch (e) {
       throw DatabaseException('Failed to clear maintenance: $e');
     }

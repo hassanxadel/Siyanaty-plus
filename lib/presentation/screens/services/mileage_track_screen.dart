@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,7 +6,7 @@ import '../../../shared/constants/app_theme.dart';
 import '../../../models/mileage_entry.dart';
 import '../../../services/mileage_service.dart';
 import '../../../services/car_service.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class MileageTrackScreen extends StatefulWidget {
   const MileageTrackScreen({super.key});
@@ -30,6 +31,7 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
   String? _userId;
   String? _selectedCarId;
   List<dynamic> _cars = [];
+  TripFrequency _selectedTripFrequency = TripFrequency.oneTime;
 
   @override
   void initState() {
@@ -97,7 +99,8 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ScreenWithNavBar(
+      child: Scaffold(
       backgroundColor: AppTheme.backgroundGreen,
       body: Column(
         children: [
@@ -127,7 +130,7 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavBar(currentIndex: 0, onTap: (i) {}),
+    ),
     );
   }
 
@@ -166,14 +169,15 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
                   ),
                   const SizedBox(width: 16),
                   const Text(
-                    'Mileage Track',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
+                          'Mileage Tracking',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontFamily: 'Orbitron',
+                          ),
+                        ),
                   const Spacer(),
                   PopupMenuButton<String>(
                     onSelected: _handleMenuAction,
@@ -294,23 +298,55 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
           const SizedBox(height: 16),
           _buildInstructionStep(
             '1',
-            'Record Mileage',
-            'Enter your current odometer reading and fuel information after each fill-up.',
-            Icons.speed,
+            'Select Your Car',
+            'Choose the car you\'re tracking from your saved vehicles.',
+            Icons.directions_car,
           ),
           const SizedBox(height: 12),
           _buildInstructionStep(
             '2',
-            'Track Efficiency',
-            'Monitor your vehicle\'s fuel efficiency and identify consumption patterns.',
-            Icons.local_gas_station,
+            'Choose Trip Frequency',
+            'Set if this is a one-time, daily, weekly, or monthly trip for automatic mileage updates.',
+            Icons.repeat,
           ),
           const SizedBox(height: 12),
           _buildInstructionStep(
             '3',
-            'Sync to Cloud',
-            'Use the menu to sync your data to Firebase for backup and access across devices.',
-            Icons.cloud_upload,
+            'Record Trip Details',
+            'Enter the trip distance, fuel used, and cost. Your car\'s mileage updates automatically!',
+            Icons.speed,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryGreen.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppTheme.primaryGreen.withOpacity(0.5),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.auto_awesome,
+                  color: Colors.amber,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Tap the info icon (ⓘ) above the form to learn more about automated mileage tracking!',
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -490,7 +526,7 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
             color: color,
             size: 24,
           ),
-          const SizedBox(height: 8),
+                const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
@@ -540,22 +576,34 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Add New Entry',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontFamily: 'Orbitron',
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Add New Entry',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                onPressed: _showAutomatedMileageInfo,
+                tooltip: 'Learn about automated mileage tracking',
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           _buildTextField(
             controller: _entryNameController,
             hintText: 'Entry Name (e.g., Weekly Fill-up)',
           ),
           const SizedBox(height: 12),
           _buildCarDropdown(),
+          const SizedBox(height: 12),
+          _buildTripFrequencySelector(),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -595,7 +643,7 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+                const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: Container(
@@ -701,52 +749,1342 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
 
   Widget _buildCarDropdown() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.3),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedCarId,
-          hint: const Text(
-            'Select Car',
-                style: TextStyle(
-              color: Colors.white54,
-                  fontFamily: 'Orbitron',
-              fontSize: 14,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () => _showCarSelectionDialog(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: _selectedCarId != null && _cars.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: _cars
+                                      .firstWhere((car) =>
+                                          car.id.toString() == _selectedCarId)
+                                      .imagePath !=
+                                  null
+                              ? Image.file(
+                                  File(_cars
+                                      .firstWhere((car) =>
+                                          car.id.toString() == _selectedCarId)
+                                      .imagePath!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      Icons.directions_car,
+                                      color: Colors.white,
+                                      size: 24,
+                                    );
+                                  },
+                                )
+                              : const Icon(
+                                  Icons.directions_car,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                        )
+                      : const Icon(
+                          Icons.directions_car,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedCarId != null && _cars.isNotEmpty
+                            ? '${_cars.firstWhere((car) => car.id.toString() == _selectedCarId).brand} ${_cars.firstWhere((car) => car.id.toString() == _selectedCarId).model}'
+                            : 'Select Car',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _selectedCarId != null && _cars.isNotEmpty
+                            ? 'Year: ${_cars.firstWhere((car) => car.id.toString() == _selectedCarId).year}'
+                            : 'Tap to choose vehicle',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ],
             ),
           ),
-          isExpanded: true,
-          dropdownColor: AppTheme.darkAccentGreen,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-          style: const TextStyle(
-            color: Colors.white,
-            fontFamily: 'Orbitron',
-            fontSize: 14,
-          ),
-                        items: _cars.map((car) {
-                          return DropdownMenuItem<String>(
-                            value: car.id.toString(),
-                            child: Text(
-                              '${car.brand} ${car.model} (${car.year})',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontFamily: 'Orbitron',
-                              ),
-                            ),
-                          );
-                        }).toList(),
-          onChanged: (String? newValue) {
-            setState(() {
-              _selectedCarId = newValue;
-            });
-          },
         ),
       ),
+    );
+  }
+
+  void _showCarSelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.directions_car,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Select Vehicle',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Car list
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.6,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: _cars.length,
+                  itemBuilder: (context, index) {
+                    final car = _cars[index];
+                    final isSelected = _selectedCarId == car.id.toString();
+                    
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedCarId = car.id.toString();
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.primaryGreen,
+                                    AppTheme.darkAccentGreen,
+                                  ],
+                                )
+                              : LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.darkAccentGreen.withOpacity(0.5),
+                                    AppTheme.backgroundGreen.withOpacity(0.5),
+                                  ],
+                                ),
+                          borderRadius: BorderRadius.circular(15),
+                          border: isSelected
+                              ? Border.all(color: Colors.white, width: 2)
+                              : null,
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: AppTheme.primaryGreen.withOpacity(0.4),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.white.withOpacity(0.2)
+                                    : AppTheme.primaryGreen.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: car.imagePath != null
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.file(
+                                        File(car.imagePath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Icon(
+                                            Icons.directions_car,
+                                            color: Colors.white,
+                                            size: isSelected ? 28 : 24,
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.directions_car,
+                                      color: Colors.white,
+                                      size: isSelected ? 28 : 24,
+                                    ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${car.brand} ${car.model}',
+                                    style: TextStyle(
+                                      fontFamily: 'Orbitron',
+                                      fontSize: isSelected ? 18 : 16,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Year: ${car.year}',
+                                    style: TextStyle(
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 13,
+                                      color: Colors.white.withOpacity(0.8),
+                                    ),
+                                  ),
+                                  if (car.licensePlate != null &&
+                                      car.licensePlate!.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'License: ${car.licensePlate}',
+                                      style: TextStyle(
+                                        fontFamily: 'Orbitron',
+                                        fontSize: 12,
+                                        color: Colors.white.withOpacity(0.6),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: AppTheme.primaryGreen,
+                                  size: 20,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTripFrequencySelector() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () => _showTripFrequencyDialog(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    _getTripFrequencyIcon(_selectedTripFrequency),
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedTripFrequency.displayName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                              const SizedBox(height: 4),
+                      Text(
+                        _selectedTripFrequency.description,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _getTripFrequencyIcon(TripFrequency frequency) {
+    switch (frequency) {
+      case TripFrequency.oneTime:
+        return Icons.looks_one;
+      case TripFrequency.daily:
+        return Icons.today;
+      case TripFrequency.weekly:
+        return Icons.date_range;
+      case TripFrequency.monthly:
+        return Icons.calendar_month;
+    }
+  }
+
+  List<Color> _getTripFrequencyColors(TripFrequency frequency) {
+    switch (frequency) {
+      case TripFrequency.oneTime:
+        return [Colors.blue.shade600, Colors.blue.shade800];
+      case TripFrequency.daily:
+        return [Colors.green.shade600, Colors.green.shade800];
+      case TripFrequency.weekly:
+        return [Colors.orange.shade600, Colors.orange.shade800];
+      case TripFrequency.monthly:
+        return [Colors.purple.shade600, Colors.purple.shade800];
+    }
+  }
+
+  Widget _buildEditCarSelector(String? selectedCarId, Function(String?) onCarSelected) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () {
+            Navigator.pop(context); // Close edit sheet
+            _showCarSelectionDialogForEdit(selectedCarId, onCarSelected);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: selectedCarId != null && _cars.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: _cars
+                                      .firstWhere((car) =>
+                                          car.id.toString() == selectedCarId)
+                                      .imagePath !=
+                                  null
+                              ? Image.file(
+                                  File(_cars
+                                      .firstWhere((car) =>
+                                          car.id.toString() == selectedCarId)
+                                      .imagePath!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      Icons.directions_car,
+                                      color: Colors.white,
+                                      size: 24,
+                                    );
+                                  },
+                                )
+                              : const Icon(
+                                  Icons.directions_car,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                        )
+                      : const Icon(
+                          Icons.directions_car,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selectedCarId != null && _cars.isNotEmpty
+                            ? '${_cars.firstWhere((car) => car.id.toString() == selectedCarId).brand} ${_cars.firstWhere((car) => car.id.toString() == selectedCarId).model}'
+                            : 'Select Car',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        selectedCarId != null && _cars.isNotEmpty
+                            ? 'Year: ${_cars.firstWhere((car) => car.id.toString() == selectedCarId).year}'
+                            : 'Tap to choose vehicle',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCarSelectionDialogForEdit(String? currentCarId, Function(String?) onCarSelected) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(Icons.directions_car, color: Colors.white, size: 28),
+                    SizedBox(width: 12),
+                    Text(
+                      'Select Vehicle',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.6,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: _cars.length,
+                  itemBuilder: (context, index) {
+                    final car = _cars[index];
+                    final isSelected = currentCarId == car.id.toString();
+                    
+                    return GestureDetector(
+                      onTap: () {
+                        onCarSelected(car.id.toString());
+                        Navigator.pop(context);
+                        // Re-open edit dialog
+                        Future.delayed(const Duration(milliseconds: 100), () {
+                          // The edit dialog will be re-opened by the caller
+                        });
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.primaryGreen,
+                                    AppTheme.darkAccentGreen,
+                                  ],
+                                )
+                              : LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.darkAccentGreen.withOpacity(0.5),
+                                    AppTheme.backgroundGreen.withOpacity(0.5),
+                                  ],
+                                ),
+                          borderRadius: BorderRadius.circular(15),
+                          border: isSelected
+                              ? Border.all(color: Colors.white, width: 2)
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.white.withOpacity(0.2)
+                                    : AppTheme.primaryGreen.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: car.imagePath != null
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.file(
+                                        File(car.imagePath!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Icon(
+                                            Icons.directions_car,
+                                            color: Colors.white,
+                                            size: isSelected ? 28 : 24,
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.directions_car,
+                                      color: Colors.white,
+                                      size: isSelected ? 28 : 24,
+                                    ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${car.brand} ${car.model}',
+                                    style: TextStyle(
+                                      fontFamily: 'Orbitron',
+                                      fontSize: isSelected ? 18 : 16,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Year: ${car.year}',
+                                    style: TextStyle(
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 13,
+                                      color: Colors.white.withOpacity(0.8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: AppTheme.primaryGreen,
+                                  size: 20,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEditTripFrequencySelector(TripFrequency selectedFrequency, Function(TripFrequency) onFrequencySelected) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () {
+            Navigator.pop(context); // Close edit sheet
+            _showTripFrequencyDialogForEdit(selectedFrequency, onFrequencySelected);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    _getTripFrequencyIcon(selectedFrequency),
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selectedFrequency.displayName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        selectedFrequency.description,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showTripFrequencyDialogForEdit(TripFrequency currentFrequency, Function(TripFrequency) onFrequencySelected) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(Icons.repeat, color: Colors.white, size: 28),
+                    SizedBox(width: 12),
+                    Text(
+                      'Trip Frequency',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...TripFrequency.values.map((frequency) {
+                final isSelected = currentFrequency == frequency;
+                return GestureDetector(
+                  onTap: () {
+                    onFrequencySelected(frequency);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: isSelected
+                          ? const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.primaryGreen,
+                                AppTheme.darkAccentGreen,
+                              ],
+                            )
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.darkAccentGreen.withOpacity(0.5),
+                                AppTheme.backgroundGreen.withOpacity(0.5),
+                              ],
+                            ),
+                      borderRadius: BorderRadius.circular(15),
+                      border: isSelected
+                          ? Border.all(color: Colors.white, width: 2)
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Colors.white.withOpacity(0.2)
+                                : AppTheme.primaryGreen.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            _getTripFrequencyIcon(frequency),
+                            color: Colors.white,
+                            size: isSelected ? 28 : 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                frequency.displayName,
+                                style: TextStyle(
+                                  fontFamily: 'Orbitron',
+                                  fontSize: isSelected ? 18 : 16,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                frequency.description,
+                                style: TextStyle(
+                                  fontFamily: 'Orbitron',
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isSelected)
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              color: AppTheme.primaryGreen,
+                              size: 20,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showTripFrequencyDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.repeat,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Trip Frequency',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Frequency list
+              ...TripFrequency.values.map((frequency) {
+                final isSelected = _selectedTripFrequency == frequency;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedTripFrequency = frequency;
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: isSelected
+                          ? const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.primaryGreen,
+                                AppTheme.darkAccentGreen,
+                              ],
+                            )
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.darkAccentGreen.withOpacity(0.5),
+                                AppTheme.backgroundGreen.withOpacity(0.5),
+                              ],
+                            ),
+                      borderRadius: BorderRadius.circular(15),
+                      border: isSelected
+                          ? Border.all(color: Colors.white, width: 2)
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Colors.white.withOpacity(0.2)
+                                : AppTheme.primaryGreen.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            _getTripFrequencyIcon(frequency),
+                            color: Colors.white,
+                            size: isSelected ? 28 : 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                frequency.displayName,
+                                style: TextStyle(
+                                  fontFamily: 'Orbitron',
+                                  fontSize: isSelected ? 18 : 16,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                frequency.description,
+                                style: TextStyle(
+                                  fontFamily: 'Orbitron',
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isSelected)
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              color: AppTheme.primaryGreen,
+                              size: 20,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAutomatedMileageInfo() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.backgroundGreen,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryGreen.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.auto_awesome,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+                'Automated Mileage Tracking',
+                style: TextStyle(
+                  fontFamily: 'Orbitron',
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'How It Works:',
+                style: TextStyle(
+                  fontFamily: 'Orbitron',
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildInfoItem(
+                Icons.looks_one,
+                'One-Time Trip',
+                'The mileage is added to your car immediately, just once.',
+              ),
+              const SizedBox(height: 12),
+              _buildInfoItem(
+                Icons.today,
+                'Daily Trip',
+                'For regular commutes. The app automatically adds this mileage to your car every day.',
+              ),
+              const SizedBox(height: 12),
+              _buildInfoItem(
+                Icons.date_range,
+                'Weekly Trip',
+                'For trips you make once a week. Mileage is added weekly to your car.',
+              ),
+              const SizedBox(height: 12),
+              _buildInfoItem(
+                Icons.calendar_month,
+                'Monthly Trip',
+                'For monthly trips. The app adds this mileage to your car once per month.',
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppTheme.primaryGreen.withOpacity(0.5),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.lightbulb_outline,
+                      color: Colors.amber,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'No need to manually update your car\'s mileage anymore! The app does it automatically based on your trip entries.',
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Got It!',
+                style: TextStyle(
+                  fontFamily: 'Orbitron',
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoItem(IconData icon, String title, String description) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryGreen.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontFamily: 'Orbitron',
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: TextStyle(
+                  fontFamily: 'Orbitron',
+                  color: Colors.white.withOpacity(0.8),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -873,9 +2211,45 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
                     ],
                   ),
                 ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: _getTripFrequencyColors(entry.tripFrequency),
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _getTripFrequencyColors(entry.tripFrequency)[0].withOpacity(0.3),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getTripFrequencyIcon(entry.tripFrequency),
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        entry.tripFrequency.displayName,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -909,7 +2283,7 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
             ),
           ],
           if (entry.notes != null && entry.notes!.isNotEmpty) ...[
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
             Text(
               'Notes: ${entry.notes}',
               style: const TextStyle(
@@ -970,6 +2344,11 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
       return;
     }
 
+    if (_selectedCarId == null) {
+      _showMessage('Please select a car');
+      return;
+    }
+
     setState(() {
       _isAddingEntry = true;
     });
@@ -983,9 +2362,12 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
         notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
         entryName: _entryNameController.text.trim().isEmpty ? null : _entryNameController.text.trim(),
         userId: _userId,
+        carId: _selectedCarId,
+        tripFrequency: _selectedTripFrequency,
     );
 
-      await _mileageService.addEntry(newEntry);
+      // Use the new method that automatically updates car mileage
+      await _mileageService.addEntryWithAutoMileageUpdate(newEntry);
 
     // Clear inputs
     _mileageController.clear();
@@ -993,12 +2375,23 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
     _costController.clear();
       _notesController.clear();
       _entryNameController.clear();
+      setState(() {
+        _selectedTripFrequency = TripFrequency.oneTime; // Reset to default
+      });
 
       // Reload data
       await _loadData();
 
     HapticFeedback.lightImpact();
-    _showMessage('Mileage entry added successfully!');
+    
+    // Show appropriate message based on trip frequency
+    String message = 'Mileage entry added successfully!';
+    if (_selectedTripFrequency != TripFrequency.oneTime) {
+      message += '\nCar mileage will be automatically updated based on trip frequency.';
+    } else {
+      message += '\nCar mileage updated.';
+    }
+    _showMessage(message);
     } catch (e) {
       _showErrorDialog('Failed to add entry: $e');
     } finally {
@@ -1010,93 +2403,262 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
 
 
   void _editEntry(MileageEntry entry) {
+    // Set initial values
     _mileageController.text = entry.mileage.toString();
     _fuelController.text = entry.fuel.toString();
     _costController.text = entry.cost.toString();
     _notesController.text = entry.notes ?? '';
     _entryNameController.text = entry.entryName ?? '';
     
-    showDialog(
+    // Set selected car and trip frequency
+    String? editSelectedCarId = entry.carId;
+    TripFrequency editSelectedTripFrequency = entry.tripFrequency;
+    
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        title: const Text(
-          'Edit Entry',
-          style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildTextField(
-              controller: _entryNameController,
-              hintText: 'Entry Name (optional)',
-            ),
-            const SizedBox(height: 12),
-            _buildTextField(
-              controller: _mileageController,
-              hintText: 'Mileage (km)',
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            _buildTextField(
-              controller: _fuelController,
-              hintText: 'Fuel (L)',
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            _buildTextField(
-              controller: _costController,
-              hintText: 'Cost (EGP)',
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            _buildTextField(
-              controller: _notesController,
-              hintText: 'Notes (optional)',
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _clearInputs();
-            },
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.backgroundGreen,
+                    AppTheme.darkAccentGreen,
+                  ],
+                ),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(30),
+                  topRight: Radius.circular(30),
+                ),
               ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _updateEntry(entry);
-              },
-              child: const Text(
-                'Update',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Handle bar
+                      Container(
+                        margin: const EdgeInsets.only(top: 12, bottom: 8),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      // Title
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryGreen.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.edit,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'Edit Mileage Entry',
+                              style: TextStyle(
+                                fontFamily: 'Orbitron',
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Form fields
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          children: [
+                            _buildTextField(
+                              controller: _entryNameController,
+                              hintText: 'Entry Name (e.g., Weekly Fill-up)',
+                            ),
+                            const SizedBox(height: 12) ,
+                            // Car selector
+                            _buildEditCarSelector(editSelectedCarId, (newCarId) {
+                              setModalState(() {
+                                editSelectedCarId = newCarId;
+                              });
+                            }),
+                            const SizedBox(height: 12) ,
+                            // Trip frequency selector
+                            _buildEditTripFrequencySelector(editSelectedTripFrequency, (newFrequency) {
+                              setModalState(() {
+                                editSelectedTripFrequency = newFrequency;
+                              });
+                            }),
+                            const SizedBox(height: 12) ,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildTextField(
+                                    controller: _mileageController,
+                                    hintText: 'Mileage (km)',
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildTextField(
+                                    controller: _fuelController,
+                                    hintText: 'Fuel (L)',
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12) ,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildTextField(
+                                    controller: _costController,
+                                    hintText: 'Cost (EGP)',
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildTextField(
+                                    controller: _notesController,
+                                    hintText: 'Notes (optional)',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20) ,
+                            // Action buttons
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [Colors.grey.shade700, Colors.grey.shade900],
+                                      ),
+                                      borderRadius: BorderRadius.circular(15),
+                                    ),
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _clearInputs();
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(15),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Cancel',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'Orbitron',
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          AppTheme.primaryGreen,
+                                          AppTheme.darkAccentGreen,
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(15),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppTheme.primaryGreen.withOpacity(0.3),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ElevatedButton.icon(
+                                      onPressed: () async {
+                                        Navigator.pop(context);
+                                        await _updateEntry(entry, editSelectedCarId, editSelectedTripFrequency);
+                                      },
+                                      icon: const Icon(Icons.save, color: Colors.white),
+                                      label: const Text(
+                                        'Update',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'Orbitron',
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(15),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                                const SizedBox(height: 20) ,
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Future<void> _updateEntry(MileageEntry entry) async {
+  Future<void> _updateEntry(MileageEntry entry, String? carId, TripFrequency tripFrequency) async {
     final mileage = double.tryParse(_mileageController.text);
     final fuel = double.tryParse(_fuelController.text);
     final cost = double.tryParse(_costController.text);
 
     if (mileage == null || fuel == null || cost == null) {
       _showMessage('Please enter valid values');
+      return;
+    }
+
+    if (carId == null) {
+      _showMessage('Please select a car');
       return;
     }
 
@@ -1107,6 +2669,8 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
         cost: cost,
         notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
         entryName: _entryNameController.text.trim().isEmpty ? null : _entryNameController.text.trim(),
+        carId: carId,
+        tripFrequency: tripFrequency,
       );
 
       await _mileageService.updateEntry(updatedEntry);
@@ -1409,7 +2973,7 @@ class MileageEntryDetailsDialog extends StatelessWidget {
                                 color: Colors.white,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                                  const SizedBox(height: 4),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(

@@ -26,25 +26,26 @@ class VoiceNote {
       id: map['id'] as int?,
       title: map['title'] as String,
       description: map['description'] as String?,
-      filePath: map['filePath'] as String,
+      // Handle both snake_case (database) and camelCase (legacy)
+      filePath: (map['file_path'] ?? map['filePath']) as String,
       duration: map['duration'] as int,
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      updatedAt: DateTime.parse(map['updatedAt'] as String),
-      userId: map['userId'] as String?,
+      createdAt: DateTime.parse((map['created_at'] ?? map['createdAt']) as String),
+      updatedAt: DateTime.parse((map['updated_at'] ?? map['updatedAt']) as String),
+      userId: (map['user_id'] ?? map['userId']) as String?,
     );
   }
 
-  // Convert to database map
+  // Convert to database map (using snake_case for database columns)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'title': title,
       'description': description,
-      'filePath': filePath,
+      'file_path': filePath,  // Use snake_case for database
       'duration': duration,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-      'userId': userId,
+      'created_at': createdAt.toIso8601String(),  // Use snake_case for database
+      'updated_at': updatedAt.toIso8601String(),  // Use snake_case for database
+      'user_id': userId,  // Use snake_case for database
     };
   }
 

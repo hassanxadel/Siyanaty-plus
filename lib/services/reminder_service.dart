@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../database/database_helper.dart';
 import '../models/backup_reminder.dart';
 import '../models/backup_car.dart';
@@ -447,6 +448,12 @@ class ReminderService {
   Future<void> checkAndNotifyDueReminders() async {
     try {
       if (!isUserAuthenticated) return;
+      
+      // Check if notifications are enabled
+      final prefs = await SharedPreferences.getInstance();
+      final notificationsEnabled = prefs.getBool('reminders_notifications') ?? true;
+      if (!notificationsEnabled) return;
+      
       final userId = _currentUserId!;
       
       // Get all upcoming reminders
@@ -480,6 +487,12 @@ class ReminderService {
   Future<void> scheduleAllReminderNotifications() async {
     try {
       if (!isUserAuthenticated) return;
+      
+      // Check if notifications are enabled
+      final prefs = await SharedPreferences.getInstance();
+      final notificationsEnabled = prefs.getBool('reminders_notifications') ?? true;
+      if (!notificationsEnabled) return;
+      
       final userId = _currentUserId!;
       
       // Get all upcoming reminders
@@ -524,10 +537,8 @@ class ReminderService {
       errors.add('Title must be less than 100 characters');
     }
 
-    // Validate description
-    if (description.trim().isEmpty) {
-      errors.add('Description is required');
-    } else if (description.trim().length > 500) {
+    // Validate description (optional, but check max length if provided)
+    if (description.trim().isNotEmpty && description.trim().length > 500) {
       errors.add('Description must be less than 500 characters');
     }
 

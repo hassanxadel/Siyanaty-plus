@@ -1,5 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Trip frequency types for automated mileage calculation
+enum TripFrequency {
+  oneTime,    // One-time trip, no repetition
+  daily,      // Daily trip (e.g., commute)
+  weekly,     // Weekly trip
+  monthly,    // Monthly trip
+}
+
+/// Extension to get display names for trip frequencies
+extension TripFrequencyExtension on TripFrequency {
+  String get displayName {
+    switch (this) {
+      case TripFrequency.oneTime:
+        return 'One-Time Trip';
+      case TripFrequency.daily:
+        return 'Daily Trip';
+      case TripFrequency.weekly:
+        return 'Weekly Trip';
+      case TripFrequency.monthly:
+        return 'Monthly Trip';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case TripFrequency.oneTime:
+        return 'This trip will be counted once';
+      case TripFrequency.daily:
+        return 'Mileage added daily to your car';
+      case TripFrequency.weekly:
+        return 'Mileage added weekly to your car';
+      case TripFrequency.monthly:
+        return 'Mileage added monthly to your car';
+    }
+  }
+}
+
 class MileageEntry {
   final int? id;
   final double mileage;
@@ -9,6 +46,8 @@ class MileageEntry {
   final String? notes;
   final String? entryName;
   final String? userId;
+  final String? carId;  // Link to specific car
+  final TripFrequency tripFrequency;  // How often this trip occurs
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -21,6 +60,8 @@ class MileageEntry {
     this.notes,
     this.entryName,
     this.userId,
+    this.carId,
+    this.tripFrequency = TripFrequency.oneTime,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : createdAt = createdAt ?? DateTime.now(),
@@ -28,6 +69,21 @@ class MileageEntry {
 
   // Create from database map
   factory MileageEntry.fromMap(Map<String, dynamic> map) {
+    // Parse trip frequency from string
+    TripFrequency parseTripFrequency(String? value) {
+      if (value == null) return TripFrequency.oneTime;
+      switch (value) {
+        case 'daily':
+          return TripFrequency.daily;
+        case 'weekly':
+          return TripFrequency.weekly;
+        case 'monthly':
+          return TripFrequency.monthly;
+        default:
+          return TripFrequency.oneTime;
+      }
+    }
+
     return MileageEntry(
       id: map['id'] as int?,
       mileage: (map['mileage'] as num).toDouble(),
@@ -35,15 +91,31 @@ class MileageEntry {
       cost: (map['cost'] as num).toDouble(),
       date: DateTime.parse(map['date'] as String),
       notes: map['notes'] as String?,
-      entryName: map['entryName'] as String?,
-      userId: map['userId'] as String?,
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      updatedAt: DateTime.parse(map['updatedAt'] as String),
+      // Handle both snake_case (database) and camelCase (legacy)
+      entryName: map['entry_name'] as String? ?? map['entryName'] as String?,
+      userId: map['user_id'] as String? ?? map['userId'] as String?,
+      carId: map['car_id'] as String? ?? map['carId'] as String?,
+      tripFrequency: parseTripFrequency(map['trip_frequency'] as String? ?? map['tripFrequency'] as String?),
+      createdAt: DateTime.parse(map['created_at'] as String? ?? map['createdAt'] as String),
+      updatedAt: DateTime.parse(map['updated_at'] as String? ?? map['updatedAt'] as String),
     );
   }
 
-  // Convert to database map
+  // Convert to database map (using snake_case for database columns)
   Map<String, dynamic> toMap() {
+    String tripFrequencyToString(TripFrequency freq) {
+      switch (freq) {
+        case TripFrequency.daily:
+          return 'daily';
+        case TripFrequency.weekly:
+          return 'weekly';
+        case TripFrequency.monthly:
+          return 'monthly';
+        default:
+          return 'oneTime';
+      }
+    }
+
     return {
       'id': id,
       'mileage': mileage,
@@ -51,16 +123,33 @@ class MileageEntry {
       'cost': cost,
       'date': date.toIso8601String(),
       'notes': notes,
-      'entryName': entryName,
-      'userId': userId,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
+      'entry_name': entryName,  // Use snake_case for database
+      'user_id': userId,         // Use snake_case for database
+      'car_id': carId,           // Use snake_case for database
+      'trip_frequency': tripFrequencyToString(tripFrequency),  // Use snake_case for database
+      'created_at': createdAt.toIso8601String(),  // Use snake_case for database
+      'updated_at': updatedAt.toIso8601String(),  // Use snake_case for database
     };
   }
 
   // Create from Firestore document
   factory MileageEntry.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    
+    TripFrequency parseTripFrequency(String? value) {
+      if (value == null) return TripFrequency.oneTime;
+      switch (value) {
+        case 'daily':
+          return TripFrequency.daily;
+        case 'weekly':
+          return TripFrequency.weekly;
+        case 'monthly':
+          return TripFrequency.monthly;
+        default:
+          return TripFrequency.oneTime;
+      }
+    }
+
     return MileageEntry(
       id: null, // Firestore doesn't use integer IDs
       mileage: (data['mileage'] as num).toDouble(),
@@ -70,6 +159,8 @@ class MileageEntry {
       notes: data['notes'] as String?,
       entryName: data['entryName'] as String?,
       userId: data['userId'] as String?,
+      carId: data['carId'] as String?,
+      tripFrequency: parseTripFrequency(data['tripFrequency'] as String?),
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       updatedAt: (data['updatedAt'] as Timestamp).toDate(),
     );
@@ -77,6 +168,19 @@ class MileageEntry {
 
   // Convert to Firestore document
   Map<String, dynamic> toFirestore() {
+    String tripFrequencyToString(TripFrequency freq) {
+      switch (freq) {
+        case TripFrequency.daily:
+          return 'daily';
+        case TripFrequency.weekly:
+          return 'weekly';
+        case TripFrequency.monthly:
+          return 'monthly';
+        default:
+          return 'oneTime';
+      }
+    }
+
     return {
       'mileage': mileage,
       'fuel': fuel,
@@ -85,6 +189,8 @@ class MileageEntry {
       'notes': notes,
       'entryName': entryName,
       'userId': userId,
+      'carId': carId,
+      'tripFrequency': tripFrequencyToString(tripFrequency),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -100,6 +206,8 @@ class MileageEntry {
     String? notes,
     String? entryName,
     String? userId,
+    String? carId,
+    TripFrequency? tripFrequency,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -112,6 +220,8 @@ class MileageEntry {
       notes: notes ?? this.notes,
       entryName: entryName ?? this.entryName,
       userId: userId ?? this.userId,
+      carId: carId ?? this.carId,
+      tripFrequency: tripFrequency ?? this.tripFrequency,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );

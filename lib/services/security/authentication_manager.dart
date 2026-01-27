@@ -5,8 +5,9 @@ import 'dart:math';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../shared/utils/app_logger.dart';
+import '../firebase_email_service.dart';
 import 'secure_storage_service.dart';
+import '../../shared/utils/app_logger.dart';
 
 /// Manages authentication, token refresh, and MFA
 class AuthenticationManager {
@@ -271,9 +272,8 @@ class AuthenticationManager {
       AppLogger.info('⏰ This code expires in 5 minutes');
       AppLogger.info('═══════════════════════════════════════════════════');
       
-      // Send email using EmailService
-      // Note: EmailJS needs to be configured with valid credentials for production
-      // For now, the code is logged to console for testing
+      // Send email using Firebase Email Service
+      // Note: Firebase Extension "Trigger Email" must be installed for emails to be sent
       try {
         // Import is at the top of the file
         final emailSent = await _sendEmailWithCode(email, code);
@@ -295,38 +295,24 @@ class AuthenticationManager {
     }
   }
 
-  /// Helper to send email with verification code
+  /// Helper to send email with verification code using Firebase
   Future<bool> _sendEmailWithCode(String email, String code) async {
     try {
-      // Use Firebase Firestore to trigger email via Firebase Extensions
-      // or a Cloud Function that watches the 'mail' collection
-      await _firestore.collection('mail').add({
-        'to': email,
-        'message': {
-          'subject': 'Siyanaty - Your Verification Code',
-          'html': '''
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
-              <div style="background-color: #062117; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
-                <h1 style="margin: 0;">🚗 Siyanaty</h1>
-              </div>
-              <div style="background-color: white; padding: 30px; border-radius: 0 0 10px 10px;">
-                <h2 style="color: #333;">Your Verification Code</h2>
-                <p style="color: #666;">Use this code to verify your identity:</p>
-                <div style="background-color: #062117; color: white; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; border-radius: 8px; letter-spacing: 8px; margin: 20px 0;">
-                  $code
-                </div>
-                <p style="color: #999; font-size: 14px;">This code will expire in 5 minutes.</p>
-                <p style="color: #999; font-size: 12px;">If you didn't request this code, please ignore this email.</p>
-              </div>
-            </div>
-          ''',
-          'text': 'Your Siyanaty verification code is: $code. This code expires in 5 minutes.',
-        },
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      return true;
+      // Use Firebase Email Service to send OTP code
+      final emailSent = await FirebaseEmailService.sendOTPEmail(
+        toEmail: email,
+        code: code,
+      );
+      
+      if (emailSent) {
+        AppLogger.info('✅ Email sent successfully via Firebase to $email');
+        return true;
+      } else {
+        AppLogger.warning('Firebase email service failed - code is in console');
+        return false;
+      }
     } catch (e) {
-      AppLogger.warning('Could not queue email for sending', error: e);
+      AppLogger.warning('Firebase email service error - code is in console', error: e);
       return false;
     }
   }

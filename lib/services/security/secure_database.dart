@@ -3,6 +3,7 @@ import 'package:path/path.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 import 'secure_storage_service.dart';
+import '../../shared/utils/app_logger.dart';
 
 /// Secure database wrapper using SQLCipher for encryption
 class SecureDatabase {
@@ -11,7 +12,7 @@ class SecureDatabase {
   
   // Database configuration
   static const String _databaseName = 'siyanaty_secure.db';
-  static const int _databaseVersion = 9; // Incremented for security migration
+  static const int _databaseVersion = 10; // Incremented for mileage_entries schema fix
 
   /// Get the secure database instance
   static Future<Database> get database async {
@@ -67,7 +68,119 @@ class SecureDatabase {
       await _createSecurityTables(db);
     }
     
+    // Version 10: Fix mileage_entries schema (add missing columns and fix column names)
+    if (oldVersion < 10) {
+      await _upgradeMileageEntriesTable(db);
+    }
+    
     // Add other version-specific upgrades as needed
+  }
+  
+  /// Upgrade mileage_entries table to version 10
+  static Future<void> _upgradeMileageEntriesTable(Database db) async {
+    try {
+      // Check if table exists
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='mileage_entries'"
+      );
+      
+      if (tables.isEmpty) {
+        // Table doesn't exist, will be created by _createAllTables
+        return;
+      }
+      
+      // Get existing columns
+      final columns = await db.rawQuery('PRAGMA table_info(mileage_entries)');
+      final columnNames = columns.map((col) => col['name'] as String).toSet();
+      
+      // Check if we need to migrate
+      final needsMigration = !columnNames.contains('fuel') || 
+                             !columnNames.contains('cost') ||
+                             columnNames.contains('userId'); // Old camelCase column
+      
+      if (!needsMigration) {
+        return; // Already up to date
+      }
+      
+      AppLogger.info('🔄 Migrating mileage_entries table to version 10...');
+      
+      // Create new table with correct schema
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS mileage_entries_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          car_id INTEGER,
+          entry_name TEXT,
+          mileage REAL NOT NULL,
+          fuel REAL NOT NULL DEFAULT 0,
+          cost REAL NOT NULL DEFAULT 0,
+          date TEXT NOT NULL,
+          location TEXT,
+          notes TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+          FOREIGN KEY (car_id) REFERENCES cars (id) ON DELETE CASCADE
+        )
+      ''');
+      
+      // Copy data from old table, handling both old and new column names
+      await db.execute('''
+        INSERT INTO mileage_entries_new (
+          id, user_id, car_id, entry_name, mileage, fuel, cost, 
+          date, location, notes, created_at, updated_at
+        )
+        SELECT 
+          id,
+          COALESCE(user_id, userId) as user_id,
+          car_id,
+          COALESCE(entry_name, entryName) as entry_name,
+          mileage,
+          COALESCE(fuel, 0) as fuel,
+          COALESCE(cost, 0) as cost,
+          date,
+          location,
+          notes,
+          COALESCE(created_at, createdAt, datetime('now')) as created_at,
+          COALESCE(updated_at, updatedAt, datetime('now')) as updated_at
+        FROM mileage_entries
+      ''');
+      
+      // Drop old table
+      await db.execute('DROP TABLE mileage_entries');
+      
+      // Rename new table
+      await db.execute('ALTER TABLE mileage_entries_new RENAME TO mileage_entries');
+      
+      AppLogger.info('✅ Mileage entries table migrated successfully');
+    } catch (e) {
+      AppLogger.warning('⚠️ Mileage entries migration error (may be expected): $e');
+      // If migration fails, try to recreate the table
+      try {
+        await db.execute('DROP TABLE IF EXISTS mileage_entries');
+        await db.execute('''
+          CREATE TABLE mileage_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            car_id INTEGER,
+            entry_name TEXT,
+            mileage REAL NOT NULL,
+            fuel REAL NOT NULL,
+            cost REAL NOT NULL,
+            date TEXT NOT NULL,
+            location TEXT,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+            FOREIGN KEY (car_id) REFERENCES cars (id) ON DELETE CASCADE
+          )
+        ''');
+        AppLogger.info('✅ Mileage entries table recreated');
+      } catch (recreateError) {
+        AppLogger.error('❌ Failed to recreate mileage_entries table', error: recreateError);
+      }
+    }
   }
 
   /// Configure database on open
@@ -178,14 +291,16 @@ class SecureDatabase {
       CREATE TABLE IF NOT EXISTS mileage_entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT NOT NULL,
-        car_id INTEGER NOT NULL,
+        car_id INTEGER,
         entry_name TEXT,
-        mileage INTEGER NOT NULL,
-        date INTEGER NOT NULL,
+        mileage REAL NOT NULL,
+        fuel REAL NOT NULL,
+        cost REAL NOT NULL,
+        date TEXT NOT NULL,
         location TEXT,
         notes TEXT,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
         FOREIGN KEY (car_id) REFERENCES cars (id) ON DELETE CASCADE
       )

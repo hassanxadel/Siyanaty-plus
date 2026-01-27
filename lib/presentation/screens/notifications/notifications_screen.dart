@@ -54,12 +54,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _markAsRead(String notificationId) async {
     try {
+      // First update the local state for immediate UI feedback
+      setState(() {
+        final index = _notifications.indexWhere((n) => n.id == notificationId);
+        if (index != -1) {
+          _notifications[index].isRead = true;
+        }
+      });
+      
+      // Then persist to storage
       await _notificationService.markNotificationAsRead(notificationId);
       
-      setState(() {
-        final notification = _notifications.firstWhere((n) => n.id == notificationId);
-        notification.isRead = true;
-      });
       HapticFeedback.lightImpact();
     } catch (e) {
       _showMessage('Error marking notification as read: $e');

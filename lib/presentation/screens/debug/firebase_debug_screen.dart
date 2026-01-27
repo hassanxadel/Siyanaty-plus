@@ -174,7 +174,7 @@ class _FirebaseDebugScreenState extends State<FirebaseDebugScreen> {
               ),
             ),
             
-            const Spacer(),
+            const SizedBox.shrink(),
             
             const Text(
               'Note: Check console output for debug information',

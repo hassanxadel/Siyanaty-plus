@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../../shared/utils/responsive_utils.dart';
 import '../../providers/auth_provider.dart';
 import '../actions/all_actions_screen.dart';
 import '../services/cars_screen.dart';
@@ -20,6 +21,8 @@ import '../profile/profile_screen.dart';
 import '../notifications/notifications_screen.dart';
 import 'license_screen.dart';
 import '../../../services/car_service.dart';
+import '../../../services/car_health_service.dart';
+import '../../../models/car_health_score.dart';
 import '../../../models/backup_car.dart';
 import '../../../services/reminder_service.dart';
 import '../../../services/maintenance_service.dart';
@@ -27,6 +30,7 @@ import '../../../services/notification_database_service.dart';
 import '../../../models/backup_reminder.dart';
 import '../../../models/backup_maintenance.dart';
 import '../../../services/security/local_unlock_service.dart';
+import '../../../shared/utils/string_extensions.dart';
 
 /// Main dashboard screen that serves as the home page
 /// Displays user welcome, quick actions, and vehicle overview
@@ -53,6 +57,8 @@ class _HomeDashboardState extends State<HomeDashboard>
   int _currentCarIndex = 0;
   /// Car service for fetching real car data
   final CarService _carService = CarService();
+  /// Car health service for calculating health scores
+  final CarHealthService _carHealthService = CarHealthService();
   /// Reminder service for fetching reminders data
   final ReminderService _reminderService = ReminderService();
   /// Maintenance service for fetching maintenance data
@@ -67,6 +73,8 @@ class _HomeDashboardState extends State<HomeDashboard>
   List<BackupCar> _userCars = [];
   /// Loading state for cars
   bool _carsLoading = true;
+  /// Map of car health scores by car ID
+  final Map<int, CarHealthScore> _carHealthScores = {};
   /// List of upcoming reminders (max 3)
   List<ReminderWithCarInfo> _upcomingReminders = [];
   /// Loading state for reminders
@@ -153,6 +161,24 @@ class _HomeDashboardState extends State<HomeDashboard>
             _currentCarIndex = 0;
           }
         });
+        
+        // Calculate health scores for all loaded cars
+        // Uses the same CarHealthService.calculateHealthScore() as Car Health Dashboard
+        // This ensures consistency between home screen and health dashboard displays
+        for (var car in _userCars) {
+          if (car.id != null) {
+            try {
+              final healthScore = await _carHealthService.calculateHealthScore(car);
+              if (mounted) {
+                setState(() {
+                  _carHealthScores[car.id!] = healthScore;
+                });
+              }
+            } catch (e) {
+              print('[HomeScreen] Error calculating health score for car ${car.id}: $e');
+            }
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -549,7 +575,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                     fontFamily: 'Orbitron',
                   ),
                 ),
-                const SizedBox(height: 4),
+                  const SizedBox(height: 4),
                 Text(
                   'Track maintenance, fuel, and more',
                   style: TextStyle(
@@ -694,33 +720,44 @@ class _HomeDashboardState extends State<HomeDashboard>
             ),
           ],
         ),
-        child: const Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(
-              IconData(0xe800, fontFamily: 'MyFlutterApp'),
-              size: 48,
-              color: Colors.white54,
-            ),
-            SizedBox(height: 12),
-            Text(
-              'No Cars Added',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontFamily: 'Orbitron',
+            Transform.translate(
+              offset: const Offset(-40, 0),
+              child: const Icon(
+                IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                size: 48,
+                color: Colors.white54,
               ),
             ),
-            SizedBox(height: 8),
-            Text(
-              'Tap + to add your first car',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white70,
-                fontFamily: 'Orbitron',
+            const SizedBox(height: 12),
+            const SizedBox(
+              width: double.infinity,
+              child: Text(
+                'No Cars Added',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const SizedBox(
+              width: double.infinity,
+              child: Text(
+                'Tap + to add your first car',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white70,
+                  fontFamily: 'Orbitron',
+                ),
+                textAlign: TextAlign.center,
+              ),
             ),
           ],
         ),
@@ -729,10 +766,11 @@ class _HomeDashboardState extends State<HomeDashboard>
 
     final car = _userCars[index];
     
-    // Calculate health based on mileage and age (simple heuristic)
-    final currentYear = DateTime.now().year;
-    final age = currentYear - car.year;
-    final health = (1.0 - (age * 0.05) - (car.mileage / 200000)).clamp(0.0, 1.0);
+    // Get real health score from CarHealthService
+    // This matches the score shown in Car Health Dashboard screen
+    final healthScore = _carHealthScores[car.id];
+    final health = healthScore != null ? healthScore.overallScore / 100 : 0.5;
+    final healthLabel = healthScore != null ? healthScore.healthStatus : 'Unknown';
     
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -869,7 +907,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                     ),
                   ),
                   Text(
-                    '${(health * 100).toInt()}% Good',
+                    '${(health * 100).toInt()}% ${healthLabel.capitalize()}',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -1031,7 +1069,7 @@ class _HomeDashboardState extends State<HomeDashboard>
               const Text(
                 'Upcoming Reminders',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                   fontFamily: 'Orbitron',
@@ -1046,9 +1084,9 @@ class _HomeDashboardState extends State<HomeDashboard>
                     ),
                   );
                 },
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: EdgeInsets.symmetric(horizontal: context.r(10), vertical: context.r(6)),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -1058,7 +1096,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
                     border: Border.all(
                       color: Colors.white.withOpacity(0.5),
                       width: 1.5,
@@ -1066,28 +1104,27 @@ class _HomeDashboardState extends State<HomeDashboard>
                     boxShadow: [
                       BoxShadow(
                         color: Colors.white.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+                        blurRadius: context.r(4),
+                        offset: Offset(0, context.r(2)),
                       ),
                     ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'View All',
-                        style: TextStyle(
+                        style: context.responsiveTextStyle(
+                          fontSize: 10,
                           color: Colors.white,
                           fontFamily: 'Orbitron',
-                          fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(width: context.r(4)),
                       Icon(
                         Icons.arrow_forward_ios,
-                        size: 12,
+                        size: context.responsiveIconSize(10),
                         color: Colors.white.withOpacity(0.9),
                       ),
                     ],
@@ -1135,8 +1172,8 @@ class _HomeDashboardState extends State<HomeDashboard>
     final daysUntil = reminder.targetDate?.difference(DateTime.now()).inDays ?? 0;
     
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: context.r(8)),
+      padding: EdgeInsets.all(context.r(12)),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -1241,7 +1278,7 @@ class _HomeDashboardState extends State<HomeDashboard>
               const Text(
                 'Latest Maintenance',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                   fontFamily: 'Orbitron',
@@ -1256,9 +1293,9 @@ class _HomeDashboardState extends State<HomeDashboard>
                     ),
                   );
                 },
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: EdgeInsets.symmetric(horizontal: context.r(10), vertical: context.r(6)),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -1268,7 +1305,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
                     border: Border.all(
                       color: Colors.white.withOpacity(0.5),
                       width: 1.5,
@@ -1276,28 +1313,27 @@ class _HomeDashboardState extends State<HomeDashboard>
                     boxShadow: [
                       BoxShadow(
                         color: Colors.white.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+                        blurRadius: context.r(4),
+                        offset: Offset(0, context.r(2)),
                       ),
                     ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'View All',
-                        style: TextStyle(
+                        style: context.responsiveTextStyle(
+                          fontSize: 10,
                           color: Colors.white,
                           fontFamily: 'Orbitron',
-                          fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(width: context.r(4)),
                       Icon(
                         Icons.arrow_forward_ios,
-                        size: 12,
+                        size: context.responsiveIconSize(12),
                         color: Colors.white.withOpacity(0.9),
                       ),
                     ],
@@ -1447,7 +1483,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                 size: 18,
               ),
             ),
-            const SizedBox(height: 3),
+                const SizedBox(height: 3),
             Text(
               label,
               textAlign: TextAlign.center,
@@ -1988,7 +2024,7 @@ class _HomeDashboardState extends State<HomeDashboard>
             fontFamily: 'Orbitron',
           ),
         ),
-        const SizedBox(height: 4),
+          const SizedBox(height: 4),
         Text(
           subtitle,
           style: const TextStyle(
@@ -2574,162 +2610,176 @@ class _HomeDashboardState extends State<HomeDashboard>
     HapticFeedback.lightImpact();
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      builder: (dialogContext) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(24))),
         elevation: 20,
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 700),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF1A362A), // Dark green
-                Color(0xFF2E4032), // Slightly lighter dark green
-              ],
+        child: SingleChildScrollView(
+          child: Container(
+            padding: EdgeInsets.all(dialogContext.r(20)),
+            constraints: BoxConstraints(
+              maxWidth: dialogContext.r(480),
+              maxHeight: dialogContext.screenHeight * 0.95,
             ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: AppTheme.primaryGreen.withOpacity(0.3),
-              width: 1,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with close button
-              Row(
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryGreen.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: car.imagePath != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Image.file(
-                                    File(car.imagePath!),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return const Icon(
-                                        Icons.directions_car,
-                                        color: AppTheme.primaryGreen,
-                                        size: 24,
-                                      );
-                                    },
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.directions_car,
-                                  color: AppTheme.primaryGreen,
-                                  size: 24,
-                                ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${car.year} ${car.brand} ${car.model}',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Orbitron',
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              if (car.licensePlate.isNotEmpty)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryGreen.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    car.licensePlate,
-                                    style: const TextStyle(
-                                      color: AppTheme.primaryGreen,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      onPressed: () {
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      },
-                      icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                      padding: const EdgeInsets.all(8),
-                      constraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
-                      ),
-                    ),
-                  ),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF1A362A), // Dark green
+                  Color(0xFF2E4032), // Slightly lighter dark green
                 ],
               ),
-              const SizedBox(height: 24),
-              
-              // Details section with modern styling
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
+              borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(24)),
+              border: Border.all(
+                color: AppTheme.primaryGreen.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with close button
+                Row(
                   children: [
-                    _buildModernDetailRow('Mileage', '${car.mileage.toStringAsFixed(0)} km', Icons.speed, Colors.blue),
-                    _buildModernDetailRow('Color', car.color.isNotEmpty ? car.color : 'N/A', Icons.color_lens, Colors.purple),
-                    _buildModernDetailRow('Fuel Type', car.fuelType.isNotEmpty ? car.fuelType : 'N/A', Icons.local_gas_station, Colors.orange),
-                    _buildModernDetailRow('Engine', car.engineCC + (car.turbo ? ' Turbo' : ''), Icons.build, Colors.red),
-                    _buildModernDetailRow('VIN', car.vin.isNotEmpty ? car.vin : 'N/A', Icons.qr_code, Colors.cyan),
-                    _buildModernDetailRow('Added', _formatCarDate(car.createdAt), Icons.calendar_today, Colors.green),
-                    if (car.updatedAt != car.createdAt)
-                      _buildModernDetailRow('Last Updated', _formatCarDate(car.updatedAt), Icons.update, Colors.teal),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: dialogContext.r(50),
+                            height: dialogContext.r(50),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryGreen.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(16)),
+                            ),
+                            child: car.imagePath != null
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(16)),
+                                    child: Image.file(
+                                      File(car.imagePath!),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Icon(
+                                          Icons.directions_car,
+                                          color: AppTheme.primaryGreen,
+                                          size: dialogContext.responsiveIconSize(24),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.directions_car,
+                                    color: AppTheme.primaryGreen,
+                                    size: dialogContext.responsiveIconSize(24),
+                                  ),
+                          ),
+                          SizedBox(width: dialogContext.r(12)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${car.year} ${car.brand} ${car.model}',
+                                  style: dialogContext.responsiveTextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Orbitron',
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                SizedBox(height: dialogContext.r(4)),
+                                if (car.licensePlate.isNotEmpty)
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: dialogContext.r(8), 
+                                      vertical: dialogContext.r(4),
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryGreen.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(12)),
+                                    ),
+                                    child: Text(
+                                      car.licensePlate,
+                                      style: dialogContext.responsiveTextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.primaryGreen,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(12)),
+                      ),
+                      child: IconButton(
+                        onPressed: () {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
+                        },
+                        icon: Icon(
+                          Icons.close, 
+                          color: Colors.white, 
+                          size: dialogContext.responsiveIconSize(20),
+                        ),
+                        padding: EdgeInsets.all(dialogContext.r(8)),
+                        constraints: BoxConstraints(
+                          minWidth: dialogContext.r(32),
+                          minHeight: dialogContext.r(32),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // Action button
-              SizedBox(
-                width: double.infinity,
-                child: _buildModernActionButton(
-                  icon: Icons.edit_rounded,
-                  label: 'View & Edit in My Cars',
-                  color: AppTheme.primaryGreen,
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _navigateToCarsList();
-                  },
+                SizedBox(height: dialogContext.r(20)),
+                
+                // Details section with modern styling
+                Container(
+                  padding: EdgeInsets.all(dialogContext.r(14)),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(16)),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildModernDetailRow('Mileage', '${car.mileage.toStringAsFixed(0)} km', Icons.speed, Colors.blue),
+                      _buildModernDetailRow('Color', car.color.isNotEmpty ? car.color : 'N/A', Icons.color_lens, Colors.purple),
+                      _buildModernDetailRow('Fuel Type', car.fuelType.isNotEmpty ? car.fuelType : 'N/A', Icons.local_gas_station, Colors.orange),
+                      _buildModernDetailRow('Engine', car.engineCC + (car.turbo ? ' Turbo' : ''), Icons.build, Colors.red),
+                      _buildModernDetailRow('VIN', car.vin.isNotEmpty ? car.vin : 'N/A', Icons.qr_code, Colors.cyan),
+                      _buildModernDetailRow('Added', _formatCarDate(car.createdAt), Icons.calendar_today, Colors.green),
+                      if (car.updatedAt != car.createdAt)
+                        _buildModernDetailRow('Last Updated', _formatCarDate(car.updatedAt), Icons.update, Colors.teal),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                
+                SizedBox(height: dialogContext.r(20)),
+                
+                // Action button
+                SizedBox(
+                  width: double.infinity,
+                  child: _buildModernActionButton(
+                    icon: Icons.edit_rounded,
+                    label: 'View & Edit in My Cars',
+                    color: AppTheme.primaryGreen,
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _navigateToCarsList();
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2738,39 +2788,39 @@ class _HomeDashboardState extends State<HomeDashboard>
 
   Widget _buildModernDetailRow(String label, String value, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: context.r(6)),
       child: Row(
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: context.r(32),
+            height: context.r(32),
             decoration: BoxDecoration(
               color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
             ),
             child: Icon(
               icon,
               color: color,
-              size: 16,
+              size: context.responsiveIconSize(16),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: context.r(10)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[400],
+                  style: context.responsiveTextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[400]!,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: context.r(2)),
                 Text(
                   value.isEmpty ? 'N/A' : value,
-                  style: const TextStyle(
+                  style: context.responsiveTextStyle(
                     fontSize: 14,
                     color: Colors.white,
                     fontWeight: FontWeight.w600,

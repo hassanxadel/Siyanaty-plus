@@ -1,104 +1,34 @@
-# Siyanaty+ - Smart Car Maintenance App
+# Siyanaty+ Car Maintenance Application
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.5.3+-blue.svg)](https://flutter.dev/)
-[![Dart](https://img.shields.io/badge/Dart-3.5.3+-blue.svg)](https://dart.dev/)
-[![Firebase](https://img.shields.io/badge/Firebase-Enabled-green.svg)](https://firebase.google.com/)
-[![License](https://img.shields.io/badge/License-Private-red.svg)]()
+A comprehensive Flutter-based car maintenance and management application with smart features for tracking vehicle health, maintenance schedules, and reminders.
 
-## 📋 Overview
+## Features
 
-**Siyanaty+** is a comprehensive Flutter-based car maintenance application that revolutionizes vehicle maintenance management through digital transformation. The app transitions vehicle care from reactive to proactive management using real-time diagnostics, smart reminders, and intelligent service integration.
+- **User Authentication**: Secure login with Firebase Auth, MFA, and PIN protection
+- **Car Management**: Add and manage multiple vehicles with images
+- **Maintenance Tracking**: Track all maintenance activities with costs and dates
+- **Smart Reminders**: Set reminders based on date or mileage with notifications
+- **OCR Integration**: Scan documents for easy data entry
+- **OBD-II Integration**: Connect to your car via Bluetooth for real-time diagnostics
+- **Car Health Score**: Comprehensive health monitoring based on maintenance history
+- **Mileage Tracking**: Track fuel consumption and calculate efficiency
+- **Cloud Backup**: Sync data with Firebase across devices
 
-### 🚀 Key Features
-
-- **Multi-Vehicle Management** - Manage multiple cars with individual profiles
-- **Real-Time OBD-II Diagnostics** - Live vehicle health monitoring and diagnostics
-- **Smart Maintenance Reminders** - AI-powered scheduling and priority-based alerts
-- **Service Center Locator** - Find nearby service centers with filtering capabilities
-- **VIN Lookup & Scanner** - Vehicle information retrieval and barcode scanning
-- **OCR Document Scanner** - Extract data from service reports and documents
-- **Voice Notes** - Quick maintenance notes with speech recognition
-- **Mileage Tracking** - Predictive maintenance based on usage patterns
-- **Maintenance Records** - Comprehensive service history and cost tracking
-- **Dark/Light Theme Support** - Modern UI with customizable themes
-- **Offline Functionality** - Works without internet connection using local storage
-
----
-
-## 🏗️ Architecture
-
-### Clean Architecture Implementation
-
-The app follows Clean Architecture principles with three main layers:
-
-- **Domain Layer** (`lib/domain/`) - Business logic and entities
-- **Presentation Layer** (`lib/presentation/`) - UI components and state management
-- **Shared Layer** (`lib/shared/`) - Services, utilities, and constants
-
-### Technology Stack
-
-#### Frontend Technologies
-- **Flutter 3.5.3+** - Cross-platform mobile development
-- **Dart** - Primary programming language
-- **Material Design 3** - Modern UI/UX framework
-- **Provider Pattern** - State management architecture
-- **Orbitron Font Family** - Futuristic typography system
-
-#### Backend & Cloud Services
-- **Firebase Authentication** - User authentication and authorization
-- **Google Sign-In** - Social authentication integration
-- **Cloud Firestore** - NoSQL cloud database
-- **Firebase Storage** - File and document storage
-- **SQLite (sqflite)** - Local database for offline functionality
-- **Shared Preferences** - Application settings storage
-
-#### Hardware Integration (Planned)
-- **Bluetooth Communication** - OBD-II device connectivity
-- **GPS & Location Services** - Service center location and navigation
-- **Camera Integration** - Document and barcode scanning
-- **Voice Recognition** - Speech-to-text functionality
-
----
-
-## 📱 Screenshots & Features
-
-### Main Dashboard
-- **Home Screen** - Welcome interface with quick actions and vehicle overview
-- **Quick Actions Grid** - 12 main features accessible from home
-- **Vehicle Health Cards** - Real-time status indicators
-- **Recent Activity Feed** - Latest maintenance activities
-
-### Core Features
-- **OBD Diagnostics** - Real-time vehicle data and health monitoring
-- **Smart Reminders** - Priority-based maintenance scheduling
-- **Service Centers** - Location-based service discovery
-- **Multi-Car Management** - Individual vehicle profiles
-- **Settings & Profile** - User customization and preferences
-
-### Advanced Tools
-- **VIN Lookup** - Vehicle information and maintenance recommendations
-- **OCR Scanner** - Extract data from service reports
-- **Barcode Scanner** - Part details and product information
-- **Voice Notes** - Quick maintenance notes with speech recognition
-- **Mileage Tracking** - Usage-based maintenance predictions
-
----
-
-## 🚀 Getting Started
+## Quick Start
 
 ### Prerequisites
 
-- Flutter SDK 3.5.3 or higher
-- Dart SDK 3.5.3 or higher
-- Android Studio / VS Code
-- Git
+- Flutter SDK (version 3.5.3 or later)
+- Dart SDK (included with Flutter)
+- Android SDK (for Android development)
+- Firebase account (for cloud features)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/hassanxadel/Siyanaty-plus.git
-   cd Siyanaty-plus
+   git clone https://github.com/yourusername/siyanaty-plus.git
+   cd siyanaty-plus
    ```
 
 2. **Install dependencies**
@@ -106,363 +36,181 @@ The app follows Clean Architecture principles with three main layers:
    flutter pub get
    ```
 
-3. **Configure Firebase (Optional)**
-   - Add your `google-services.json` to `android/app/`
-   - Configure Firebase project settings
-   - Update `lib/firebase_options.dart` with your configuration
+3. **Configure Firebase**
+   - Create a Firebase project
+   - Download `google-services.json` (Android) and `GoogleService-Info.plist` (iOS)
+   - Place them in the appropriate directories
 
-4. **Run the application**
+4. **Run the app**
    ```bash
    flutter run
    ```
 
-### Build for Production
+## Documentation
 
-#### Android
-```bash
-flutter build apk --release
+All documentation is organized in the `docs/` folder:
+
+| Document | Description |
+|----------|-------------|
+| [APP_ARCHITECTURE.md](docs/APP_ARCHITECTURE.md) | Application structure, patterns, and data flow |
+| [DATABASE.md](docs/DATABASE.md) | Complete SQLite database schema and ERD |
+| [SERVICES.md](docs/SERVICES.md) | All services (Car, Maintenance, Mileage, etc.) |
+| [SECURITY_AUTHENTICATION.md](docs/SECURITY_AUTHENTICATION.md) | Authentication, MFA, PIN, and security features |
+| [EMAIL_VERIFICATION.md](docs/EMAIL_VERIFICATION.md) | Email verification and Firebase email setup |
+| [CLOUD_SYNC.md](docs/CLOUD_SYNC.md) | Cloud backup and restore functionality |
+| [OBD_INTEGRATION.md](docs/OBD_INTEGRATION.md) | OBD-II Bluetooth diagnostics |
+| [CAR_HEALTH.md](docs/CAR_HEALTH.md) | Car health score algorithm |
+| [NAVIGATION.md](docs/NAVIGATION.md) | Global navigation system |
+| [RESPONSIVE_DESIGN.md](docs/RESPONSIVE_DESIGN.md) | Responsive design utilities |
+| [TESTING.md](docs/TESTING.md) | Test suite documentation |
+
+### Feature Documentation
+
+| Document | Description |
+|----------|-------------|
+| [VIN_LOOKUP.md](docs/VIN_LOOKUP.md) | VIN decoder API integration |
+| [VOICE_NOTES.md](docs/VOICE_NOTES.md) | Voice recording feature |
+| [SERVICE_CENTERS.md](docs/SERVICE_CENTERS.md) | Google Maps service center finder |
+| [PIN_CODE.md](docs/PIN_CODE.md) | PIN security and biometric auth |
+| [MFA.md](docs/MFA.md) | Multi-factor authentication (Email OTP) |
+| [REMINDERS.md](docs/REMINDERS.md) | Maintenance reminders system |
+| [MAINTENANCE.md](docs/MAINTENANCE.md) | Maintenance records tracking |
+| [OCR_SCANNER.md](docs/OCR_SCANNER.md) | Document scanning with ML Kit |
+| [MY_CARS.md](docs/MY_CARS.md) | Car management feature |
+| [MILEAGE_TRACKER.md](docs/MILEAGE_TRACKER.md) | Fuel and mileage tracking |
+| [NOTIFICATIONS.md](docs/NOTIFICATIONS.md) | Local push notifications |
+| [PROFILE.md](docs/PROFILE.md) | User profile management |
+
+## Testing
+
+The project includes 67 automated tests.
+
+### Quick Test Execution
+
+```powershell
+# Windows PowerShell
+.\scripts\run_all_tests.ps1
 ```
-
-#### iOS
-```bash
-flutter build ios --release
-```
-
----
-
-## 📊 Project Status
-
-### Current Progress: 65% Complete
-
-#### ✅ Completed Phases
-
-**Phase 1: Foundation Development (95% Complete)**
-- ✅ Authentication System with Firebase integration
-- ✅ User Interface Framework with custom themes
-- ✅ Clean Architecture implementation
-- ✅ Provider pattern for state management
-
-**Phase 2: Core Features Development (80% Complete)**
-- ✅ Main application screens (25+ screens)
-- ✅ Data models and local storage
-- ✅ Navigation system with bottom navigation
-- ✅ Theme switching (Dark/Light mode)
-
-**Phase 3: Backend Integration (85% Complete)**
-- ✅ Firebase Authentication configuration
-- ✅ Cloud Firestore database setup
-- ✅ Firebase Storage integration
-- ✅ Security rules and access control
-
-#### 🚧 In Progress
-
-**Phase 4: Hardware Integration (10% Complete)**
-- 🔄 OBD-II communication system
-- 🔄 Location services integration
-- 🔄 Camera and scanning features
-- 🔄 Bluetooth device connectivity
-
-#### 📋 Planned Features
-
-**Phase 5: Data Integration & APIs**
-- 📋 VIN lookup system with NHTSA API
-- 📋 Service center database population
-- 📋 Maintenance prediction algorithms
-- 📋 Real-time data synchronization
-
-**Phase 6: Advanced Features**
-- 📋 Notification system (local & push)
-- 📋 Voice commands and documentation
-- 📋 Analytics and reporting
-- 📋 Performance optimization
-
----
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-lib/
-├── domain/
-│   └── entities/          # Business logic entities
-├── presentation/
-│   ├── providers/         # State management
-│   ├── screens/           # UI screens (25+ screens)
-│   └── widgets/          # Reusable UI components
-├── shared/
-│   ├── constants/        # App constants and themes
-│   ├── services/         # Core services (Firebase, Database)
-│   └── utils/           # Utility functions and helpers
-└── main.dart            # App entry point
-```
-
-### Key Dependencies
-
-```yaml
-dependencies:
-  flutter: sdk: flutter
-  provider: ^6.1.2                    # State management
-  sqflite: ^2.3.3+1                    # Local database
-  shared_preferences: ^2.3.2           # Settings storage
-  firebase_core: ^2.15.0              # Firebase core
-  firebase_auth: ^4.7.0               # Authentication
-  cloud_firestore: ^4.8.0             # Cloud database
-  firebase_storage: ^11.2.0           # File storage
-  google_sign_in: ^6.1.5             # Google authentication
-  image_picker: ^1.0.7                # Image selection
-  file_picker: ^8.0.0+1              # File selection
-  intl: ^0.18.1                       # Internationalization
-```
-
-### Code Quality
-
-- **Clean Architecture** - Separation of concerns
-- **Provider Pattern** - Reactive state management
-- **Comprehensive Documentation** - Inline code documentation
-- **Error Handling** - Graceful degradation and recovery
-- **Performance Optimization** - Efficient memory and battery usage
-
----
-
-## 🎯 Success Metrics
-
-### Technical Performance
-- **Application Startup Time**: < 2 seconds
-- **Memory Usage**: < 100MB average
-- **Battery Consumption**: < 5% per hour
-- **Crash Rate**: < 0.1%
-
-### User Experience
-- **User Retention**: > 80% after 30 days
-- **Feature Adoption**: > 60% for core features
-- **User Satisfaction**: > 4.5/5 rating
-- **Support Requests**: < 5% of users
-
-### Business Metrics
-- **Monthly Active Users**: Target 10,000+
-- **Premium Feature Conversion**: > 15%
-- **User Engagement**: > 20 minutes daily
-- **App Store Rating**: Target > 4.5 stars
-
----
-
-## 🔧 Configuration
-
-### Environment Setup
-
-1. **Flutter Environment**
-   ```bash
-   flutter doctor
-   flutter config --enable-web
-   ```
-
-2. **Firebase Configuration**
-   - Create Firebase project
-   - Enable Authentication, Firestore, and Storage
-   - Download configuration files
-   - Update `lib/firebase_options.dart`
-
-3. **Development Tools**
-   - Enable developer options on device
-   - Configure USB debugging (Android)
-   - Install Flutter extensions in IDE
-
-### Build Configuration
-
-#### Android (`android/app/build.gradle`)
-```gradle
-android {
-    compileSdkVersion 34
-    defaultConfig {
-        applicationId "com.example.siyanaty_plus"
-        minSdkVersion 21
-        targetSdkVersion 34
-        versionCode 1
-        versionName "1.0.0"
-    }
-}
-```
-
-#### iOS (`ios/Runner/Info.plist`)
-```xml
-<key>CFBundleDisplayName</key>
-<string>Siyanaty+</string>
-<key>CFBundleIdentifier</key>
-<string>com.example.siyanaty</string>
-```
-
----
-
-## 🧪 Testing
-
-### Running Tests
 
 ```bash
-# Unit tests
-flutter test
-
-# Integration tests
-flutter test integration_test/
-
-# Widget tests
-flutter test test/widget_test.dart
+# Manual testing
+flutter test                    # Run all tests
+flutter test test/unit/         # Unit tests only
+flutter test integration_test/  # Integration tests only
 ```
 
 ### Test Coverage
 
-- **Unit Tests** - Service and utility testing
-- **Widget Tests** - UI component functionality
-- **Integration Tests** - End-to-end workflow validation
-- **Performance Tests** - Load and stress testing
+- **Unit Tests**: 46 tests (auth, car, maintenance, reminder services)
+- **Widget Tests**: 8 tests (UI components)
+- **Integration Tests**: 13 tests (complete workflows)
 
----
+See [docs/TESTING.md](docs/TESTING.md) for detailed testing documentation.
 
-## 🚨 Troubleshooting
+## Project Structure
 
-### Common Issues
+```
+lib/
+├── database/           # SQLite database helpers
+├── models/             # Data models
+├── presentation/       # UI layer
+│   ├── screens/       # App screens
+│   ├── widgets/       # Reusable widgets
+│   └── providers/     # State management
+├── services/          # Business logic layer
+│   ├── security/      # Auth, MFA, PIN services
+│   ├── obd/           # OBD-II services
+│   └── bluetooth/     # Bluetooth connectivity
+├── shared/            # Shared utilities
+└── main.dart          # Entry point
 
-1. **Firebase Connection Issues**
-   ```bash
-   # Check Firebase configuration
-   flutter clean
-   flutter pub get
-   ```
-
-2. **Build Errors**
-   ```bash
-   # Clean and rebuild
-   flutter clean
-   flutter pub get
-   flutter build apk
-   ```
-
-3. **Dependency Conflicts**
-   ```bash
-   # Update dependencies
-   flutter pub upgrade
-   flutter pub deps
-   ```
-
-### Debug Mode
-
-```bash
-# Enable debug logging
-flutter run --debug
-
-# Check device logs
-flutter logs
+docs/                   # Documentation
+scripts/               # Automation scripts
+test/                  # Test files
 ```
 
----
+## Key Features
 
-## 🤝 Contributing
+### Security
+- Firebase Authentication
+- Multi-Factor Authentication (Email OTP)
+- PIN/Biometric local authentication
+- Encrypted local database (SQLCipher)
+- Device trust management
 
-### Development Guidelines
+### Car Management
+- Multiple vehicle support
+- VIN decoding
+- License plate storage
+- Car images
 
-1. **Code Style**
-   - Follow Dart/Flutter conventions
-   - Use meaningful variable names
-   - Add comprehensive comments
-   - Maintain consistent formatting
+### Maintenance
+- Service record tracking
+- Cost tracking
+- Service provider info
+- Invoice storage
 
-2. **Architecture**
-   - Follow Clean Architecture principles
-   - Use Provider pattern for state management
-   - Implement proper error handling
-   - Write unit tests for new features
+### Reminders
+- Date-based reminders
+- Mileage-based reminders
+- Push notifications
+- Priority levels
 
-3. **Git Workflow**
-   ```bash
-   # Create feature branch
-   git checkout -b feature/new-feature
-   
-   # Commit changes
-   git add .
-   git commit -m "Add new feature"
-   
-   # Push and create PR
-   git push origin feature/new-feature
-   ```
+### OBD-II Diagnostics
+- Real-time vehicle data
+- RPM, Speed, Temperature
+- Fuel level, Battery voltage
+- Diagnostic trouble codes
 
-### Pull Request Process
+### Mileage Tracking
+- Fuel consumption logging
+- Cost tracking
+- Efficiency calculations
+- Statistics and charts
+
+## Building for Production
+
+### Android
+
+```bash
+flutter build apk --release        # Build APK
+flutter build appbundle --release  # Build App Bundle
+```
+
+### iOS
+
+```bash
+flutter build ios --release
+```
+
+## Supported Platforms
+
+- Android (API 21+)
+- iOS (iOS 12.0+)
+- Web (limited features)
+
+## Dependencies
+
+Key dependencies include:
+- `firebase_core`, `firebase_auth`, `cloud_firestore` - Firebase services
+- `sqflite_sqlcipher` - Encrypted local database
+- `flutter_secure_storage` - Secure key-value storage
+- `flutter_bluetooth_serial` - OBD-II Bluetooth communication
+- `google_ml_kit_text_recognition` - OCR
+- `provider` - State management
+
+## Contributing
 
 1. Fork the repository
-2. Create feature branch
-3. Implement changes with tests
-4. Update documentation
-5. Submit pull request
-6. Address review feedback
+2. Create a feature branch
+3. Add tests for new features
+4. Ensure all tests pass
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
 
 ---
 
-## 📄 License
-
-This project is private and proprietary. All rights reserved.
-
----
-
-## 📞 Contact & Support
-
-### Project Information
-- **Repository**: https://github.com/hassanxadel/Siyanaty-plus
-- **Documentation**: See `/docs` folder for detailed documentation
-- **Issues**: Use GitHub Issues for bug reports and feature requests
-
-### Development Team
-- **Lead Developer**: Hassan Adel
-- **Project Status**: Active Development
-- **Last Updated**: December 2024
-
-### Getting Help
-
-1. **Documentation** - Check this README and inline code comments
-2. **Issues** - Search existing GitHub issues
-3. **Discussions** - Use GitHub Discussions for questions
-4. **Email** - Contact project maintainer for urgent issues
-
----
-
-## 🗺️ Roadmap
-
-### Short Term (Next 3 months)
-- Complete OBD-II hardware integration
-- Implement real-time location services
-- Add comprehensive testing suite
-- Optimize performance and battery usage
-
-### Medium Term (3-6 months)
-- Deploy to app stores (Google Play & App Store)
-- Implement advanced analytics
-- Add social features and community
-- Integrate with automotive APIs
-
-### Long Term (6+ months)
-- Machine learning for predictive maintenance
-- IoT device integration
-- Enterprise features and partnerships
-- Multi-language support
-
----
-
-**Document Version**: 2.0 | **Last Updated**: December 2024 | **Project Status**: Active Development
-
-## 🔑 API Keys & New Features Setup
-
-1. Configure keys in `lib/shared/constants/app_constants.dart`:
-   - `zpkApiKey`: set your RapidAPI key for VIN decoding
-   - `googleMapsApiKey`: set your Google Maps API key
-
-2. VIN Lookup Usage:
-   - Open `VIN Lookup` screen, enter a 17-character VIN, tap "Lookup VIN"
-   - The app fetches Make, Model, Year, Engine, Transmission, Body Style, Fuel Type
-   - Tap "Save to My Cars" to add a minimal car record using `CarService`
-
-3. Service Centers (backend available):
-   - Get current coordinates with `LocationService.getCurrentPosition()`
-   - Fetch nearby centers with `ServiceCenterService.findNearbyServiceCenters(latitude, longitude)`
-   - Integrate results into a UI list as desired (e.g., map or list view)
-
-4. Permissions (Android):
-   - Location permission is requested by `geolocator` at runtime
-   - Ensure Google Places API is enabled for your key in Google Cloud Console
+**Built with Flutter**

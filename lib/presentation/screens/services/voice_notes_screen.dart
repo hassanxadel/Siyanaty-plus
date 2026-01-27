@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,7 +7,7 @@ import 'package:flutter_sound/flutter_sound.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../models/voice_note.dart';
 import '../../../services/voice_note_service.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class VoiceNotesScreen extends StatefulWidget {
   const VoiceNotesScreen({super.key});
@@ -33,6 +34,8 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
   String? _recordingPath;
   String? _userId;
   String _searchQuery = '';
+  int _recordingDuration = 0;
+  Timer? _recordingTimer;
 
   @override
   void initState() {
@@ -71,6 +74,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
     _recorder.closeRecorder();
     _player.closePlayer();
     _titleController.dispose();
@@ -122,7 +126,8 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ScreenWithNavBar(
+      child: Scaffold(
       backgroundColor: AppTheme.backgroundGreen,
       body: Column(
         children: [
@@ -156,7 +161,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavBar(currentIndex: 0, onTap: (i) {}),
+    ),
     );
   }
 
@@ -195,14 +200,15 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                   ),
                   const SizedBox(width: 16),
                   const Text(
-                    'Voice Notes',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
+                          'Voice Notes',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontFamily: 'Orbitron',
+                          ),
+                        ),
                   const Spacer(),
                   PopupMenuButton<String>(
                     onSelected: _handleMenuAction,
@@ -510,7 +516,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
             color: color,
             size: 24,
           ),
-          const SizedBox(height: 8),
+              const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
@@ -569,7 +575,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
               fontFamily: 'Orbitron',
             ),
           ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
           GestureDetector(
             onTap: _isRecording ? _stopRecording : _startRecording,
             child: Container(
@@ -608,6 +614,61 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
               fontFamily: 'Orbitron',
             ),
           ),
+          if (_isRecording) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.darkAccentGreen,
+                    AppTheme.backgroundGreen,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.5),
+                          blurRadius: 8,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    _formatDuration(_recordingDuration),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontFamily: 'Orbitron',
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_recordingPath != null) ...[
             const SizedBox(height: 20),
             const Text(
@@ -623,12 +684,17 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Colors.green, Colors.greenAccent],
+                  child:                   Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.darkAccentGreen,
+                          AppTheme.backgroundGreen,
+                        ],
                       ),
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                     child: ElevatedButton.icon(
                       onPressed: _saveRecording,
@@ -646,7 +712,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                         shadowColor: Colors.transparent,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                     ),
@@ -654,12 +720,17 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Colors.red, Colors.redAccent],
+                  child:                   Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.darkAccentGreen,
+                          AppTheme.backgroundGreen,
+                        ],
                       ),
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                     child: ElevatedButton.icon(
                       onPressed: _discardRecording,
@@ -677,7 +748,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                         shadowColor: Colors.transparent,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                     ),
@@ -1096,7 +1167,11 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
       if (recordingStarted) {
         setState(() {
           _isRecording = true;
+          _recordingDuration = 0;
         });
+
+        // Start timer to update duration
+        _startRecordingTimer();
 
         HapticFeedback.lightImpact();
         _showMessage('Recording started');
@@ -1112,19 +1187,126 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
     try {
       await _recorder.stopRecorder();
       
+      // Stop the timer
+      _recordingTimer?.cancel();
+      _recordingTimer = null;
+      
       setState(() {
         _isRecording = false;
       });
 
       HapticFeedback.lightImpact();
-      _showMessage('Recording stopped');
+      
+      // Show dialog asking if user wants to save or discard
+      if (mounted) {
+        _showSaveOrDiscardDialog();
+      }
     } catch (e) {
       _showErrorDialog('Failed to stop recording: $e');
     }
   }
+  
+  void _showSaveOrDiscardDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.backgroundGreen,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Recording Stopped',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'Would you like to save this recording?',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            color: Colors.white70,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _discardRecording();
+            },
+            child: const Text(
+              'Discard',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _saveRecording();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryGreen,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Save',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _discardRecording() {
+    // Delete the recording file
+    if (_recordingPath != null) {
+      try {
+        final file = File(_recordingPath!);
+        if (file.existsSync()) {
+          file.deleteSync();
+        }
+      } catch (e) {
+        print('Error deleting recording: $e');
+      }
+    }
+    
+    setState(() {
+      _recordingPath = null;
+      _recordingDuration = 0;
+    });
+    
+    _showMessage('Recording discarded');
+  }
 
-  void _saveRecording() {
+  void _startRecordingTimer() {
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _recordingDuration++;
+        });
+      }
+    });
+  }
+
+  Future<void> _saveRecording() async {
     if (_recordingPath == null) return;
+
+    // Stop recording if still recording
+    if (_isRecording) {
+      await _stopRecording();
+    }
 
     showDialog(
       context: context,
@@ -1165,7 +1347,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
               style: const TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: 'Enter description (optional)',
+                hintText: 'Description (optional)',
                 hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'Orbitron'),
                 filled: true,
                 fillColor: Colors.white.withOpacity(0.1),
@@ -1186,22 +1368,41 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _clearInputs();
-            },
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
+              ),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+            child: TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _clearInputs();
+              },
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
             child: TextButton(
               onPressed: () {
@@ -1256,21 +1457,6 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
     }
   }
 
-  void _discardRecording() {
-    if (_recordingPath != null) {
-      try {
-        File(_recordingPath!).deleteSync();
-      } catch (e) {
-        print('Error deleting recording file: $e');
-      }
-    }
-    
-    setState(() {
-      _recordingPath = null;
-    });
-    
-    _showMessage('Recording discarded');
-  }
 
   Future<void> _togglePlayback(int index, VoiceNote note) async {
     if (_isPlaying && _currentPlayingIndex == index) {
@@ -1382,7 +1568,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
               style: const TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: 'Enter description (optional)',
+                hintText: 'Description (optional)',
                 hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'Orbitron'),
                 filled: true,
                 fillColor: Colors.white.withOpacity(0.1),
@@ -1403,22 +1589,41 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _clearInputs();
-            },
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
+              ),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+            child: TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _clearInputs();
+              },
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
             child: TextButton(
               onPressed: () {
@@ -1473,17 +1678,38 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           style: const TextStyle(fontFamily: 'Orbitron', color: Colors.white),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
+              ),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Container(
-            decoration: BoxDecoration(
-              color: Colors.red,
-              borderRadius: BorderRadius.circular(8),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
+              ),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
             child: TextButton(
               onPressed: () {
@@ -1564,11 +1790,24 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Close',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.darkAccentGreen,
+                    AppTheme.backgroundGreen,
+                  ],
+                ),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+                ),
               ),
             ),
           ],
@@ -1611,11 +1850,24 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           style: const TextStyle(fontFamily: 'Orbitron', color: Colors.white),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'OK',
-              style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.darkAccentGreen,
+                  AppTheme.backgroundGreen,
+                ],
+              ),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'OK',
+                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
+              ),
             ),
           ),
         ],

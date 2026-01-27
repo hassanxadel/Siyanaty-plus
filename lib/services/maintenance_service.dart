@@ -3,7 +3,6 @@ import '../database/database_helper.dart';
 import '../models/backup_maintenance.dart';
 import '../models/backup_reminder.dart';
 import '../shared/utils/app_logger.dart';
-import 'firebase_maintenance_service.dart';
 
 /// Service class for managing maintenance records
 /// Handles business logic, validation, and database operations for maintenance
@@ -19,7 +18,8 @@ class MaintenanceService {
 
   /// Add a new maintenance record
   Future<MaintenanceOperationResult> addMaintenance({
-    required int reminderId,
+    int? reminderId, // Made optional for standalone maintenance
+    int? carId, // Direct car ID for standalone maintenance
     required String title,
     required String description,
     required double cost,
@@ -40,23 +40,27 @@ class MaintenanceService {
         return MaintenanceOperationResult.failure('Title is required');
       }
 
-      if (description.trim().isEmpty) {
-        return MaintenanceOperationResult.failure('Description is required');
-      }
+      // Description is optional, no validation needed
 
       if (cost < 0) {
         return MaintenanceOperationResult.failure('Cost cannot be negative');
       }
 
-      // Check if reminder exists and belongs to user
-      final reminder = await _databaseHelper.getReminderById(reminderId, userId);
-      if (reminder == null) {
-        return MaintenanceOperationResult.failure('Reminder not found or access denied');
+      // Check if reminder exists and belongs to user (only if reminderId is provided)
+      if (reminderId != null) {
+        final reminder = await _databaseHelper.getReminderById(reminderId, userId);
+        if (reminder == null) {
+          return MaintenanceOperationResult.failure('Reminder not found or access denied');
+        }
+      } else if (carId == null) {
+        // If no reminder, we must have a carId for standalone maintenance
+        return MaintenanceOperationResult.failure('Either reminder or car must be specified');
       }
 
       final maintenance = BackupMaintenance(
         id: null, // Let database auto-generate
-        reminderId: reminderId,
+        reminderId: reminderId, // Can be null for standalone maintenance
+        carId: carId, // Direct car ID for standalone maintenance
         title: title.trim(),
         description: description.trim(),
         cost: cost,
@@ -71,16 +75,8 @@ class MaintenanceService {
       final id = await _databaseHelper.insertMaintenance(maintenance);
       AppLogger.info('Maintenance record added successfully with ID: $id');
 
-      // Backup to Firebase if user is authenticated
-      if (isUserAuthenticated) {
-        try {
-          await FirebaseMaintenanceService.backupMaintenanceToFirestore();
-          AppLogger.info('Maintenance record backed up to Firebase');
-        } catch (e) {
-          AppLogger.error('Failed to backup maintenance record to Firebase', error: e);
-          // Don't fail the operation if backup fails
-        }
-      }
+      // Note: Backup to Firebase is handled manually via backup buttons in settings screen
+      // This matches the behavior of reminders
 
       return MaintenanceOperationResult.success('Maintenance record added successfully');
     } catch (e) {
@@ -173,9 +169,7 @@ class MaintenanceService {
         return MaintenanceOperationResult.failure('Title is required');
       }
 
-      if (description.trim().isEmpty) {
-        return MaintenanceOperationResult.failure('Description is required');
-      }
+      // Description is optional, no validation needed
 
       if (cost < 0) {
         return MaintenanceOperationResult.failure('Cost cannot be negative');
@@ -202,16 +196,7 @@ class MaintenanceService {
       if (rowsUpdated > 0) {
         AppLogger.info('Maintenance record updated successfully');
         
-        // Backup to Firebase if user is authenticated
-        if (isUserAuthenticated) {
-          try {
-            await FirebaseMaintenanceService.backupMaintenanceToFirestore();
-            AppLogger.info('Updated maintenance record backed up to Firebase');
-          } catch (e) {
-            AppLogger.error('Failed to backup updated maintenance record to Firebase', error: e);
-            // Don't fail the operation if backup fails
-          }
-        }
+        // Note: Backup to Firebase is handled manually via backup buttons in settings screen
         
         return MaintenanceOperationResult.success('Maintenance record updated successfully');
       } else {
@@ -236,16 +221,7 @@ class MaintenanceService {
       if (rowsDeleted > 0) {
         AppLogger.info('Maintenance record deleted successfully');
         
-        // Backup to Firebase if user is authenticated
-        if (isUserAuthenticated) {
-          try {
-            await FirebaseMaintenanceService.backupMaintenanceToFirestore();
-            AppLogger.info('Maintenance record deletion backed up to Firebase');
-          } catch (e) {
-            AppLogger.error('Failed to backup maintenance record deletion to Firebase', error: e);
-            // Don't fail the operation if backup fails
-          }
-        }
+        // Note: Backup to Firebase is handled manually via backup buttons in settings screen
         
         return MaintenanceOperationResult.success('Maintenance record deleted successfully');
       } else {

@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../database/database_helper.dart';
 import '../models/backup_reminder.dart';
 import '../models/backup_car.dart';
@@ -27,6 +28,9 @@ class NotificationDatabaseService {
 
       final userId = _currentUserId!;
       
+      // Get read notification IDs
+      final readIds = await getReadNotificationIds();
+      
       // Get all overdue reminders with car info
       final overdueReminders = await _databaseHelper.getOverdueRemindersWithCarInfo(userId);
       
@@ -34,14 +38,15 @@ class NotificationDatabaseService {
       return overdueReminders.map((reminderMap) {
         final reminder = BackupReminder.fromMap(reminderMap);
         final car = _parseCarFromJoinedQuery(reminderMap);
+        final notificationId = 'overdue_${reminder.id}';
         
         return NotificationItem(
-          id: 'overdue_${reminder.id}',
+          id: notificationId,
           title: _getOverdueNotificationTitle(reminder),
           message: _getOverdueNotificationMessage(reminder, car),
           type: NotificationType.reminder,
           timestamp: reminder.updatedAt,
-          isRead: false,
+          isRead: readIds.contains(notificationId),
           priority: _getNotificationPriority(reminder),
           reminderId: reminder.id,
           carId: reminder.carId,
@@ -62,6 +67,9 @@ class NotificationDatabaseService {
       final now = DateTime.now();
       final fiveDaysFromNow = now.add(const Duration(days: 5));
       
+      // Get read notification IDs
+      final readIds = await getReadNotificationIds();
+      
       // Get all upcoming reminders with car info
       final upcomingReminders = await _databaseHelper.getUpcomingRemindersWithCarInfo(userId);
       
@@ -77,14 +85,15 @@ class NotificationDatabaseService {
       return soonDueReminders.map((reminderMap) {
         final reminder = BackupReminder.fromMap(reminderMap);
         final car = _parseCarFromJoinedQuery(reminderMap);
+        final notificationId = 'upcoming_${reminder.id}';
         
         return NotificationItem(
-          id: 'upcoming_${reminder.id}',
+          id: notificationId,
           title: _getUpcomingNotificationTitle(reminder),
           message: _getUpcomingNotificationMessage(reminder, car),
           type: NotificationType.reminder,
           timestamp: reminder.updatedAt,
-          isRead: false,
+          isRead: readIds.contains(notificationId),
           priority: NotificationPriority.medium,
           reminderId: reminder.id,
           carId: reminder.carId,
@@ -110,10 +119,56 @@ class NotificationDatabaseService {
 
   /// Mark a notification as read
   Future<void> markNotificationAsRead(String notificationId) async {
-    // For now, we'll just store this in shared preferences
-    // In a more complex system, you might want to store read status in database
-    // This is a simple implementation that marks the notification as read in memory
-    print('Marking notification as read: $notificationId');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final readNotifications = prefs.getStringList('read_notifications') ?? [];
+      
+      if (!readNotifications.contains(notificationId)) {
+        readNotifications.add(notificationId);
+        await prefs.setStringList('read_notifications', readNotifications);
+      }
+      
+      print('Marked notification as read: $notificationId');
+    } catch (e) {
+      print('Error marking notification as read: $e');
+    }
+  }
+  
+  /// Check if a notification has been read
+  Future<bool> isNotificationRead(String notificationId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final readNotifications = prefs.getStringList('read_notifications') ?? [];
+      return readNotifications.contains(notificationId);
+    } catch (e) {
+      print('Error checking notification read status: $e');
+      return false;
+    }
+  }
+  
+  /// Get list of all read notification IDs
+  Future<Set<String>> getReadNotificationIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final readNotifications = prefs.getStringList('read_notifications') ?? [];
+      return readNotifications.toSet();
+    } catch (e) {
+      print('Error getting read notification IDs: $e');
+      return {};
+    }
+  }
+  
+  /// Clear read status for a notification (when it becomes unread)
+  Future<void> markNotificationAsUnread(String notificationId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final readNotifications = prefs.getStringList('read_notifications') ?? [];
+      
+      readNotifications.remove(notificationId);
+      await prefs.setStringList('read_notifications', readNotifications);
+    } catch (e) {
+      print('Error marking notification as unread: $e');
+    }
   }
 
   /// Delete a notification (mark reminder as completed)

@@ -401,7 +401,7 @@ class HelpScreen extends StatelessWidget {
               fontFamily: 'Orbitron',
             ),
           ),
-          const SizedBox(height: 16),
+              const SizedBox(height: 16),
           
           Row(
             children: [

@@ -119,7 +119,6 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      height: 260,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -137,8 +136,9 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
@@ -147,31 +147,33 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                     icon: const Icon(
                       Icons.arrow_back_ios,
                       color: Colors.white,
-                      size: 28,
+                      size: 24,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  const Text(
-                    'Scan History',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
+                  const SizedBox(width: 4),
+                  const Expanded(
+                    child: Text(
+                      'Scan History',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(15),
                     ),
                     child: Text(
-                      '${_filteredScans.length} scans',
+                      '${_filteredScans.length}',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 14,
+                        fontSize: 13,
                         fontFamily: 'Orbitron',
                         fontWeight: FontWeight.w600,
                       ),
@@ -179,23 +181,25 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
                   'View and manage your saved OCR scans',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     color: Colors.white70,
                     fontFamily: 'Orbitron',
                   ),
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               // Search bar
               Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
+                margin: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(25),
@@ -214,33 +218,36 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                     hintStyle: const TextStyle(
                       fontFamily: 'Orbitron',
                       color: Colors.grey,
+                      fontSize: 14,
                     ),
                     prefixIcon: const Icon(
                       Icons.search,
                       color: AppTheme.primaryGreen,
+                      size: 20,
                     ),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
                             onPressed: () {
                               _searchController.clear();
                             },
-                            icon: const Icon(Icons.clear, color: AppTheme.primaryGreen),
+                            icon: const Icon(Icons.clear, color: AppTheme.primaryGreen, size: 20),
                           )
                         : null,
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                   style: const TextStyle(
                     fontFamily: 'Orbitron',
                     color: AppTheme.backgroundGreen,
+                    fontSize: 14,
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               // Stats row
               Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(15),
@@ -248,30 +255,36 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem(
-                      icon: Icons.document_scanner,
-                      label: 'Total',
-                      value: _scans.length.toString(),
+                    Expanded(
+                      child: _buildStatItem(
+                        icon: Icons.document_scanner,
+                        label: 'Total',
+                        value: _scans.length.toString(),
+                      ),
                     ),
                     Container(
                       width: 1,
-                      height: 30,
+                      height: 25,
                       color: Colors.white.withOpacity(0.3),
                     ),
-                    _buildStatItem(
-                      icon: Icons.search,
-                      label: 'Filtered',
-                      value: _filteredScans.length.toString(),
+                    Expanded(
+                      child: _buildStatItem(
+                        icon: Icons.search,
+                        label: 'Filtered',
+                        value: _filteredScans.length.toString(),
+                      ),
                     ),
                     Container(
                       width: 1,
-                      height: 30,
+                      height: 25,
                       color: Colors.white.withOpacity(0.3),
                     ),
-                    _buildStatItem(
-                      icon: Icons.cloud,
-                      label: 'Cloud',
-                      value: _scans.where((s) => s.source == 'cloud').length.toString(),
+                    Expanded(
+                      child: _buildStatItem(
+                        icon: Icons.cloud,
+                        label: 'Cloud',
+                        value: _scans.where((s) => s.source == 'cloud').length.toString(),
+                      ),
                     ),
                   ],
                 ),
@@ -289,18 +302,19 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
     required String value,
   }) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           icon,
           color: Colors.white,
-          size: 20,
+          size: 18,
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
         Text(
           value,
           style: const TextStyle(
             fontFamily: 'Orbitron',
-            fontSize: 16,
+            fontSize: 15,
             fontWeight: FontWeight.w700,
             color: Colors.white,
           ),
@@ -309,9 +323,11 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
           label,
           style: const TextStyle(
             fontFamily: 'Orbitron',
-            fontSize: 10,
+            fontSize: 9,
             color: Colors.white70,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -475,7 +491,7 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     
-                    const SizedBox(height: 8),
+                      const SizedBox(height: 8),
                     
                     // Metadata
                     Row(

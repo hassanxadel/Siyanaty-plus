@@ -928,7 +928,7 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
             shape: BoxShape.circle,
           ),
         ),
-        const SizedBox(height: 4),
+            const SizedBox(height: 4),
         Text(
           label,
           style: const TextStyle(
