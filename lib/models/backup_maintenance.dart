@@ -24,7 +24,8 @@ enum MaintenanceType {
 
 class BackupMaintenance {
   final int? id;
-  final int reminderId; // FK to reminder
+  final int? reminderId; // FK to reminder (nullable for standalone maintenance)
+  final int? carId; // Direct FK to car (for standalone maintenance)
   final String title;
   final String description;
   final double cost;
@@ -37,7 +38,8 @@ class BackupMaintenance {
 
   const BackupMaintenance({
     this.id,
-    required this.reminderId,
+    this.reminderId,
+    this.carId,
     required this.title,
     required this.description,
     required this.cost,
@@ -53,6 +55,7 @@ class BackupMaintenance {
     return {
       'id': id,
       'reminder_id': reminderId,
+      'car_id': carId,
       'title': title,
       'description': description,
       'cost': cost,
@@ -68,7 +71,8 @@ class BackupMaintenance {
   factory BackupMaintenance.fromMap(Map<String, dynamic> map) {
     return BackupMaintenance(
       id: map['id']?.toInt(),
-      reminderId: (map['reminder_id'] ?? 0).toInt(),
+      reminderId: map['reminder_id']?.toInt(),
+      carId: map['car_id']?.toInt(),
       title: map['title'] ?? '',
       description: map['description'] ?? '',
       cost: (map['cost'] ?? 0.0).toDouble(),
@@ -87,6 +91,7 @@ class BackupMaintenance {
   BackupMaintenance copyWith({
     int? id,
     int? reminderId,
+    int? carId,
     String? title,
     String? description,
     double? cost,
@@ -100,6 +105,7 @@ class BackupMaintenance {
     return BackupMaintenance(
       id: id ?? this.id,
       reminderId: reminderId ?? this.reminderId,
+      carId: carId ?? this.carId,
       title: title ?? this.title,
       description: description ?? this.description,
       cost: cost ?? this.cost,
@@ -117,6 +123,7 @@ class BackupMaintenance {
     return {
       'id': id,
       'reminder_id': reminderId,
+      'car_id': carId,
       'title': title,
       'description': description,
       'cost': cost,
@@ -132,7 +139,8 @@ class BackupMaintenance {
   factory BackupMaintenance.fromFirebaseMap(Map<String, dynamic> map) {
     return BackupMaintenance(
       id: map['id']?.toInt(),
-      reminderId: (map['reminder_id'] ?? 0).toInt(),
+      reminderId: map['reminder_id']?.toInt(),
+      carId: map['car_id']?.toInt(),
       title: map['title'] ?? '',
       description: map['description'] ?? '',
       cost: (map['cost'] ?? 0.0).toDouble(),

@@ -255,7 +255,7 @@ class _ModernForgotPasswordScreenState extends State<ModernForgotPasswordScreen>
                 : const Text(
                     'Send Reset Link',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.backgroundGreen,
                       fontFamily: 'Orbitron',

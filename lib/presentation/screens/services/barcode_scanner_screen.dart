@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../shared/constants/app_theme.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
   const BarcodeScannerScreen({super.key});
@@ -19,28 +19,29 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          _buildHeader(context),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildInstructionsCard(),
-                  const SizedBox(height: 24),
-                  _buildScannerCard(),
-                  const SizedBox(height: 24),
-                  if (_partInfo != null) _buildPartInfoCard(),
-                ],
+    return ScreenWithNavBar(
+      child: Scaffold(
+        body: Column(
+          children: [
+            _buildHeader(context),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInstructionsCard(),
+                    const SizedBox(height: 24),
+                    _buildScannerCard(),
+                    const SizedBox(height: 24),
+                    if (_partInfo != null) _buildPartInfoCard(),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-      bottomNavigationBar: BottomNavBar(currentIndex: 0, onTap: (i) {}),
     );
   }
 
@@ -403,7 +404,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
           // Import from Files Button
           SizedBox(
             width: double.infinity,
@@ -548,7 +549,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
           Row(
             children: [
               Expanded(

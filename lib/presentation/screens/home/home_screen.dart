@@ -4,12 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../../shared/utils/responsive_utils.dart';
 import '../../providers/auth_provider.dart';
 import '../actions/all_actions_screen.dart';
 import '../services/cars_screen.dart';
 import '../services/vin_lookup_screen.dart';
 import '../services/ocr_scanner_screen.dart';
-import '../services/barcode_scanner_screen.dart';
+import '../health/car_health_dashboard_screen.dart';
 import '../services/voice_notes_screen.dart';
 import '../services/mileage_track_screen.dart';
 import '../services/reminders_screen.dart';
@@ -20,11 +21,16 @@ import '../profile/profile_screen.dart';
 import '../notifications/notifications_screen.dart';
 import 'license_screen.dart';
 import '../../../services/car_service.dart';
+import '../../../services/car_health_service.dart';
+import '../../../models/car_health_score.dart';
 import '../../../models/backup_car.dart';
 import '../../../services/reminder_service.dart';
 import '../../../services/maintenance_service.dart';
+import '../../../services/notification_database_service.dart';
 import '../../../models/backup_reminder.dart';
 import '../../../models/backup_maintenance.dart';
+import '../../../services/security/local_unlock_service.dart';
+import '../../../shared/utils/string_extensions.dart';
 
 /// Main dashboard screen that serves as the home page
 /// Displays user welcome, quick actions, and vehicle overview
@@ -38,7 +44,7 @@ class HomeDashboard extends StatefulWidget {
 /// State class for the home dashboard
 /// Manages animations, car selection, and user interactions
 class _HomeDashboardState extends State<HomeDashboard>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   /// Controller for managing entrance animations (fade and slide)
   late AnimationController _animationController;
   /// Fade animation for smooth screen entrance
@@ -51,14 +57,24 @@ class _HomeDashboardState extends State<HomeDashboard>
   int _currentCarIndex = 0;
   /// Car service for fetching real car data
   final CarService _carService = CarService();
+  /// Car health service for calculating health scores
+  final CarHealthService _carHealthService = CarHealthService();
   /// Reminder service for fetching reminders data
   final ReminderService _reminderService = ReminderService();
   /// Maintenance service for fetching maintenance data
   final MaintenanceService _maintenanceService = MaintenanceService();
+  /// Notification database service for checking notification count
+  final NotificationDatabaseService _notificationService = NotificationDatabaseService.instance;
+  /// Local unlock service for PIN verification
+  final LocalUnlockService _localUnlockService = LocalUnlockService();
+  /// Count of unread notifications for badge
+  int _notificationCount = 0;
   /// List of user's cars (max 5 for swipe)
   List<BackupCar> _userCars = [];
   /// Loading state for cars
   bool _carsLoading = true;
+  /// Map of car health scores by car ID
+  final Map<int, CarHealthScore> _carHealthScores = {};
   /// List of upcoming reminders (max 3)
   List<ReminderWithCarInfo> _upcomingReminders = [];
   /// Loading state for reminders
@@ -104,11 +120,28 @@ class _HomeDashboardState extends State<HomeDashboard>
     _loadUpcomingReminders();
     /// Load latest maintenance
     _loadLatestMaintenance();
+    /// Load notification count
+    _loadNotificationCount();
+    
+    /// Add observer to detect app lifecycle changes
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Handle app lifecycle changes
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // Refresh notification count when app becomes active
+      _loadNotificationCount();
+    }
   }
 
   /// Clean up animation controllers and page controller
   @override
   void dispose() {
+    /// Remove observer
+    WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
     _carPageController.dispose();
     super.dispose();
@@ -128,6 +161,24 @@ class _HomeDashboardState extends State<HomeDashboard>
             _currentCarIndex = 0;
           }
         });
+        
+        // Calculate health scores for all loaded cars
+        // Uses the same CarHealthService.calculateHealthScore() as Car Health Dashboard
+        // This ensures consistency between home screen and health dashboard displays
+        for (var car in _userCars) {
+          if (car.id != null) {
+            try {
+              final healthScore = await _carHealthService.calculateHealthScore(car);
+              if (mounted) {
+                setState(() {
+                  _carHealthScores[car.id!] = healthScore;
+                });
+              }
+            } catch (e) {
+              print('[HomeScreen] Error calculating health score for car ${car.id}: $e');
+            }
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -181,6 +232,34 @@ class _HomeDashboardState extends State<HomeDashboard>
     }
   }
 
+  /// Load notification count for badge
+  Future<void> _loadNotificationCount() async {
+    try {
+      final notifications = await _notificationService.getAllNotifications();
+      if (mounted) {
+        setState(() {
+          _notificationCount = notifications.length;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _notificationCount = 0;
+        });
+      }
+    }
+  }
+
+  /// Refreshes all data on the home screen
+  Future<void> _refreshHomeData() async {
+    await Future.wait([
+      _loadUserCars(),
+      _loadUpcomingReminders(),
+      _loadLatestMaintenance(),
+      _loadNotificationCount(),
+    ]);
+  }
+
   /// Get time-based greeting message (Morning, Afternoon, Evening)
   String _getGreeting() {
     final hour = DateTime.now().hour;
@@ -212,7 +291,10 @@ class _HomeDashboardState extends State<HomeDashboard>
         opacity: _fadeAnimation,
         child: SlideTransition(
           position: _slideAnimation,
-          child: SingleChildScrollView(
+          child: RefreshIndicator(
+            onRefresh: _refreshHomeData,
+            color: AppTheme.primaryGreen,
+            child: SingleChildScrollView(
             child: Column(
               children: [
                 /// Header section with gradient background and user welcome
@@ -239,11 +321,11 @@ class _HomeDashboardState extends State<HomeDashboard>
                       const SizedBox(height: 24),
 
                       // Upcoming reminders
-                      _buildUpcomingReminders(),
+                      _buildUpcomingRemindersSection(),
                       const SizedBox(height: 24),
 
-                      // Latest repairs
-                      _buildLatestRepairs(),
+                      // Latest maintenance
+                      _buildLatestMaintenanceSection(),
                       const SizedBox(height: 24),
 
                       // Service recommendations (keep as is)
@@ -257,6 +339,7 @@ class _HomeDashboardState extends State<HomeDashboard>
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -307,7 +390,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                       _buildCircularIcon(
                         Icons.notifications_outlined,
                             () => _showNotifications(),
-                        hasNotificationBadge: true,
+                        hasNotificationBadge: _notificationCount > 0,
                         color: AppTheme.lightBackground,
                       ),
                       const SizedBox(width: 8),
@@ -340,14 +423,24 @@ class _HomeDashboardState extends State<HomeDashboard>
       child: Container(
         width: 44,
         height: 44,
-        decoration: BoxDecoration(
-          color: AppTheme.getThemeAwareBackground(context).withOpacity(0.2),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: AppTheme.getThemeAwareBackground(context).withOpacity(0.3),
-            width: 1,
-          ),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
         child: Stack(
           children: [
             Center(
@@ -381,12 +474,22 @@ class _HomeDashboardState extends State<HomeDashboard>
       width: double.infinity,
       padding: const EdgeInsets.all(16), 
       decoration: BoxDecoration(
-        color: AppTheme.getThemeAwareBackground(context).withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppTheme.getThemeAwareBackground(context).withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -422,12 +525,22 @@ class _HomeDashboardState extends State<HomeDashboard>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.primaryGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color.fromARGB(255, 255, 255, 255).withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -462,7 +575,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                     fontFamily: 'Orbitron',
                   ),
                 ),
-                const SizedBox(height: 4),
+                  const SizedBox(height: 4),
                 Text(
                   'Track maintenance, fuel, and more',
                   style: TextStyle(
@@ -513,7 +626,7 @@ class _HomeDashboardState extends State<HomeDashboard>
 
         // Car card with swipe functionality
         SizedBox(
-          height: 230, // Increased height to accommodate content
+          height: 250, // Increased height to accommodate content
           child: PageView.builder(
             controller: _carPageController,
             onPageChanged: (index) {
@@ -562,12 +675,22 @@ class _HomeDashboardState extends State<HomeDashboard>
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppTheme.darkGray.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppTheme.primaryGreen.withOpacity(0.2),
-            width: 1,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
+            ],
           ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: const Center(
           child: CircularProgressIndicator(color: AppTheme.primaryGreen),
@@ -580,51 +703,61 @@ class _HomeDashboardState extends State<HomeDashboard>
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppTheme.darkGray.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppTheme.primaryGreen.withOpacity(0.2),
-            width: 1,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
+            ],
           ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(
-              Icons.directions_car_outlined,
-              size: 48,
-              color: Colors.grey[400],
+            Transform.translate(
+              offset: const Offset(-40, 0),
+              child: const Icon(
+                IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                size: 48,
+                color: Colors.white54,
+              ),
             ),
             const SizedBox(height: 12),
-            Text(
-              'No Cars Added',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
-                fontFamily: 'Orbitron',
+            const SizedBox(
+              width: double.infinity,
+              child: Text(
+                'No Cars Added',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                ),
+                textAlign: TextAlign.center,
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Add your first car to get started',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[500],
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _navigateToCarsList(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryGreen,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            const SizedBox(
+              width: double.infinity,
+              child: Text(
+                'Tap + to add your first car',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white70,
+                  fontFamily: 'Orbitron',
                 ),
+                textAlign: TextAlign.center,
               ),
-              child: const Text('Add Car'),
             ),
           ],
         ),
@@ -632,126 +765,153 @@ class _HomeDashboardState extends State<HomeDashboard>
     }
 
     final car = _userCars[index];
-    final carName = '${car.brand} ${car.model} ${car.year}';
-    final mileage = '${car.mileage.toStringAsFixed(0)} km';
-    // Calculate health based on mileage and age (simple heuristic)
-    final currentYear = DateTime.now().year;
-    final age = currentYear - car.year;
-    final health = (1.0 - (age * 0.05) - (car.mileage / 200000)).clamp(0.0, 1.0);
-
-    return ClipRect(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppTheme.darkGray.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppTheme.primaryGreen.withOpacity(0.2),
-            width: 1,
-          ),
+    
+    // Get real health score from CarHealthService
+    // This matches the score shown in Car Health Dashboard screen
+    final healthScore = _carHealthScores[car.id];
+    final health = healthScore != null ? healthScore.overallScore / 100 : 0.5;
+    final healthLabel = healthScore != null ? healthScore.healthStatus : 'Unknown';
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Car Image
               Container(
                 width: 120,
-                height: 80,
+                height: 100,
                 decoration: BoxDecoration(
-                  color: AppTheme.getThemeAwareIconColor(context).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppTheme.primaryGreen,
+                      AppTheme.darkAccentGreen,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   child: car.imagePath != null && car.imagePath!.isNotEmpty
                       ? Image.file(
                           File(car.imagePath!),
                           fit: BoxFit.cover,
-                          width: 120,
-                          height: 80,
                           errorBuilder: (context, error, stackTrace) {
-                            // Show default icon if image fails to load
-                            return Container(
-                              padding: const EdgeInsets.all(10),
-                              child: Icon(
-                                const IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                                color: Theme.of(context).brightness == Brightness.dark 
-                                    ? Colors.white 
-                                    : Colors.black,
-                                size: 28,
-                              ),
+                            return const Icon(
+                              IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                              size: 40,
+                              color: Colors.white,
                             );
                           },
                         )
-                      : Container(
-                          padding: const EdgeInsets.all(10),
-                          child: Icon(
-                            const IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                            color: Theme.of(context).brightness == Brightness.dark 
-                                ? Colors.white 
-                                : Colors.black,
-                            size: 28,
-                          ),
+                      : const Icon(
+                          IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                          size: 40,
+                          color: Colors.white,
                         ),
                 ),
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      carName,
-                      style: TextStyle(
-                        fontSize: 14,
+                      '${car.brand} ${car.model}',
+                      style: const TextStyle(
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.getThemeAwareTextColor(context),
+                        color: Colors.white,
                         fontFamily: 'Orbitron',
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
                     Text(
-                      mileage,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
+                      '${car.year}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
                         fontFamily: 'Orbitron',
                       ),
                     ),
                   ],
                 ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${car.mileage.toStringAsFixed(0)} km',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+              ),
             ],
           ),
+          const SizedBox(height: 12),
           
-          const SizedBox(height: 14), 
-
-          // Health Status
+          // Vehicle Health
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
+                  const Text(
                     'Vehicle Health',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.getThemeAwareTextColor(context),
+                      color: Colors.white,
                       fontFamily: 'Orbitron',
                     ),
                   ),
                   Text(
-                    '${(health * 100).toInt()}% Good',
+                    '${(health * 100).toInt()}% ${healthLabel.capitalize()}',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: Color.fromARGB(255, 0, 0, 0),
+                      color: Colors.white,
                       fontFamily: 'Orbitron',
                     ),
                   ),
@@ -762,30 +922,540 @@ class _HomeDashboardState extends State<HomeDashboard>
                 borderRadius: BorderRadius.circular(10),
                 child: LinearProgressIndicator(
                   value: health,
-                  backgroundColor: AppTheme.getThemeAwareCardBackground(context).withOpacity(0.3),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Color.fromARGB(255, 21, 219, 84)),
+                  backgroundColor: Colors.white.withOpacity(0.2),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    health > 0.7 ? Colors.green : health > 0.4 ? Colors.orange : Colors.red,
+                  ),
                   minHeight: 6,
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 24), // Reduced spacing between health status and action buttons
-
-          // Circular action buttons
+          
+          const SizedBox(height: 16),
+          
+          // Action buttons
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildCircularActionButton('Repairs', Icons.get_app_rounded, const Color.fromARGB(255, 185, 109, 2)),
-              _buildCircularActionButton('Fuel Log', Icons.local_gas_station, const Color.fromARGB(255, 185, 109, 2)),
-              _buildCircularActionButton('License', Icons.credit_card, const Color.fromARGB(255, 185, 109, 2)),
+              _buildCarActionButton(
+                Icons.credit_card,
+                'License',
+                () => _navigateToLicense(),
+              ),
+              _buildCarActionButton(
+                Icons.info_outline,
+                'Details',
+                () => _showCarDetailsDialog(car),
+              ),
+              _buildCarActionButton(
+                Icons.speed,
+                'Mileage',
+                () => _navigateToMileageTrack(),
+              ),
             ],
           ),
-          
-          const SizedBox(height: 8), // Bottom spacing for the card
         ],
       ),
-    ));
+    );
+  }
+
+  Widget _buildCarActionButton(IconData icon, String label, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withOpacity(0.15),
+                Colors.white.withOpacity(0.05),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCarIndicators() {
+    if (_userCars.isEmpty) return const SizedBox.shrink();
+    
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        _userCars.length > 5 ? 5 : _userCars.length,
+        (index) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: _currentCarIndex == index
+                ? Colors.white
+                : Colors.white.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUpcomingRemindersSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Upcoming Reminders',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                ),
+              ),
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SmartRemindersScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: context.r(10), vertical: context.r(6)),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.2),
+                        Colors.white.withOpacity(0.1),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.5),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.1),
+                        blurRadius: context.r(4),
+                        offset: Offset(0, context.r(2)),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View All',
+                        style: context.responsiveTextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(width: context.r(4)),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: context.responsiveIconSize(10),
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_remindersLoading)
+            const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
+          else if (_upcomingReminders.isEmpty)
+            Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.notifications_none,
+                    size: 48,
+                    color: Colors.white.withOpacity(0.5),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No upcoming reminders',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Column(
+              children: _upcomingReminders.take(3).map((reminderWithCar) {
+                return _buildReminderItem(reminderWithCar);
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReminderItem(ReminderWithCarInfo reminderWithCar) {
+    final reminder = reminderWithCar.reminder;
+    final daysUntil = reminder.targetDate?.difference(DateTime.now()).inDays ?? 0;
+    
+    return Container(
+      margin: EdgeInsets.only(bottom: context.r(8)),
+      padding: EdgeInsets.all(context.r(12)),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.backgroundGreen,
+            AppTheme.primaryGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              reminder.type.icon,
+              style: const TextStyle(fontSize: 20),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reminder.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  reminderWithCar.carDisplayName,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: daysUntil <= 3 ? Colors.red : Colors.orange,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              daysUntil == 0 ? 'Today' : '$daysUntil days',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLatestMaintenanceSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Latest Maintenance',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                ),
+              ),
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MaintenanceRecordsScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: context.r(10), vertical: context.r(6)),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.2),
+                        Colors.white.withOpacity(0.1),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.5),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.1),
+                        blurRadius: context.r(4),
+                        offset: Offset(0, context.r(2)),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View All',
+                        style: context.responsiveTextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(width: context.r(4)),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: context.responsiveIconSize(12),
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_maintenanceLoading)
+            const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
+          else if (_latestMaintenance.isEmpty)
+            Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.build_circle_outlined,
+                    size: 48,
+                    color: Colors.white.withOpacity(0.5),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No maintenance records',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Column(
+              children: _latestMaintenance.take(3).map((maintenanceWithInfo) {
+                return _buildMaintenanceItem(maintenanceWithInfo);
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMaintenanceItem(MaintenanceWithInfo maintenanceWithInfo) {
+    final maintenance = maintenanceWithInfo.maintenance;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.backgroundGreen,
+            AppTheme.primaryGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.build,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  maintenance.type.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  maintenanceWithInfo.carDisplayName,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'EGP ${maintenance.cost.toStringAsFixed(0)}',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildCircularActionButton(String label, IconData icon, Color color) {
@@ -813,7 +1483,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                 size: 18,
               ),
             ),
-            const SizedBox(height: 3),
+                const SizedBox(height: 3),
             Text(
               label,
               textAlign: TextAlign.center,
@@ -849,13 +1519,60 @@ class _HomeDashboardState extends State<HomeDashboard>
                 fontFamily: 'Orbitron',
               ),
             ),
-            TextButton(
-              onPressed: () => _navigateToAllActions(),
-              child: Text(
-                'View All',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareIconColor(context),
-                  fontFamily: 'Orbitron',
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AllActionsScreen(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppTheme.getThemeAwareTextColor(context).withOpacity(0.2),
+                      AppTheme.getThemeAwareTextColor(context).withOpacity(0.1),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'View All',
+                      style: TextStyle(
+                        color: AppTheme.getThemeAwareTextColor(context),
+                        fontFamily: 'Orbitron',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 12,
+                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.9),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -890,7 +1607,7 @@ class _HomeDashboardState extends State<HomeDashboard>
   final actions = [
     {'label': 'VIN Lookup', 'icon': Icons.search, 'color': const Color(0xFFF59E0B)}, // Amber/Orange
     {'label': 'OCR Scanner', 'icon': Icons.document_scanner, 'color': const Color(0xFF06B6D4)}, // Cyan
-    {'label': 'Barcode Scanner', 'icon': Icons.qr_code_scanner, 'color': const Color(0xFF8E44AD)}, // Purple
+    {'label': 'Car Health', 'icon': Icons.health_and_safety, 'color': const Color(0xFF8E44AD)}, // Purple
     {'label': 'Voice Notes', 'icon': Icons.mic, 'color': const Color(0xFFE74C3C)}, // Red
     {'label': 'Mileage Track', 'icon': Icons.track_changes, 'color': const Color(0xFF10B981)}, // Emerald
     {'label': 'Maintenance', 'icon': Icons.home_repair_service_rounded, 'color': const Color(0xFF3B82F6)}, // Blue
@@ -906,12 +1623,22 @@ class _HomeDashboardState extends State<HomeDashboard>
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         decoration: BoxDecoration(
-          color: AppTheme.darkGray.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppTheme.primaryGreen.withOpacity(0.2),
-            width: 1,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
+            ],
           ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -934,10 +1661,10 @@ class _HomeDashboardState extends State<HomeDashboard>
               child: Text(
                 label,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.getThemeAwareTextColor(context),
+                  color: Colors.white,
                   fontFamily: 'Orbitron',
                 ),
                 maxLines: 2,
@@ -946,173 +1673,6 @@ class _HomeDashboardState extends State<HomeDashboard>
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  // Upcoming Reminders Section
-  Widget _buildUpcomingReminders() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Upcoming Reminders',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.getThemeAwareTextColor(context),
-                fontFamily: 'Orbitron',
-              ),
-            ),
-            TextButton(
-              onPressed: () => _navigateToReminders(),
-              child: Text(
-                'View All',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareIconColor(context),
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        if (_remindersLoading)
-          const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
-        else if (_upcomingReminders.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.darkGray.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.notification_important_outlined,
-                  size: 48,
-                  color: Colors.grey[400],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'No Upcoming Reminders',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[600],
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Add reminders to stay on top of your car maintenance',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          )
-        else
-          ..._upcomingReminders.asMap().entries.map((entry) {
-            final index = entry.key;
-            final reminderWithCar = entry.value;
-            final reminder = reminderWithCar.reminder;
-            
-            // Calculate days until due
-            final daysUntil = reminder.targetDate?.difference(DateTime.now()).inDays ?? 0;
-            final dueDateText = daysUntil <= 0 
-                ? 'Overdue' 
-                : daysUntil == 1 
-                    ? 'Due tomorrow'
-                    : 'Due in $daysUntil days';
-            
-            // Get icon and color based on reminder type
-            final iconData = _getReminderIcon(reminder.type);
-            final color = _getReminderColor(reminder.type);
-            
-            return Column(
-              children: [
-                _buildReminderItem(
-                  reminder.title,
-                  dueDateText,
-                  iconData,
-                  color,
-                ),
-                if (index < _upcomingReminders.length - 1) const SizedBox(height: 12),
-              ],
-            );
-          }),
-      ],
-    );
-  }
-
-  Widget _buildReminderItem(String title, String subtitle, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.getThemeAwareTextColor(context),
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.arrow_forward_ios,
-            color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
-            size: 16,
-          ),
-        ],
       ),
     );
   }
@@ -1134,13 +1694,60 @@ class _HomeDashboardState extends State<HomeDashboard>
                 fontFamily: 'Orbitron',
               ),
             ),
-            TextButton(
-              onPressed: () => _navigateToMaintenance(),
-              child: Text(
-                'View All',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareIconColor(context),
-                  fontFamily: 'Orbitron',
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MaintenanceRecordsScreen(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.2),
+                      Colors.white.withOpacity(0.1),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.white.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'View All',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 12,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1330,33 +1937,40 @@ class _HomeDashboardState extends State<HomeDashboard>
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: AppTheme.darkGray.withOpacity(0.3),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.darkAccentGreen,
+                AppTheme.backgroundGreen,
+              ],
+            ),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              const Row(
                 children: [
                   Icon(
                     Icons.lightbulb_outline,
-                    color: AppTheme.getThemeAwareIconColor(context),
+                    color: Colors.white,
                     size: 24,
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Text(
                     'AI Insights',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.getThemeAwareIconColor(context),
+                      color: Colors.white,
                       fontFamily: 'Orbitron',
                     ),
                   ),
@@ -1379,7 +1993,7 @@ class _HomeDashboardState extends State<HomeDashboard>
               TextButton(
                 onPressed: () => _navigateToServices(),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppTheme.getThemeAwareIconColor(context),
+                  foregroundColor: Colors.white,
                   padding: EdgeInsets.zero,
                 ),
                 child: const Text(
@@ -1403,19 +2017,19 @@ class _HomeDashboardState extends State<HomeDashboard>
       children: [
         Text(
           title,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: AppTheme.getThemeAwareTextColor(context),
+            color: Colors.white,
             fontFamily: 'Orbitron',
           ),
         ),
-        const SizedBox(height: 4),
+          const SizedBox(height: 4),
         Text(
           subtitle,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12,
-            color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
+            color: Colors.white70,
             fontFamily: 'Orbitron',
           ),
         ),
@@ -1424,12 +2038,14 @@ class _HomeDashboardState extends State<HomeDashboard>
   }
 
   // Navigation Methods
-  void _showNotifications() {
+  void _showNotifications() async {
     HapticFeedback.lightImpact();
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const NotificationsScreen()),
     );
+    // Refresh notification count when returning from notifications screen
+    _loadNotificationCount();
   }
 
   void _showProfile() {
@@ -1459,16 +2075,16 @@ class _HomeDashboardState extends State<HomeDashboard>
           MaterialPageRoute(builder: (context) => const VinLookupScreen()),
         );
         break;
-      case 'ocr scanner':
+        case 'ocr scanner':
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const OcrScannerScreen()),
+          );
+          break;
+      case 'car health':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const OcrScannerScreen()),
-        );
-        break;
-      case 'barcode scanner':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+          MaterialPageRoute(builder: (context) => const CarHealthDashboardScreen()),
         );
         break;
       case 'voice notes':
@@ -1484,10 +2100,7 @@ class _HomeDashboardState extends State<HomeDashboard>
         );
         break;
       case 'license':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const LicenseScreen()),
-        );
+        _showPinVerificationForLicense();
         break;
       
       default:
@@ -1562,6 +2175,728 @@ class _HomeDashboardState extends State<HomeDashboard>
       context,
       MaterialPageRoute(builder: (context) => const MyCarsScreen()),
     );
+  }
+
+  void _navigateToLicense() {
+    HapticFeedback.lightImpact();
+    _showPinVerificationForLicense();
+  }
+
+  /// Show PIN verification dialog before accessing License screen
+  Future<void> _showPinVerificationForLicense() async {
+    String pin = '';
+    String? errorMessage;
+    bool isLoading = false;
+    int remainingAttempts = 5;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              backgroundColor: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppTheme.getThemeAwareCardBackground(context),
+                      AppTheme.getThemeAwareCardBackground(context).withOpacity(0.95),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header with lock icon
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.primaryGreen,
+                            AppTheme.darkAccentGreen,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryGreen.withOpacity(0.4),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.lock_outline,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Enter PIN',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Orbitron',
+                        color: AppTheme.getThemeAwareTextColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Verify your PIN to access License',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // PIN dots display
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(6, (index) {
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: index < pin.length
+                                ? AppTheme.primaryGreen
+                                : Colors.transparent,
+                            border: Border.all(
+                              color: index < pin.length
+                                  ? AppTheme.primaryGreen
+                                  : AppTheme.getThemeAwareTextColor(context).withOpacity(0.3),
+                              width: 2,
+                            ),
+                            boxShadow: index < pin.length
+                                ? [
+                                    BoxShadow(
+                                      color: AppTheme.primaryGreen.withOpacity(0.5),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Error message
+                    if (errorMessage != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          errorMessage!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                            fontFamily: 'Orbitron',
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+
+                    // Keypad
+                    _buildPinKeypad(
+                      pin: pin,
+                      isLoading: isLoading,
+                      onDigitPressed: (digit) async {
+                        if (isLoading || pin.length >= 6) return;
+                        
+                        HapticFeedback.lightImpact();
+                        setDialogState(() {
+                          pin += digit;
+                          errorMessage = null;
+                        });
+
+                        // Auto-verify at 6 digits
+                        if (pin.length == 6) {
+                          setDialogState(() => isLoading = true);
+                          
+                          final authResult = await _localUnlockService.authenticateWithPin(pin);
+                          
+                          if (authResult == PinAuthResult.success) {
+                            Navigator.of(dialogContext).pop(true);
+                          } else if (authResult == PinAuthResult.lockedOut) {
+                            setDialogState(() {
+                              errorMessage = 'Too many failed attempts. Please try again later.';
+                              pin = '';
+                              isLoading = false;
+                            });
+                          } else {
+                            remainingAttempts = await _localUnlockService.getRemainingAttempts();
+                            setDialogState(() {
+                              errorMessage = 'Incorrect PIN. $remainingAttempts attempts remaining.';
+                              pin = '';
+                              isLoading = false;
+                            });
+                          }
+                        }
+                      },
+                      onBackspacePressed: () {
+                        if (isLoading || pin.isEmpty) return;
+                        HapticFeedback.lightImpact();
+                        setDialogState(() {
+                          pin = pin.substring(0, pin.length - 1);
+                          errorMessage = null;
+                        });
+                      },
+                      onVerifyPressed: () async {
+                        if (isLoading || pin.length < 4) return;
+                        
+                        HapticFeedback.mediumImpact();
+                        setDialogState(() => isLoading = true);
+                        
+                        final authResult = await _localUnlockService.authenticateWithPin(pin);
+                        
+                        if (authResult == PinAuthResult.success) {
+                          Navigator.of(dialogContext).pop(true);
+                        } else if (authResult == PinAuthResult.lockedOut) {
+                          setDialogState(() {
+                            errorMessage = 'Too many failed attempts. Please try again later.';
+                            pin = '';
+                            isLoading = false;
+                          });
+                        } else {
+                          remainingAttempts = await _localUnlockService.getRemainingAttempts();
+                          setDialogState(() {
+                            errorMessage = 'Incorrect PIN. $remainingAttempts attempts remaining.';
+                            pin = '';
+                            isLoading = false;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Verify button (for 4-5 digit PINs)
+                    if (pin.length >= 4 && pin.length < 6)
+                      Container(
+                        width: double.infinity,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppTheme.primaryGreen,
+                              AppTheme.darkAccentGreen,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryGreen.withOpacity(0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: isLoading ? null : () async {
+                              HapticFeedback.mediumImpact();
+                              setDialogState(() => isLoading = true);
+                              
+                              final authResult = await _localUnlockService.authenticateWithPin(pin);
+                              
+                              if (authResult == PinAuthResult.success) {
+                                Navigator.of(dialogContext).pop(true);
+                              } else if (authResult == PinAuthResult.lockedOut) {
+                                setDialogState(() {
+                                  errorMessage = 'Too many failed attempts. Please try again later.';
+                                  pin = '';
+                                  isLoading = false;
+                                });
+                              } else {
+                                remainingAttempts = await _localUnlockService.getRemainingAttempts();
+                                setDialogState(() {
+                                  errorMessage = 'Incorrect PIN. $remainingAttempts attempts remaining.';
+                                  pin = '';
+                                  isLoading = false;
+                                });
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Center(
+                              child: isLoading
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Verify PIN',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        fontFamily: 'Orbitron',
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+
+                    // Cancel button
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    // Navigate to License screen if PIN verified successfully
+    if (result == true && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LicenseScreen()),
+      );
+    }
+  }
+
+  /// Build the PIN keypad widget
+  Widget _buildPinKeypad({
+    required String pin,
+    required bool isLoading,
+    required Function(String) onDigitPressed,
+    required VoidCallback onBackspacePressed,
+    required VoidCallback onVerifyPressed,
+  }) {
+    return Column(
+      children: [
+        _buildKeypadRow(['1', '2', '3'], onDigitPressed, isLoading),
+        const SizedBox(height: 12),
+        _buildKeypadRow(['4', '5', '6'], onDigitPressed, isLoading),
+        const SizedBox(height: 12),
+        _buildKeypadRow(['7', '8', '9'], onDigitPressed, isLoading),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // Empty space
+            const SizedBox(width: 70, height: 70),
+            // Zero button
+            _buildKeypadButton('0', onDigitPressed, isLoading),
+            // Backspace button
+            SizedBox(
+              width: 70,
+              height: 70,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: isLoading ? null : onBackspacePressed,
+                  borderRadius: BorderRadius.circular(35),
+                  child: Center(
+                    child: Icon(
+                      Icons.backspace_outlined,
+                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Build a row of keypad buttons
+  Widget _buildKeypadRow(List<String> digits, Function(String) onPressed, bool isLoading) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: digits.map((digit) => _buildKeypadButton(digit, onPressed, isLoading)).toList(),
+    );
+  }
+
+  /// Build a single keypad button
+  Widget _buildKeypadButton(String digit, Function(String) onPressed, bool isLoading) {
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(35),
+        border: Border.all(
+          color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isLoading ? null : () => onPressed(digit),
+          borderRadius: BorderRadius.circular(35),
+          splashColor: AppTheme.primaryGreen.withOpacity(0.3),
+          highlightColor: AppTheme.primaryGreen.withOpacity(0.1),
+          child: Center(
+            child: Text(
+              digit,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.getThemeAwareTextColor(context),
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToMileageTrack() {
+    HapticFeedback.lightImpact();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MileageTrackScreen()),
+    );
+  }
+
+  void _showCarDetailsDialog(BackupCar car) {
+    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(24))),
+        elevation: 20,
+        child: SingleChildScrollView(
+          child: Container(
+            padding: EdgeInsets.all(dialogContext.r(20)),
+            constraints: BoxConstraints(
+              maxWidth: dialogContext.r(480),
+              maxHeight: dialogContext.screenHeight * 0.95,
+            ),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF1A362A), // Dark green
+                  Color(0xFF2E4032), // Slightly lighter dark green
+                ],
+              ),
+              borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(24)),
+              border: Border.all(
+                color: AppTheme.primaryGreen.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with close button
+                Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: dialogContext.r(50),
+                            height: dialogContext.r(50),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryGreen.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(16)),
+                            ),
+                            child: car.imagePath != null
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(16)),
+                                    child: Image.file(
+                                      File(car.imagePath!),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Icon(
+                                          Icons.directions_car,
+                                          color: AppTheme.primaryGreen,
+                                          size: dialogContext.responsiveIconSize(24),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.directions_car,
+                                    color: AppTheme.primaryGreen,
+                                    size: dialogContext.responsiveIconSize(24),
+                                  ),
+                          ),
+                          SizedBox(width: dialogContext.r(12)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${car.year} ${car.brand} ${car.model}',
+                                  style: dialogContext.responsiveTextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Orbitron',
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                SizedBox(height: dialogContext.r(4)),
+                                if (car.licensePlate.isNotEmpty)
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: dialogContext.r(8), 
+                                      vertical: dialogContext.r(4),
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryGreen.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(12)),
+                                    ),
+                                    child: Text(
+                                      car.licensePlate,
+                                      style: dialogContext.responsiveTextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.primaryGreen,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(12)),
+                      ),
+                      child: IconButton(
+                        onPressed: () {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
+                        },
+                        icon: Icon(
+                          Icons.close, 
+                          color: Colors.white, 
+                          size: dialogContext.responsiveIconSize(20),
+                        ),
+                        padding: EdgeInsets.all(dialogContext.r(8)),
+                        constraints: BoxConstraints(
+                          minWidth: dialogContext.r(32),
+                          minHeight: dialogContext.r(32),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: dialogContext.r(20)),
+                
+                // Details section with modern styling
+                Container(
+                  padding: EdgeInsets.all(dialogContext.r(14)),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(16)),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildModernDetailRow('Mileage', '${car.mileage.toStringAsFixed(0)} km', Icons.speed, Colors.blue),
+                      _buildModernDetailRow('Color', car.color.isNotEmpty ? car.color : 'N/A', Icons.color_lens, Colors.purple),
+                      _buildModernDetailRow('Fuel Type', car.fuelType.isNotEmpty ? car.fuelType : 'N/A', Icons.local_gas_station, Colors.orange),
+                      _buildModernDetailRow('Engine', car.engineCC + (car.turbo ? ' Turbo' : ''), Icons.build, Colors.red),
+                      _buildModernDetailRow('VIN', car.vin.isNotEmpty ? car.vin : 'N/A', Icons.qr_code, Colors.cyan),
+                      _buildModernDetailRow('Added', _formatCarDate(car.createdAt), Icons.calendar_today, Colors.green),
+                      if (car.updatedAt != car.createdAt)
+                        _buildModernDetailRow('Last Updated', _formatCarDate(car.updatedAt), Icons.update, Colors.teal),
+                    ],
+                  ),
+                ),
+                
+                SizedBox(height: dialogContext.r(20)),
+                
+                // Action button
+                SizedBox(
+                  width: double.infinity,
+                  child: _buildModernActionButton(
+                    icon: Icons.edit_rounded,
+                    label: 'View & Edit in My Cars',
+                    color: AppTheme.primaryGreen,
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _navigateToCarsList();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernDetailRow(String label, String value, IconData icon, Color color) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: context.r(6)),
+      child: Row(
+        children: [
+          Container(
+            width: context.r(32),
+            height: context.r(32),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: context.responsiveIconSize(16),
+            ),
+          ),
+          SizedBox(width: context.r(10)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: context.responsiveTextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[400]!,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: context.r(2)),
+                Text(
+                  value.isEmpty ? 'N/A' : value,
+                  style: context.responsiveTextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.8),
+            color,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatCarDate(DateTime? date) {
+    if (date == null) return 'N/A';
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   /// Get icon for reminder type

@@ -1,12 +1,15 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../database/database_helper.dart';
 import '../models/backup_reminder.dart';
 import '../models/backup_car.dart';
+import 'local_notification_service.dart';
 
 /// Service class for managing reminders with business logic and validation
 class ReminderService {
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final LocalNotificationService _notificationService = LocalNotificationService.instance;
 
   /// Get current user ID from Firebase Auth
   String? get _currentUserId => _auth.currentUser?.uid;
@@ -72,6 +75,11 @@ class ReminderService {
       // Insert reminder into database
       final id = await _databaseHelper.insertReminder(reminder);
       final savedReminder = await _databaseHelper.getReminderById(id, userId);
+
+      // Schedule local notification for the reminder
+      if (savedReminder != null) {
+        await _notificationService.scheduleReminderNotification(savedReminder);
+      }
 
       return ReminderOperationResult.success(
         message: 'Reminder added successfully',
@@ -151,6 +159,14 @@ class ReminderService {
       await _databaseHelper.updateReminder(updatedReminder);
       final savedReminder = await _databaseHelper.getReminderById(id, userId);
 
+      // Update local notification for the reminder
+      if (savedReminder != null) {
+        // Cancel existing notification
+        await _notificationService.cancelReminderNotification(id);
+        // Schedule new notification
+        await _notificationService.scheduleReminderNotification(savedReminder);
+      }
+
       return ReminderOperationResult.success(
         message: 'Reminder updated successfully',
         reminder: savedReminder,
@@ -177,6 +193,9 @@ class ReminderService {
       }
 
       await _databaseHelper.deleteReminder(id, userId);
+
+      // Cancel local notification for the reminder
+      await _notificationService.cancelReminderNotification(id);
 
       return ReminderOperationResult.success(
         message: 'Reminder deleted successfully',
@@ -208,6 +227,9 @@ class ReminderService {
 
       await _databaseHelper.markReminderCompleted(id, userId);
       final updatedReminder = await _databaseHelper.getReminderById(id, userId);
+
+      // Cancel local notification for the completed reminder
+      await _notificationService.cancelReminderNotification(id);
 
       return ReminderOperationResult.success(
         message: 'Reminder marked as completed',
@@ -400,14 +422,94 @@ class ReminderService {
     }
   }
 
-  /// Update overdue reminders automatically
+  /// Update overdue reminders automatically and schedule overdue notifications
   Future<void> _updateOverdueReminders() async {
     try {
       if (!isUserAuthenticated) return;
       final userId = _currentUserId!;
+      
+      // Get overdue reminders before updating status
+      final overdueReminders = await _databaseHelper.getOverdueReminders(userId);
+      
+      // Update overdue reminders status
       await _databaseHelper.updateOverdueRemindersStatus(userId);
+      
+      // Send immediate device notifications for overdue reminders
+      for (final reminder in overdueReminders) {
+        await _notificationService.scheduleOverdueNotification(reminder);
+      }
     } catch (e) {
       // Silent fail for background operation
+      print('Error updating overdue reminders: $e');
+    }
+  }
+
+  /// Check and send notifications for reminders due today
+  Future<void> checkAndNotifyDueReminders() async {
+    try {
+      if (!isUserAuthenticated) return;
+      
+      // Check if notifications are enabled
+      final prefs = await SharedPreferences.getInstance();
+      final notificationsEnabled = prefs.getBool('reminders_notifications') ?? true;
+      if (!notificationsEnabled) return;
+      
+      final userId = _currentUserId!;
+      
+      // Get all upcoming reminders
+      final upcomingReminders = await _databaseHelper.getUpcomingRemindersWithCarInfo(userId);
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      
+      // Find reminders due today
+      for (final reminderMap in upcomingReminders) {
+        final reminder = BackupReminder.fromMap(reminderMap);
+        
+        if (reminder.targetDate != null && !reminder.isCompleted) {
+          final reminderDate = DateTime(
+            reminder.targetDate!.year,
+            reminder.targetDate!.month,
+            reminder.targetDate!.day,
+          );
+          
+          // If reminder is due today, send notification
+          if (reminderDate.isAtSameMomentAs(today)) {
+            await _notificationService.scheduleOverdueNotification(reminder);
+          }
+        }
+      }
+    } catch (e) {
+      print('Error checking due reminders: $e');
+    }
+  }
+
+  /// Check and schedule notifications for all user reminders
+  Future<void> scheduleAllReminderNotifications() async {
+    try {
+      if (!isUserAuthenticated) return;
+      
+      // Check if notifications are enabled
+      final prefs = await SharedPreferences.getInstance();
+      final notificationsEnabled = prefs.getBool('reminders_notifications') ?? true;
+      if (!notificationsEnabled) return;
+      
+      final userId = _currentUserId!;
+      
+      // Get all upcoming reminders
+      final upcomingReminders = await _databaseHelper.getRemindersByStatus(ReminderStatus.upcoming, userId);
+      
+      // Schedule notifications for upcoming reminders
+      for (final reminder in upcomingReminders) {
+        await _notificationService.scheduleReminderNotification(reminder);
+      }
+      
+      // Get overdue reminders and schedule overdue notifications
+      final overdueReminders = await _databaseHelper.getOverdueReminders(userId);
+      for (final reminder in overdueReminders) {
+        await _notificationService.scheduleOverdueNotification(reminder);
+      }
+    } catch (e) {
+      print('Error scheduling reminder notifications: $e');
     }
   }
 
@@ -435,10 +537,8 @@ class ReminderService {
       errors.add('Title must be less than 100 characters');
     }
 
-    // Validate description
-    if (description.trim().isEmpty) {
-      errors.add('Description is required');
-    } else if (description.trim().length > 500) {
+    // Validate description (optional, but check max length if provided)
+    if (description.trim().isNotEmpty && description.trim().length > 500) {
       errors.add('Description must be less than 500 characters');
     }
 

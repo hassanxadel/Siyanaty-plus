@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/services/notification_service.dart';
+import '../../../services/local_notification_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../debug/firebase_debug_screen.dart';
 import '../profile/profile_screen.dart';
+import '../security/pin_setup_screen.dart';
 import '../info/about_screen.dart';
 import '../info/help_screen.dart';
 import '../info/privacy_screen.dart';
 import '../info/terms_screen.dart';
 import '../../../widgets/backup_button_widget.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -21,42 +25,64 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notifications = true;
-  bool _maintenanceReminders = true;
-  final bool _fuelTracking = true;
-  bool _obdAlerts = true;
+  bool _remindersNotifications = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationPreference();
+  }
+
+  Future<void> _loadNotificationPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _remindersNotifications = prefs.getBool('reminders_notifications') ?? true;
+    });
+  }
+
+  Future<void> _saveNotificationPreference(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('reminders_notifications', value);
+  }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final currentUser = authProvider.firebaseUser;
 
-    return Scaffold(
-      body: Column(
+    return ScreenWithNavBar(
+      currentIndex: 4, // Settings is index 4 in nav bar
+      child: Scaffold(
+        body: Column(
         children: [
           _buildHeaderWithBackground(),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildProfileSection(currentUser, authProvider),
-                  const SizedBox(height: 24),
-                  _buildNotificationsSection(),
-                  const SizedBox(height: 24),
-                  const BackupButtonWidget(),
-                  const SizedBox(height: 24),
-                  _buildAppAppearanceSection(),
-                  const SizedBox(height: 24),
-                  _buildAboutSupportSection(),
-                  const SizedBox(height: 32),
-                ],
+            child: RefreshIndicator(
+              onRefresh: _refreshSettingsData,
+              color: AppTheme.primaryGreen,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildProfileSection(currentUser, authProvider),
+                    const SizedBox(height: 24),
+                    _buildNotificationsSection(),
+                    const SizedBox(height: 24),
+                    const BackupButtonWidget(),
+                    const SizedBox(height: 24),
+                    _buildAppAppearanceSection(),
+                    const SizedBox(height: 24),
+                    _buildAboutSupportSection(),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -116,12 +142,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,22 +281,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
           
           const SizedBox(height: 20),
           
-          // Action Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _signOut,
-              icon: const Icon(Icons.logout, size: 16),
-              label: const Text(
-                'Sign Out',
-                style: TextStyle(fontFamily: 'Orbitron'),
+          // Action Buttons
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _changePin,
+                  icon: const Icon(Icons.lock_reset, size: 16),
+                  label: const Text(
+                    'Change PIN',
+                    style: TextStyle(fontFamily: 'Orbitron'),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.errorColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _signOut,
+                  icon: const Icon(Icons.logout, size: 16),
+                  label: const Text(
+                    'Sign Out',
+                    style: TextStyle(fontFamily: 'Orbitron'),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.errorColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -271,12 +326,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,28 +360,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           
           _buildSwitchTile(
-            'All Notifications',
-            'Enable or disable all notifications',
-            _notifications,
-            (value) => setState(() => _notifications = value),
+            'Reminders Notifications',
+            'Get notified when reminders become overdue',
+            _remindersNotifications,
+            (value) async {
+              setState(() => _remindersNotifications = value);
+              // Save preference to shared preferences
+              await _saveNotificationPreference(value);
+            },
           ),
           
-          _buildSwitchTile(
-            'Maintenance Reminders',
-            'Get notified about upcoming maintenance',
-            _maintenanceReminders,
-            (value) => setState(() => _maintenanceReminders = value),
+          const SizedBox(height: 16),
+          
+          // Test Notification Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _sendTestNotification,
+              icon: const Icon(Icons.notifications_active, size: 18),
+              label: const Text(
+                'Send Test Notification',
+                style: TextStyle(fontFamily: 'Orbitron'),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _remindersNotifications 
+                    ? AppTheme.primaryGreen 
+                    : AppTheme.darkGray,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
           ),
-        
-          _buildSwitchTile(
-            'OBD Alerts',
-            'Real-time diagnostic alerts',
-            _obdAlerts,
-            (value) => setState(() => _obdAlerts = value),
-          ),
+          
+          if (!_remindersNotifications) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Enable notifications to send a test',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
+                fontFamily: 'Orbitron',
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+  
+  Future<void> _sendTestNotification() async {
+    HapticFeedback.lightImpact();
+    
+    // Check if notifications are enabled
+    if (!_remindersNotifications) {
+      _showMessage('Please enable notifications first');
+      return;
+    }
+    
+    try {
+      // Send test notification
+      await LocalNotificationService.instance.sendTestNotification();
+      _showMessage('Test notification sent! Check your notification panel.');
+    } catch (e) {
+      _showMessage('Failed to send test notification: ${e.toString()}');
+    }
   }
 
 
@@ -324,12 +435,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,7 +466,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               fontFamily: 'Orbitron',
             ),
           ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
           
           _buildActionTile(
             'Help & FAQ',
@@ -570,7 +691,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-
+  void _changePin() async {
+    HapticFeedback.lightImpact();
+    
+    // Import the PIN setup screen
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const PinSetupScreen(isChangingPin: true),
+      ),
+    );
+    
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'PIN changed successfully',
+            style: TextStyle(fontFamily: 'Orbitron'),
+          ),
+          backgroundColor: AppTheme.primaryGreen,
+        ),
+      );
+    }
+  }
 
   void _signOut() {
     HapticFeedback.lightImpact();
@@ -640,6 +783,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'App Appearance',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).brightness == Brightness.light
+                  ? AppTheme.primaryGreen
+                  : AppTheme.getThemeAwareTextColor(context),
+              fontFamily: 'Orbitron',
+            ),
+          ),
+            const SizedBox(height: 16),
+          Consumer<ThemeProvider>(
+            builder: (context, themeProvider, child) {
+              return _buildSwitchTile(
+                'Dark Mode',
+                'Toggle between light and dark theme',
+                themeProvider.isDarkMode,
+                (value) {
+                  themeProvider.toggleTheme();
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOldAppAppearanceSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
         color: AppTheme.darkGray.withOpacity(0.3),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
@@ -661,7 +857,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               fontFamily: 'Orbitron',
             ),
           ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
           
           // Dark Mode Toggle
           ListTile(
@@ -782,6 +978,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _showMessage('Verification status refreshed!');
     } else if (mounted) {
       _showMessage('Failed to refresh verification status. Please try again.');
+    }
+  }
+
+  /// Refreshes all data on the settings screen
+  Future<void> _refreshSettingsData() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.reloadUser();
+    if (mounted) {
+      setState(() {}); // Refresh the UI
     }
   }
 }

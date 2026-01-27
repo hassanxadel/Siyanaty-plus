@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/backup_reminder.dart';
+import '../models/backup_car.dart';
 import '../database/database_helper.dart';
 
 /// Service for handling Firebase Firestore backup and restore operations for reminders
@@ -37,9 +38,16 @@ class FirebaseReminderService {
         return ReminderBackupResult.error('User not authenticated. Please sign in first.');
       }
 
+      // Get the car's VIN and license plate to store in backup for restore matching
+      final car = await _databaseHelper.getCarById(reminder.carId, _currentUserId!);
+      final carVin = car?.vin ?? '';
+      final carLicensePlate = car?.licensePlate ?? '';
+      
       // Prepare reminder data for Firestore
       final reminderData = reminder.toFirebaseMap();
       reminderData['local_id'] = reminder.id;
+      reminderData['car_vin'] = carVin; // Store VIN for restore matching
+      reminderData['car_license_plate'] = carLicensePlate; // Store license plate as fallback
       reminderData['backup_timestamp'] = FieldValue.serverTimestamp();
 
       await _userRemindersCollection.add(reminderData);
@@ -51,7 +59,7 @@ class FirebaseReminderService {
     }
   }
 
-  /// Backup all reminders to Firebase
+  /// Backup all reminders to Firebase (prevents duplicates by checking local_id)
   Future<ReminderBackupResult> backupAllRemindersToFirebase() async {
     try {
       if (!isUserAuthenticated) {
@@ -64,7 +72,19 @@ class FirebaseReminderService {
         return ReminderBackupResult.success('No reminders to backup.');
       }
 
+      // Get existing cloud reminders to check for duplicates
+      final existingCloudReminders = await _userRemindersCollection.get();
+      final existingLocalIds = <int>{};
+      
+      for (final doc in existingCloudReminders.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['local_id'] != null) {
+          existingLocalIds.add(data['local_id'] as int);
+        }
+      }
+
       int successCount = 0;
+      int skippedCount = 0;
       int failureCount = 0;
       final List<String> errors = [];
 
@@ -74,8 +94,22 @@ class FirebaseReminderService {
       for (final reminderMap in localReminders) {
         try {
           final reminder = BackupReminder.fromMap(reminderMap);
+          
+          // Skip if reminder already exists in cloud (by local_id)
+          if (existingLocalIds.contains(reminder.id)) {
+            skippedCount++;
+            continue;
+          }
+          
+          // Get the car's VIN and license plate to store in backup for restore matching
+          final car = await _databaseHelper.getCarById(reminder.carId, _currentUserId!);
+          final carVin = car?.vin ?? '';
+          final carLicensePlate = car?.licensePlate ?? '';
+          
           final reminderData = reminder.toFirebaseMap();
           reminderData['local_id'] = reminder.id;
+          reminderData['car_vin'] = carVin; // Store VIN for restore matching
+          reminderData['car_license_plate'] = carLicensePlate; // Store license plate as fallback
           reminderData['backup_timestamp'] = FieldValue.serverTimestamp();
 
           final docRef = _userRemindersCollection.doc();
@@ -93,13 +127,14 @@ class FirebaseReminderService {
 
       if (failureCount > 0) {
         return ReminderBackupResult.error(
-          'Backup completed with errors. $successCount reminders backed up successfully, $failureCount failed. Errors: ${errors.join(', ')}'
+          'Backup completed with errors. $successCount reminders backed up, $failureCount failed, $skippedCount already in cloud.'
         );
       }
 
-      return ReminderBackupResult.success(
-        'All $successCount reminders backed up successfully!'
-      );
+      final message = skippedCount > 0
+          ? '$successCount reminders backed up, $skippedCount already in cloud'
+          : 'All $successCount reminders backed up successfully!';
+      return ReminderBackupResult.success(message);
 
     } catch (e) {
       return ReminderBackupResult.error('Failed to backup reminders: ${e.toString()}');
@@ -129,9 +164,61 @@ class FirebaseReminderService {
           final data = doc.data() as Map<String, dynamic>;
           final reminder = BackupReminder.fromFirebaseMap(data);
           
-          // Insert into local database
-          await _databaseHelper.insertReminder(reminder);
-          successCount++;
+          // Try to find car by VIN first (stored in backup), then fall back to other methods
+          BackupCar? car;
+          final carVin = data['car_vin'] as String?;
+          if (carVin != null && carVin.isNotEmpty && carVin != 'Not specified' && !carVin.startsWith('VIN')) {
+            car = await _databaseHelper.getCarByVin(carVin, _currentUserId!);
+          }
+          
+          // If not found by VIN, try by old carId (for backward compatibility with old backups)
+          car ??= await _databaseHelper.getCarById(reminder.carId, _currentUserId!);
+          
+          // If still not found, try fallback: if user has only one car, use that one
+          // This handles cases where old backups don't have car_vin and carId doesn't match
+          if (car == null) {
+            final allCars = await _databaseHelper.getAllCars(_currentUserId!);
+            if (allCars.length == 1) {
+              car = allCars.first;
+            } else if (allCars.isNotEmpty) {
+              // Multiple cars exist - try to match by license plate if stored in backup
+              final carLicensePlate = data['car_license_plate'] as String?;
+              if (carLicensePlate != null && carLicensePlate.isNotEmpty && carLicensePlate != 'Not specified') {
+                car = await _databaseHelper.getCarByLicensePlate(carLicensePlate, _currentUserId!);
+              }
+              // If still no match, use the first car as fallback (better than failing)
+              car ??= allCars.first;
+            }
+          }
+          
+          if (car == null) {
+            failureCount++;
+            errors.add('Reminder "${reminder.title}" skipped: no cars found. Please restore cars first.');
+            continue;
+          }
+          
+          // Update reminder with the new local car ID
+          final reminderWithUpdatedCarId = reminder.copyWith(carId: car.id!);
+          
+          // Check if reminder already exists by local_id
+          final localId = data['local_id'] as int?;
+          BackupReminder? existingReminder;
+          if (localId != null) {
+            existingReminder = await _databaseHelper.getReminderById(localId, _currentUserId!);
+          }
+          
+          if (existingReminder == null) {
+            // Insert new reminder with updated car ID
+            await _databaseHelper.insertReminder(reminderWithUpdatedCarId);
+            successCount++;
+          } else {
+            // Update existing reminder if cloud version is newer
+            if (reminder.updatedAt.isAfter(existingReminder.updatedAt)) {
+              final updatedReminder = reminderWithUpdatedCarId.copyWith(id: existingReminder.id);
+              await _databaseHelper.updateReminder(updatedReminder);
+              successCount++;
+            }
+          }
         } catch (e) {
           failureCount++;
           errors.add('Failed to restore reminder: ${e.toString()}');

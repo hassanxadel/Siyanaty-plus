@@ -33,6 +33,7 @@ dependencies:
 
   # UI & Icons
   cupertino_icons: ^1.0.8
+  flutter_svg: ^2.0.10+1
   http: ^1.2.2
   
   # State Management
@@ -40,8 +41,16 @@ dependencies:
   
   # Local Storage
   sqflite: ^2.3.3+1
+  sqflite_sqlcipher: ^2.2.1
   shared_preferences: ^2.3.2
   path_provider: ^2.1.1
+  
+  # Security & Authentication
+  local_auth: ^2.1.8
+  flutter_secure_storage: ^9.2.2
+  crypto: ^3.0.3
+  otp: ^3.1.4
+  device_info_plus: ^10.1.2
   
   # Utilities
   intl: ^0.18.1
@@ -49,12 +58,39 @@ dependencies:
   image_picker: ^1.0.7
   file_picker: ^8.0.0+1
   geolocator: ^12.0.0
+  connectivity_plus: ^6.0.5
   
-  # Firebase dependencies for advanced features (stable versions)
-  firebase_core: ^2.15.0
-  firebase_auth: ^4.7.0
-  cloud_firestore: ^4.8.0
-  firebase_storage: ^11.2.0
+  # OCR and Camera
+  google_ml_kit: ^0.18.0
+  camera: ^0.10.5+9
+  
+  # Local Notifications
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+  url_launcher: ^6.2.5
+  
+  # Background Tasks
+  workmanager: ^0.5.2
+  
+  # Audio Recording and Playback
+  flutter_sound: ^9.2.13
+  permission_handler: ^11.3.1
+  
+  # OBD-II Bluetooth Communication
+  flutter_blue_plus: ^1.31.15
+  # flutter_bluetooth_serial: ^0.4.0  # Temporarily disabled - incompatible with compileSdkVersion 35
+  
+  # Car Health Dashboard
+  fl_chart: ^0.66.0
+  pdf: ^3.10.7
+  share_plus: ^7.2.1
+  printing: ^5.12.0
+  
+  # Firebase dependencies for advanced features (compatible versions)
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.15.3
+  cloud_firestore: ^4.13.6
+  firebase_storage: ^11.5.6
   google_sign_in: ^6.1.5
   google_maps_flutter: ^2.10.1
 
@@ -62,6 +98,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  integration_test:
+    sdk: flutter
+  mockito: ^5.4.4
+  build_runner: ^2.4.8
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
- 
+import '../screens/services/reminders_screen.dart';
+import '../screens/services/obd_screen.dart';
+import '../screens/services/services_screen.dart';
+import '../screens/settings/settings_screen.dart';
+import '../../shared/utils/responsive_utils.dart';
 
 /// Custom bottom navigation bar with animated tab items and curved design
 /// Provides navigation between main app sections with visual feedback
@@ -47,75 +51,106 @@ class _BottomNavBarState extends State<BottomNavBar>
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    Color color = isDarkMode ? Colors.transparent : Colors.transparent;
+    
+    // Responsive sizing using the new scaling system
+    final navBarHeight = context.r(70);
+    final centerButtonSize = context.r(56);
+    final centerButtonTop = context.r(-12);
+    final iconSize = context.responsiveIconSize(24);
+    final fontSize = context.responsiveFontSize(11);
+    final horizontalPadding = context.responsiveSpacing(16);
+    final verticalPadding = context.responsiveSpacing(8);
+    
     return Container(
-      height: 80,
+      height: navBarHeight,
       decoration: BoxDecoration(
-      color: isDarkMode ? const Color(0xFF062117) : Colors.transparent,
+        color: isDarkMode ? const Color(0xFF062117) : Colors.transparent,
       ),
       child: SafeArea(
+        bottom: true,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
             // Two-tone background with curved separator
             Positioned.fill(
               child: CustomPaint(
-                painter: _CurvedBackgroundPainter(isDarkMode: isDarkMode ),
-                
+                painter: _CurvedBackgroundPainter(isDarkMode: isDarkMode),
               ),
             ),
             // Navigation items
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontalPadding,
+                vertical: verticalPadding,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _NavBarItem(
-                    icon: Icons.home,
-                    label: 'Home',
-                    isActive: widget.currentIndex == 0,
-                    onTap: () => _handleTap(0),
+                  Flexible(
+                    child: _NavBarItem(
+                      icon: Icons.home,
+                      label: 'Home',
+                      isActive: widget.currentIndex == 0,
+                      onTap: () => _handleTap(0),
+                      iconSize: iconSize,
+                      fontSize: fontSize,
+                    ),
                   ),
-                  _NavBarItem(
-                    icon: Icons.alarm,
-                    label: 'Reminders',
-                    isActive: widget.currentIndex == 1,
-                    onTap: () => _handleTap(1),
+                  Flexible(
+                    child: _NavBarItem(
+                      icon: Icons.alarm,
+                      label: 'Reminders',
+                      isActive: widget.currentIndex == 1,
+                      onTap: () => _handleTap(1),
+                      iconSize: iconSize,
+                      fontSize: fontSize,
+                    ),
                   ),
                   // Empty space for center button
-                  const SizedBox(width: 60),
-                  _NavBarItem(
-                    icon: Icons.location_on,
-                    label: 'Location',
-                    isActive: widget.currentIndex == 3,
-                    onTap: () => _handleTap(3),
+                  SizedBox(width: centerButtonSize),
+                  Flexible(
+                    child: _NavBarItem(
+                      icon: Icons.location_on,
+                      label: 'Location',
+                      isActive: widget.currentIndex == 3,
+                      onTap: () => _handleTap(3),
+                      iconSize: iconSize,
+                      fontSize: fontSize,
+                    ),
                   ),
-                  _NavBarItem(
-                    icon: Icons.settings,
-                    label: 'Settings',
-                    isActive: widget.currentIndex == 4,
-                    onTap: () => _handleTap(4),
+                  Flexible(
+                    child: _NavBarItem(
+                      icon: Icons.settings,
+                      label: 'Settings',
+                      isActive: widget.currentIndex == 4,
+                      onTap: () => _handleTap(4),
+                      iconSize: iconSize,
+                      fontSize: fontSize,
+                    ),
                   ),
                 ],
               ),
             ),
             // Center floating button with black circular background
             Positioned(
-              left: MediaQuery.of(context).size.width / 2 - 30,
-              top: -15,
+              left: MediaQuery.of(context).size.width / 2 - (centerButtonSize / 2),
+              top: centerButtonTop,
               child: GestureDetector(
-                onTap: () => _handleTap(2),
+                onTap: () {
+                  // Navigate to OBD screen by pushing it onto the stack
+                  _navigateToScreen(context, 2);
+                },
                 child: Container(
-                  width: 60,
-                  height: 60,
+                  width: centerButtonSize,
+                  height: centerButtonSize,
                   decoration: const BoxDecoration(
                     color: Colors.black,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.developer_board,
                     color: Colors.white,
-                    size: 30,
+                    size: centerButtonSize * 0.5,
                   ),
                 ),
               ),
@@ -129,8 +164,45 @@ class _BottomNavBarState extends State<BottomNavBar>
   void _handleTap(int index) {
     _animationController.forward().then((_) {
       _animationController.reverse();
-      widget.onTap(index);
+      // Navigate to the screen by pushing it onto the stack
+      // This preserves navigation history so back button works
+      _navigateToScreen(context, index);
     });
+  }
+
+  void _navigateToScreen(BuildContext context, int index) {
+    Widget? screen;
+    
+    switch (index) {
+      case 0:
+        // For home, pop until we reach the root (which has the nav bar)
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        return;
+      case 1:
+        screen = const SmartRemindersScreen();
+        break;
+      case 2:
+        screen = const OBDDashboardScreen();
+        break;
+      case 3:
+        screen = const ServiceCentersScreen();
+        break;
+      case 4:
+        screen = const SettingsScreen();
+        break;
+    }
+    
+    if (screen != null) {
+      // Check if we're already on this screen to avoid duplicate navigation
+      final currentRoute = ModalRoute.of(context);
+      if (currentRoute != null && currentRoute.settings.name == screen.runtimeType.toString()) {
+        return; // Already on this screen
+      }
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => screen!),
+      );
+    }
   }
 }
 
@@ -139,14 +211,16 @@ class _NavBarItem extends StatefulWidget {
   final String label;
   final bool isActive;
   final VoidCallback onTap;
-  final bool isBlue;
+  final double iconSize;
+  final double fontSize;
 
   const _NavBarItem({
     required this.icon,
     required this.label,
     required this.isActive,
     required this.onTap,
-    this.isBlue = false,
+    this.iconSize = 24,
+    this.fontSize = 12,
   });
 
   @override
@@ -198,6 +272,8 @@ class _NavBarItemState extends State<_NavBarItem>
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.r(3); // Responsive spacing
+    
     return GestureDetector(
       onTap: widget.onTap,
       child: AnimatedBuilder(
@@ -205,32 +281,38 @@ class _NavBarItemState extends State<_NavBarItem>
         builder: (context, child) {
           return Transform.scale(
             scale: _scaleAnimation.value,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                                 Icon(
-                   widget.icon,
-                   color: widget.isBlue 
-                       ? Colors.blue 
-                       : (Theme.of(context).brightness == Brightness.dark 
-                           ? const Color(0xFF062117)  // Dark green when dark mode ON
-                           : Colors.white),            // White when dark mode OFF
-                   size: 24,
-                 ),
-                 const SizedBox(height: 8),
-                 Text(
-                   widget.label,
-                   style: TextStyle(
-                     fontSize: 12,
-                     fontWeight: FontWeight.w500,
-                     color: widget.isBlue 
-                         ? Colors.blue 
-                         : (Theme.of(context).brightness == Brightness.dark 
-                             ? const Color(0xFF062117)  // Dark green when dark mode ON
-                             : Colors.white),            // White when dark mode OFF
-                   ),
-                 ),
-              ],
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    widget.icon,
+                    color: Theme.of(context).brightness == Brightness.dark 
+                        ? const Color(0xFF062117)  // Dark green in dark mode
+                        : Colors.white,             // White in light mode
+                    size: widget.iconSize,
+                  ),
+                  SizedBox(height: spacing),
+                  Flexible(
+                    child: Text(
+                      widget.label,
+                      style: TextStyle(
+                        fontSize: widget.fontSize,
+                        fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w500,
+                        color: Theme.of(context).brightness == Brightness.dark 
+                            ? const Color(0xFF062117)  // Dark green in dark mode
+                            : Colors.white,             // White in light mode
+                        height: 1.0, // Tight line height to reduce space
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },

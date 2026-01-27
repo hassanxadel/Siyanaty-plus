@@ -119,6 +119,7 @@ class BackupCar {
   }
 
   /// Create a copy of BackupCar with updated fields
+  /// Use clearImagePath: true to explicitly set imagePath to null
   BackupCar copyWith({
     int? id,
     String? userId,
@@ -133,6 +134,7 @@ class BackupCar {
     String? licensePlate,
     String? vin,
     String? imagePath,
+    bool clearImagePath = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -149,7 +151,7 @@ class BackupCar {
       turbo: turbo ?? this.turbo,
       licensePlate: licensePlate ?? this.licensePlate,
       vin: vin ?? this.vin,
-      imagePath: imagePath ?? this.imagePath,
+      imagePath: clearImagePath ? null : (imagePath ?? this.imagePath),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );

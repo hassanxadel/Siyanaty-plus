@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../../services/notification_database_service.dart';
+import '../../../services/local_notification_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -12,6 +14,8 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<NotificationItem> _notifications = [];
   bool _isLoading = false;
+  final NotificationDatabaseService _notificationService = NotificationDatabaseService.instance;
+  final LocalNotificationService _localNotificationService = LocalNotificationService.instance;
 
   @override
   void initState() {
@@ -19,129 +23,106 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _loadNotifications();
   }
 
-  void _loadNotifications() {
+  Future<void> _loadNotifications() async {
     setState(() {
       _isLoading = true;
     });
 
-    // Simulate loading delay
-    Future.delayed(const Duration(milliseconds: 500), () {
+    try {
+      // Initialize local notification service
+      await _localNotificationService.initialize();
+      
+      // Load real notifications from database
+      final notifications = await _notificationService.getAllNotifications();
+      
       setState(() {
-        _notifications = _getFakeNotifications();
+        _notifications = notifications;
         _isLoading = false;
       });
-    });
-  }
-
-  List<NotificationItem> _getFakeNotifications() {
-    return [
-      NotificationItem(
-        id: '1',
-        title: 'Maintenance Due',
-        message: 'Oil change is due for your Toyota Camry in 500 km',
-        type: NotificationType.maintenance,
-        timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-        isRead: false,
-        priority: NotificationPriority.high,
-      ),
-      NotificationItem(
-        id: '2',
-        title: 'Service Reminder',
-        message: 'Tire rotation scheduled for tomorrow at 2:00 PM',
-        type: NotificationType.reminder,
-        timestamp: DateTime.now().subtract(const Duration(hours: 4)),
-        isRead: false,
-        priority: NotificationPriority.medium,
-      ),
-      NotificationItem(
-        id: '3',
-        title: 'Fuel Alert',
-        message: 'Your Honda Accord fuel level is below 20%',
-        type: NotificationType.alert,
-        timestamp: DateTime.now().subtract(const Duration(hours: 6)),
-        isRead: true,
-        priority: NotificationPriority.low,
-      ),
-      NotificationItem(
-        id: '4',
-        title: 'Mileage Milestone',
-        message: 'Congratulations! Your vehicle has reached 50,000 km',
-        type: NotificationType.info,
-        timestamp: DateTime.now().subtract(const Duration(days: 1)),
-        isRead: true,
-        priority: NotificationPriority.low,
-      ),
-      NotificationItem(
-        id: '5',
-        title: 'OBD Warning',
-        message: 'Check Engine Light detected. Schedule diagnostic service',
-        type: NotificationType.warning,
-        timestamp: DateTime.now().subtract(const Duration(days: 2)),
-        isRead: false,
-        priority: NotificationPriority.high,
-      ),
-      NotificationItem(
-        id: '6',
-        title: 'Insurance Renewal',
-        message: 'Your vehicle insurance expires in 30 days',
-        type: NotificationType.reminder,
-        timestamp: DateTime.now().subtract(const Duration(days: 3)),
-        isRead: true,
-        priority: NotificationPriority.medium,
-      ),
-      NotificationItem(
-        id: '7',
-        title: 'Service Complete',
-        message: 'Your brake service has been completed successfully',
-        type: NotificationType.success,
-        timestamp: DateTime.now().subtract(const Duration(days: 4)),
-        isRead: true,
-        priority: NotificationPriority.low,
-      ),
-      NotificationItem(
-        id: '8',
-        title: 'Weather Alert',
-        message: 'Severe weather expected. Check your vehicle preparation',
-        type: NotificationType.alert,
-        timestamp: DateTime.now().subtract(const Duration(days: 5)),
-        isRead: true,
-        priority: NotificationPriority.medium,
-      ),
-    ];
-  }
-
-  void _markAsRead(String notificationId) {
-    setState(() {
-      final notification = _notifications.firstWhere((n) => n.id == notificationId);
-      notification.isRead = true;
-    });
-    HapticFeedback.lightImpact();
-  }
-
-  void _deleteNotification(String notificationId) {
-    setState(() {
-      _notifications.removeWhere((n) => n.id == notificationId);
-    });
-    HapticFeedback.lightImpact();
-    _showMessage('Notification deleted');
-  }
-
-  void _markAllAsRead() {
-    setState(() {
-      for (var notification in _notifications) {
-        notification.isRead = true;
+    } catch (e) {
+      setState(() {
+        _notifications = [];
+        _isLoading = false;
+      });
+      
+      if (mounted) {
+        _showMessage('Error loading notifications: $e');
       }
-    });
-    HapticFeedback.lightImpact();
-    _showMessage('All notifications marked as read');
+    }
   }
 
-  void _clearAllNotifications() {
-    setState(() {
-      _notifications.clear();
-    });
-    HapticFeedback.lightImpact();
-    _showMessage('All notifications cleared');
+
+  Future<void> _markAsRead(String notificationId) async {
+    try {
+      // First update the local state for immediate UI feedback
+      setState(() {
+        final index = _notifications.indexWhere((n) => n.id == notificationId);
+        if (index != -1) {
+          _notifications[index].isRead = true;
+        }
+      });
+      
+      // Then persist to storage
+      await _notificationService.markNotificationAsRead(notificationId);
+      
+      HapticFeedback.lightImpact();
+    } catch (e) {
+      _showMessage('Error marking notification as read: $e');
+    }
+  }
+
+  Future<void> _deleteNotification(String notificationId) async {
+    try {
+      await _notificationService.deleteNotification(notificationId);
+      
+      setState(() {
+        _notifications.removeWhere((n) => n.id == notificationId);
+      });
+      HapticFeedback.lightImpact();
+      _showMessage('Notification deleted');
+      
+      // Reload notifications to get updated data
+      await _loadNotifications();
+    } catch (e) {
+      _showMessage('Error deleting notification: $e');
+    }
+  }
+
+  Future<void> _markAllAsRead() async {
+    try {
+      for (var notification in _notifications) {
+        if (!notification.isRead) {
+          await _notificationService.markNotificationAsRead(notification.id);
+          notification.isRead = true;
+        }
+      }
+      
+      setState(() {});
+      HapticFeedback.lightImpact();
+      _showMessage('All notifications marked as read');
+    } catch (e) {
+      _showMessage('Error marking notifications as read: $e');
+    }
+  }
+
+  Future<void> _clearAllNotifications() async {
+    try {
+      // Delete all notifications (mark all reminders as completed)
+      for (var notification in _notifications) {
+        await _notificationService.deleteNotification(notification.id);
+      }
+      
+      setState(() {
+        _notifications.clear();
+      });
+      HapticFeedback.lightImpact();
+      _showMessage('All notifications cleared');
+      
+      // Reload notifications to get updated data
+      await _loadNotifications();
+    } catch (e) {
+      _showMessage('Error clearing notifications: $e');
+    }
   }
 
   void _showMessage(String message) {
@@ -373,13 +354,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildNotificationsList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(20),
-      itemCount: _notifications.length,
-      itemBuilder: (context, index) {
-        final notification = _notifications[index];
-        return _buildNotificationCard(notification);
-      },
+    return RefreshIndicator(
+      onRefresh: _loadNotifications,
+      color: AppTheme.primaryGreen,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(20),
+        itemCount: _notifications.length,
+        itemBuilder: (context, index) {
+          final notification = _notifications[index];
+          return _buildNotificationCard(notification);
+        },
+      ),
     );
   }
 
@@ -529,48 +514,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
           ],
         ),
-        onTap: () {
+        onTap: () async {
           if (!notification.isRead) {
-            _markAsRead(notification.id);
+            await _markAsRead(notification.id);
           }
-          // TODO: Navigate to relevant screen based on notification type
+          // Navigate to reminders screen when notification is tapped
+          if (notification.reminderId != null) {
+            Navigator.pushNamed(context, '/reminders');
+          }
         },
       ),
     );
   }
 }
 
-class NotificationItem {
-  final String id;
-  final String title;
-  final String message;
-  final NotificationType type;
-  final DateTime timestamp;
-  bool isRead;
-  final NotificationPriority priority;
-
-  NotificationItem({
-    required this.id,
-    required this.title,
-    required this.message,
-    required this.type,
-    required this.timestamp,
-    required this.isRead,
-    required this.priority,
-  });
-}
-
-enum NotificationType {
-  maintenance,
-  reminder,
-  alert,
-  info,
-  warning,
-  success,
-}
-
-enum NotificationPriority {
-  high,
-  medium,
-  low,
-}

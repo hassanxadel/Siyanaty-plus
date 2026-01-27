@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../models/backup_maintenance.dart';
 import '../../../services/maintenance_service.dart';
@@ -43,6 +43,8 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
   }
 
   Future<void> _loadMaintenance() async {
+    if (!mounted) return;
+    
     setState(() => _isLoading = true);
     
     try {
@@ -121,9 +123,10 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
-      body: Column(
+    return ScreenWithNavBar(
+      child: Scaffold(
+        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        body: Column(
         children: [
           _buildHeaderWithBackground(),
           _buildTotalSpentSection(),
@@ -138,10 +141,7 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 2, // Maintenance screen index
-        onTap: (int i) {},
-      ),
+    ),
     );
   }
 
@@ -174,7 +174,7 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 28),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const Expanded(
@@ -267,11 +267,11 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
                 children: [
                   _buildClickableStatCard('All', _allMaintenance.length, Colors.blue, 0),
                   const SizedBox(width: 2),
-                  _buildClickableStatCard('Mechanics', _mechanicsMaintenance.length, Colors.orange, 1),
+                  _buildClickableStatCard('Mech', _mechanicsMaintenance.length, Colors.orange, 1),
                   const SizedBox(width: 2),
-                  _buildClickableStatCard('Electrical', _electricalMaintenance.length, Colors.red, 2),
+                  _buildClickableStatCard('Elec', _electricalMaintenance.length, Colors.red, 2),
                   const SizedBox(width: 2),
-                  _buildClickableStatCard('Suspension', _suspensionMaintenance.length, Colors.purple, 3),
+                  _buildClickableStatCard('Susp', _suspensionMaintenance.length, Colors.purple, 3),
                   const SizedBox(width: 2),
                   _buildClickableStatCard('Others', _othersMaintenance.length, Colors.green, 4),
                 ],
@@ -289,7 +289,14 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -439,130 +446,216 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
     
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 4,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () => _showMaintenanceDetails(maintenanceWithInfo),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: typeColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      maintenance.type.displayName,
-                      style: TextStyle(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: InkWell(
+          onTap: () => _showMaintenanceDetails(maintenanceWithInfo),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with icon and title
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: typeColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _getMaintenanceIcon(maintenance.type),
                         color: typeColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                        size: 24,
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            maintenance.title,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          // Car info
+                          Row(
+                            children: [
+                              Icon(Icons.directions_car, size: 14, color: Colors.grey[400]),
+                              const SizedBox(width: 4),
+                              Text(
+                                maintenanceWithInfo.carDisplayName,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                maintenance.title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  ],
                 ),
-              ),
-              const SizedBox(height: 4),
-              // Car info
-              Row(
-                children: [
-                  Icon(Icons.directions_car, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    maintenanceWithInfo.carDisplayName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+                const SizedBox(height: 12),
+                
+                // Type and date row
+                Row(
+                  children: [
+                    Text(
+                      maintenance.type.displayName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[400],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              // Reminder info
-              Row(
-                children: [
-                  Icon(Icons.notification_important, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Related to: ${maintenanceWithInfo.reminderDisplayName}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+                    const Spacer(),
+                    Text(
+                      DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[400],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              if (maintenance.description.isNotEmpty) ...[
+                  ],
+                ),
                 const SizedBox(height: 8),
+                
+                // Description
                 Text(
-                  maintenance.description,
-                  style: TextStyle(
+                  maintenance.description.isNotEmpty 
+                    ? maintenance.description 
+                    : 'No description provided',
+                  style: const TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[700],
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryGreen.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'EGP ${maintenance.cost.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: AppTheme.primaryGreen,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                const SizedBox(height: 12),
+                
+                // Cost and action button row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'EGP ${maintenance.cost.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: AppTheme.primaryGreen,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  if (maintenance.mechanicName != null) ...[
-                    Icon(Icons.person, size: 14, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      maintenance.mechanicName!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: () => _showMaintenanceDetails(maintenanceWithInfo),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color.fromARGB(255, 32, 61, 32),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'View Details',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Orbitron',
+                        ),
                       ),
                     ),
                   ],
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildMaintenanceDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFA5D6A7), // Muted light green
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Color(0xFFC8E6C9), // Light green text
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getMaintenanceIcon(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return Icons.build_circle;
+      case MaintenanceType.electrical:
+        return Icons.electrical_services;
+      case MaintenanceType.suspension:
+        return Icons.car_repair;
+      case MaintenanceType.others:
+        return Icons.miscellaneous_services;
+    }
   }
 
   Widget _buildEmptyState() {
@@ -626,13 +719,22 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => AddMaintenanceForm(
-        onMaintenanceAdded: () {
-          _loadMaintenance();
-        },
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => AddMaintenanceForm(
+          onMaintenanceAdded: () {
+            _loadMaintenance();
+          },
+          scrollController: scrollController,
+        ),
       ),
     );
   }
@@ -654,8 +756,8 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
     );
   }
 
-  void _showEditMaintenanceSheet(BackupMaintenance maintenance) {
-    showModalBottomSheet(
+  void _showEditMaintenanceSheet(BackupMaintenance maintenance) async {
+    final updated = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -663,11 +765,16 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
       ),
       builder: (context) => EditMaintenanceForm(
         maintenance: maintenance,
-        onMaintenanceUpdated: () {
-          _loadMaintenance();
-        },
+        onMaintenanceUpdated: () {},
       ),
     );
+    if (!mounted) return;
+    if (updated == true) {
+      await _loadMaintenance();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maintenance updated successfully')),
+      );
+    }
   }
 
   void _deleteMaintenanceRecord(BackupMaintenance maintenance) {
@@ -709,10 +816,12 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
 // Add Maintenance Form
 class AddMaintenanceForm extends StatefulWidget {
   final VoidCallback onMaintenanceAdded;
+  final ScrollController? scrollController;
 
   const AddMaintenanceForm({
     super.key,
     required this.onMaintenanceAdded,
+    this.scrollController,
   });
 
   @override
@@ -755,9 +864,8 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
     final reminders = await _maintenanceService.getAvailableReminders();
     setState(() {
       _availableReminders = reminders;
-      if (reminders.isNotEmpty) {
-        _selectedReminder = reminders.first;
-      }
+      // Start with "Without a Reminder" (null) as default
+      _selectedReminder = null;
     });
   }
 
@@ -769,9 +877,10 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
         left: 16,
         right: 16,
         bottom: media.viewInsets.bottom + 16,
-        top: 16,
+        top: 8,
       ),
       child: SingleChildScrollView(
+        controller: widget.scrollController,
         child: Form(
           key: _formKey,
           child: Column(
@@ -788,10 +897,10 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            const Text('Add Maintenance Record', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18)),
-            const SizedBox(height: 8),
-            Text('* Required fields', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            const SizedBox(height: 10),
+            const Text('Add Maintenance Record', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 6),
+            Text('* Required fields', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
             const SizedBox(height: 16),
             // Reminder selection
             _buildReminderDropdown(),
@@ -809,7 +918,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
             
             // Description
             _field(
-              label: 'Description*', 
+              label: 'Description (optional)', 
               controller: _descriptionController,
               maxLines: 3,
             ),
@@ -821,7 +930,20 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
                 Expanded(child: _field(
                   label: 'Cost (EGP)*', 
                   controller: _costController,
-                  keyboard: TextInputType.number,
+                  keyboard: const TextInputType.numberWithOptions(decimal: true),
+                  customValidator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'This field is required';
+                    }
+                    final cost = double.tryParse(value.trim());
+                    if (cost == null) {
+                      return 'Please enter a valid number';
+                    }
+                    if (cost < 0) {
+                      return 'Cost cannot be negative';
+                    }
+                    return null;
+                  },
                 )),
                 const SizedBox(width: 10),
                 Expanded(child: _buildDatePicker()),
@@ -849,32 +971,24 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
             SizedBox(
               width: double.infinity,
               child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      AppTheme.primaryGreen,
                       AppTheme.darkAccentGreen,
+                      AppTheme.backgroundGreen,
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryGreen.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _saveMaintenance,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0c3c24),
-                    shadowColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                     backgroundColor: Colors.transparent,
+                     shadowColor: Colors.transparent,
+                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _isLoading 
                     ? const SizedBox(
@@ -885,7 +999,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
-                    : const Text('Save Maintenance Record', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
+                    : const Text('Save Maintenance', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
                 ),
               ),
             ),
@@ -898,7 +1012,24 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
   }
 
   Future<void> _saveMaintenance() async {
-    if (_formKey.currentState == null || !_formKey.currentState!.validate() || _selectedReminder == null) return;
+    // Validate form fields
+    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
+      return; // Form validation will show red borders
+    }
+    
+    // Validate reminder selection
+    if (_selectedReminder == null) {
+      setState(() {
+        // Show error for reminder selection
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a reminder'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     
     if (_selectedReminder!.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -910,7 +1041,13 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    // Date is always set (initialized to DateTime.now()), but validate anyway
+    // This check is kept for safety but should never trigger
+
+    setState(() {
+      _isLoading = true;
+      _dateError = null; // Clear any date errors
+    });
 
     try {
       final result = await _maintenanceService.addMaintenance(
@@ -957,6 +1094,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
     required TextEditingController controller,
     TextInputType? keyboard,
     int maxLines = 1,
+    String? Function(String?)? customValidator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -967,6 +1105,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
             fontFamily: 'Orbitron',
             fontSize: 12,
             fontWeight: FontWeight.w600,
+            color: AppTheme.lightBackground,
           ),
         ),
         const SizedBox(height: 4),
@@ -974,9 +1113,16 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
           controller: controller,
           keyboardType: keyboard,
           maxLines: maxLines,
-          style: const TextStyle(fontFamily: 'Orbitron'),
+          style: const TextStyle(
+            fontFamily: 'Orbitron',
+            color: AppTheme.lightBackground,
+          ),
           decoration: InputDecoration(
             border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+            ),
+            enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppTheme.primaryGreen),
             ),
@@ -984,11 +1130,19 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
             ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-          validator: label.contains('*') 
+          validator: customValidator ?? (label.contains('*') 
             ? (value) => value?.isEmpty == true ? 'This field is required' : null
-            : null,
+            : null),
         ),
       ],
     );
@@ -1004,14 +1158,999 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
             fontFamily: 'Orbitron',
             fontSize: 12,
             fontWeight: FontWeight.w600,
+            color: AppTheme.lightBackground,
           ),
         ),
         const SizedBox(height: 4),
-        DropdownButtonFormField<BackupReminder>(
-          value: _selectedReminder,
-          style: const TextStyle(fontFamily: 'Orbitron'),
+        Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.darkAccentGreen,
+                AppTheme.backgroundGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryGreen.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showReminderSelectionDialog(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_active,
+                        color: AppTheme.lightBackground,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedReminder != null
+                                ? _selectedReminder!.title
+                                : 'Without a Reminder',
+                            style: const TextStyle(
+                              color: AppTheme.lightBackground,
+                              fontFamily: 'Orbitron',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _selectedReminder != null
+                                ? 'Tap to change'
+                                : 'Standalone maintenance',
+                            style: TextStyle(
+                              color: AppTheme.lightBackground.withOpacity(0.7),
+                              fontFamily: 'Orbitron',
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_drop_down,
+                        color: AppTheme.lightBackground,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showReminderSelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              
+              // Title
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_active,
+                        color: AppTheme.primaryGreen,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Select Related Reminder',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.lightBackground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // "Without a Reminder" option
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedReminder = null;
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: _selectedReminder == null
+                          ? const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.primaryGreen,
+                                AppTheme.darkAccentGreen,
+                              ],
+                            )
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.darkAccentGreen.withOpacity(0.5),
+                                AppTheme.backgroundGreen.withOpacity(0.5),
+                              ],
+                            ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: _selectedReminder == null
+                          ? Border.all(color: AppTheme.primaryGreen, width: 2)
+                          : Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 45,
+                          height: 45,
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.block,
+                            color: Colors.orange,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Without a Reminder',
+                                style: TextStyle(
+                                  color: AppTheme.lightBackground,
+                                  fontFamily: 'Orbitron',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Standalone maintenance record',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontFamily: 'Orbitron',
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_selectedReminder == null)
+                          const Icon(
+                            Icons.check_circle,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Reminder list
+              Container(
+                constraints: const BoxConstraints(maxHeight: 400),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Column(
+                    children: _availableReminders.map((reminder) {
+                      final isSelected = _selectedReminder?.id == reminder.id;
+                      
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedReminder = reminder;
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: isSelected
+                                ? const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      AppTheme.primaryGreen,
+                                      AppTheme.darkAccentGreen,
+                                    ],
+                                  )
+                                : LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      AppTheme.darkAccentGreen.withOpacity(0.5),
+                                      AppTheme.backgroundGreen.withOpacity(0.5),
+                                    ],
+                                  ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: isSelected
+                                ? Border.all(color: AppTheme.primaryGreen, width: 2)
+                                : Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 45,
+                                height: 45,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryGreen.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.notifications_active,
+                                  color: AppTheme.lightBackground,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      reminder.title,
+                                      style: const TextStyle(
+                                        color: AppTheme.lightBackground,
+                                        fontFamily: 'Orbitron',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      reminder.description.isNotEmpty
+                                          ? reminder.description
+                                          : 'No description',
+                                      style: TextStyle(
+                                        color: AppTheme.lightBackground.withOpacity(0.7),
+                                        fontFamily: 'Orbitron',
+                                        fontSize: 11,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_circle,
+                                  color: AppTheme.lightBackground,
+                                  size: 24,
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTypeDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Type*',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.lightBackground,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.darkAccentGreen,
+                AppTheme.backgroundGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryGreen.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showTypeSelectionDialog(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        _getTypeIcon(_selectedType),
+                        color: AppTheme.lightBackground,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedType.displayName,
+                            style: const TextStyle(
+                              color: AppTheme.lightBackground,
+                              fontFamily: 'Orbitron',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_drop_down,
+                        color: AppTheme.lightBackground,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _getTypeIcon(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return Icons.build;
+      case MaintenanceType.electrical:
+        return Icons.electrical_services;
+      case MaintenanceType.suspension:
+        return Icons.settings;
+      case MaintenanceType.others:
+        return Icons.more_horiz;
+    }
+  }
+
+  String _getTypeDescription(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return 'Engine, transmission, etc.';
+      case MaintenanceType.electrical:
+        return 'Battery, wiring, etc.';
+      case MaintenanceType.suspension:
+        return 'Shocks, struts, etc.';
+      case MaintenanceType.others:
+        return 'Other maintenance';
+    }
+  }
+
+  void _showTypeSelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
+            ),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(30),
+              topRight: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.category,
+                      color: AppTheme.lightBackground,
+                      size: 24,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Select Type',
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.lightBackground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Type list
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Column(
+                  children: MaintenanceType.values.map((type) {
+                    final isSelected = _selectedType == type;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedType = type;
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.primaryGreen,
+                                    AppTheme.darkAccentGreen,
+                                  ],
+                                )
+                              : LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppTheme.darkAccentGreen.withOpacity(0.5),
+                                    AppTheme.backgroundGreen.withOpacity(0.5),
+                                  ],
+                                ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: isSelected
+                              ? Border.all(color: AppTheme.primaryGreen, width: 2)
+                              : Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 45,
+                              height: 45,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryGreen.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                _getTypeIcon(type),
+                                color: AppTheme.lightBackground,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    type.displayName,
+                                    style: const TextStyle(
+                                      color: AppTheme.lightBackground,
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _getTypeDescription(type),
+                                    style: TextStyle(
+                                      color: AppTheme.lightBackground.withOpacity(0.7),
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              const Icon(
+                                Icons.check_circle,
+                                color: AppTheme.lightBackground,
+                                size: 24,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String? _dateError;
+
+  Widget _buildDatePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Maintenance Date*',
+          style: TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.lightBackground,
+          ),
+        ),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: () async {
+            final date = await showDatePicker(
+              context: context,
+              initialDate: _selectedDate,
+              firstDate: DateTime(2000),
+              lastDate: DateTime.now(),
+            );
+            if (date != null) {
+              setState(() {
+                _selectedDate = date;
+                _dateError = null; // Clear error when date is selected
+              });
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: _dateError != null ? Colors.red : AppTheme.primaryGreen,
+                width: _dateError != null ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('MMM dd, yyyy').format(_selectedDate),
+                  style: const TextStyle(
+                    fontFamily: 'Orbitron',
+                    color: AppTheme.lightBackground,
+                  ),
+                ),
+                Icon(
+                  Icons.calendar_today,
+                  color: _dateError != null ? Colors.red : AppTheme.primaryGreen,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_dateError != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            _dateError!,
+            style: const TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+              fontFamily: 'Orbitron',
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// Placeholder classes for other forms and dialogs
+class EditMaintenanceForm extends StatefulWidget {
+  final BackupMaintenance maintenance;
+  final VoidCallback onMaintenanceUpdated;
+
+  const EditMaintenanceForm({
+    super.key,
+    required this.maintenance,
+    required this.onMaintenanceUpdated,
+  });
+
+  @override
+  State<EditMaintenanceForm> createState() => _EditMaintenanceFormState();
+}
+
+class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _costController = TextEditingController();
+  final _mechanicController = TextEditingController();
+  final _invoiceController = TextEditingController();
+
+  final MaintenanceService _maintenanceService = MaintenanceService();
+
+  late DateTime _selectedDate;
+  late MaintenanceType _selectedType;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final m = widget.maintenance;
+    _titleController.text = m.title;
+    _descriptionController.text = m.description;
+    _costController.text = m.cost.toStringAsFixed(0);
+    _mechanicController.text = m.mechanicName ?? '';
+    _invoiceController.text = m.invoiceNumber ?? '';
+    _selectedDate = m.maintenanceDate;
+    _selectedType = m.type;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _costController.dispose();
+    _mechanicController.dispose();
+    _invoiceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        bottom: media.viewInsets.bottom + 16,
+        top: 16,
+      ),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+                const SizedBox(height: 16),
+              const Text('Edit Maintenance Record', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18)),
+              const SizedBox(height: 16),
+
+              // Title and Type row
+              Row(
+                children: [
+                  Expanded(child: _field(label: 'Title*', controller: _titleController)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildTypeDropdown()),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Description
+              _field(
+                label: 'Description (optional)',
+                controller: _descriptionController,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+
+              // Cost and Date row
+              Row(
+                children: [
+                  Expanded(child: _field(
+                    label: 'Cost (EGP)*',
+                    controller: _costController,
+                    keyboard: const TextInputType.numberWithOptions(decimal: true),
+                    customValidator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'This field is required';
+                      }
+                      final cost = double.tryParse(value.trim());
+                      if (cost == null) {
+                        return 'Please enter a valid number';
+                      }
+                      if (cost < 0) {
+                        return 'Cost cannot be negative';
+                      }
+                      return null;
+                    },
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildDatePicker()),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Optional fields row
+              Row(
+                children: [
+                  Expanded(child: _field(
+                    label: 'Mechanic/Service Center (optional)',
+                    controller: _mechanicController,
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: _field(
+                    label: 'Invoice Number (optional)',
+                    controller: _invoiceController,
+                  )),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Save button with gradient
+              SizedBox(
+                width: double.infinity,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.darkAccentGreen,
+                        AppTheme.backgroundGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text('Update Maintenance', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+                const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    // Validate form fields
+    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
+      return; // Form validation will show red borders
+    }
+
+    // Validate cost is a valid number
+    final costText = _costController.text.trim();
+    final cost = double.tryParse(costText);
+    if (cost == null) {
+      // This should be caught by form validation, but double-check
+      return;
+    }
+    if (cost < 0) {
+      // This should be caught by form validation, but double-check
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await _maintenanceService.updateMaintenance(
+        maintenanceId: widget.maintenance.id!.toString(),
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        cost: cost, // Use validated cost, not tryParse with fallback
+        maintenanceDate: _selectedDate,
+        type: _selectedType,
+        mechanicName: _mechanicController.text.trim().isEmpty ? null : _mechanicController.text.trim(),
+        invoiceNumber: _invoiceController.text.trim().isEmpty ? null : _invoiceController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (result.success) {
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating maintenance: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _field({
+    required String label,
+    required TextEditingController controller,
+    TextInputType? keyboard,
+    int maxLines = 1,
+    String? Function(String?)? customValidator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.lightBackground,
+          ),
+        ),
+        const SizedBox(height: 4),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboard,
+          maxLines: maxLines,
+          style: const TextStyle(
+            fontFamily: 'Orbitron',
+            color: AppTheme.lightBackground,
+          ),
           decoration: InputDecoration(
             border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+            ),
+            enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppTheme.primaryGreen),
             ),
@@ -1019,21 +2158,19 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
             ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-          items: _availableReminders.map((reminder) {
-            return DropdownMenuItem(
-              value: reminder,
-              child: Text(
-                reminder.title,
-                style: const TextStyle(fontFamily: 'Orbitron'),
-              ),
-            );
-          }).toList(),
-          onChanged: (value) {
-            setState(() => _selectedReminder = value);
-          },
-          validator: (value) => value == null ? 'Please select a reminder' : null,
+          validator: customValidator ?? (label.contains('*')
+              ? (value) => value?.isEmpty == true ? 'This field is required' : null
+              : null),
         ),
       ],
     );
@@ -1069,16 +2206,11 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
           items: MaintenanceType.values.map((type) {
             return DropdownMenuItem(
               value: type,
-              child: Text(
-                type.displayName,
-                style: const TextStyle(fontFamily: 'Orbitron'),
-              ),
+              child: Text(type.displayName, style: const TextStyle(fontFamily: 'Orbitron')),
             );
           }).toList(),
           onChanged: (value) {
-            if (value != null) {
-              setState(() => _selectedType = value);
-            }
+            if (value != null) setState(() => _selectedType = value);
           },
         ),
       ],
@@ -1106,9 +2238,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
               firstDate: DateTime(2000),
               lastDate: DateTime.now(),
             );
-            if (date != null) {
-              setState(() => _selectedDate = date);
-            }
+            if (date != null) setState(() => _selectedDate = date);
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -1123,39 +2253,12 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
                   DateFormat('MMM dd, yyyy').format(_selectedDate),
                   style: const TextStyle(fontFamily: 'Orbitron'),
                 ),
-                const Icon(
-                  Icons.calendar_today,
-                  color: AppTheme.primaryGreen,
-                  size: 20,
-                ),
+                const Icon(Icons.calendar_today, color: AppTheme.primaryGreen, size: 20),
               ],
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-// Placeholder classes for other forms and dialogs
-class EditMaintenanceForm extends StatelessWidget {
-  final BackupMaintenance maintenance;
-  final VoidCallback onMaintenanceUpdated;
-
-  const EditMaintenanceForm({
-    super.key,
-    required this.maintenance,
-    required this.onMaintenanceUpdated,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 200,
-      color: Colors.white,
-      child: const Center(
-        child: Text('Edit Maintenance Form - To be implemented'),
-      ),
     );
   }
 }
@@ -1175,43 +2278,311 @@ class MaintenanceDetailsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maintenance = maintenanceWithInfo.maintenance;
+    final typeColor = _getMaintenanceTypeColor(maintenance.type);
     
-    return AlertDialog(
-      title: Text(maintenance.title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      elevation: 20,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 800),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: typeColor.withOpacity(0.3),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with close button
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: typeColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          _getMaintenanceTypeIcon(maintenance.type),
+                          color: typeColor,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              maintenance.title,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Orbitron',
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: typeColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${maintenance.type.displayName} - ${DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate)}',
+                                style: TextStyle(
+                                  color: typeColor,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                      }
+                    },
+                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+
+
+            // Details section with modern styling
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  _buildModernDetailRow('Type', maintenance.type.displayName, Icons.category, typeColor),
+                  _buildModernDetailRow('Cost', 'EGP ${maintenance.cost.toStringAsFixed(2)}', Icons.attach_money, AppTheme.primaryGreen),
+                  _buildModernDetailRow('Date', DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate), Icons.calendar_today, Colors.blue),
+                  _buildModernDetailRow('Car', maintenanceWithInfo.carDisplayName, Icons.directions_car, Colors.orange),
+                  _buildModernDetailRow('Reminder', maintenanceWithInfo.reminderDisplayName, Icons.notification_important, Colors.purple),
+                  if (maintenance.description.isNotEmpty)
+                    _buildModernDetailRow('Description', maintenance.description, Icons.description, Colors.grey),
+                  if (maintenance.mechanicName != null)
+                    _buildModernDetailRow('Mechanic', maintenance.mechanicName!, Icons.person, Colors.cyan),
+                  if (maintenance.invoiceNumber != null)
+                    _buildModernDetailRow('Invoice', maintenance.invoiceNumber!, Icons.receipt, Colors.teal),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Modern action buttons
+            Column(
+              children: [
+                // Top row - Edit and Delete
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildModernButton(
+                        icon: Icons.edit_rounded,
+                        label: 'Edit',
+                        color: const Color(0xFF2196F3),
+                        onPressed: onEdit,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildModernButton(
+                        icon: Icons.delete_rounded,
+                        label: 'Delete',
+                        color: const Color.fromARGB(255, 219, 25, 25),
+                        onPressed: onDelete,
+                      ),
+                    ),
+                  ],
+                ),
+                  const SizedBox(height: 12),
+                
+               
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernDetailRow(String label, String value, IconData icon, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
         children: [
-          Text('Type: ${maintenance.type.displayName}'),
-          Text('Cost: EGP ${maintenance.cost.toStringAsFixed(2)}'),
-          Text('Date: ${DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate)}'),
-          Text('Car: ${maintenanceWithInfo.carDisplayName}'),
-          Text('Reminder: ${maintenanceWithInfo.reminderDisplayName}'),
-          if (maintenance.description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text('Description: ${maintenance.description}'),
-          ],
-          if (maintenance.mechanicName != null) ...[
-            const SizedBox(height: 4),
-            Text('Mechanic: ${maintenance.mechanicName}'),
-          ],
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[400],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
-        ),
-        TextButton(
-          onPressed: onEdit,
-          child: const Text('Edit'),
-        ),
-        TextButton(
-          onPressed: onDelete,
-          style: TextButton.styleFrom(foregroundColor: Colors.red),
-          child: const Text('Delete'),
-        ),
-      ],
     );
+  }
+
+  Widget _buildModernButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.8),
+            color,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getMaintenanceTypeColor(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return Colors.orange;
+      case MaintenanceType.electrical:
+        return Colors.red;
+      case MaintenanceType.suspension:
+        return Colors.purple;
+      case MaintenanceType.others:
+        return Colors.green;
+    }
+  }
+
+  IconData _getMaintenanceTypeIcon(MaintenanceType type) {
+    switch (type) {
+      case MaintenanceType.mechanics:
+        return Icons.build_circle;
+      case MaintenanceType.electrical:
+        return Icons.electrical_services;
+      case MaintenanceType.suspension:
+        return Icons.car_repair;
+      case MaintenanceType.others:
+        return Icons.miscellaneous_services;
+    }
   }
 }

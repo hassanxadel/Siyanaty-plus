@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../database/database_helper.dart';
 import '../models/backup_maintenance.dart';
+import '../models/backup_reminder.dart';
 import '../shared/utils/app_logger.dart';
 
 /// Firebase service for backing up and restoring maintenance records
@@ -41,13 +42,29 @@ class FirebaseMaintenanceService {
       for (final maintenanceMap in maintenanceRecords) {
         try {
           final maintenance = BackupMaintenance.fromMap(maintenanceMap);
+          
+          // Get reminder info to store for restore matching
+          BackupReminder? reminder;
+          if (maintenance.reminderId != null) {
+            reminder = await _databaseHelper.getReminderById(maintenance.reminderId!, userId);
+          }
+          final reminderTitle = reminder?.title ?? '';
+          final carId = reminder?.carId ?? 0;
+          final car = carId > 0 ? await _databaseHelper.getCarById(carId, userId) : null;
+          final carVin = car?.vin ?? '';
+          
+          final maintenanceData = maintenance.toFirebaseMap();
+          maintenanceData['reminder_title'] = reminderTitle; // Store for restore matching
+          maintenanceData['car_vin'] = carVin; // Store for restore matching
+          maintenanceData['local_id'] = maintenance.id; // Store local ID
+          
           final docRef = _firestore
               .collection('users')
               .doc(userId)
               .collection('maintenance')
               .doc(maintenance.id?.toString());
 
-          batch.set(docRef, maintenance.toFirebaseMap(), SetOptions(merge: true));
+          batch.set(docRef, maintenanceData, SetOptions(merge: true));
           successCount++;
         } catch (e) {
           AppLogger.error('Failed to prepare maintenance record for backup', error: e);
@@ -101,21 +118,101 @@ class FirebaseMaintenanceService {
           final maintenanceData = doc.data();
           final maintenance = BackupMaintenance.fromFirebaseMap(maintenanceData);
 
-          // Check if maintenance record already exists
-          final existingMaintenance = await _databaseHelper.getMaintenanceById(
-            maintenance.id!, 
-            userId
-          );
+          // Try to find reminder by multiple methods with fallbacks
+          BackupReminder? reminder;
+          final reminderTitle = maintenanceData['reminder_title'] as String?;
+          final carVin = maintenanceData['car_vin'] as String?;
+          
+          // Method 1: Find by title and car VIN (if stored in backup)
+          if (reminderTitle != null && reminderTitle.isNotEmpty && carVin != null && carVin.isNotEmpty && carVin != 'Not specified' && !carVin.startsWith('VIN')) {
+            final car = await _databaseHelper.getCarByVin(carVin, userId);
+            if (car != null) {
+              final allReminders = await _databaseHelper.getRemindersByCar(car.id!, userId);
+              try {
+                reminder = allReminders.firstWhere((r) => r.title == reminderTitle);
+              } catch (e) {
+                // Title doesn't match, continue to next method
+              }
+            }
+          }
+          
+          // Method 2: Find by reminder title across all reminders (if title is available)
+          if (reminder == null && reminderTitle != null && reminderTitle.isNotEmpty) {
+            final allReminders = await _databaseHelper.getAllReminders(userId);
+            try {
+              reminder = allReminders.firstWhere((r) => r.title == reminderTitle);
+            } catch (e) {
+              // Title doesn't match, continue to next method
+            }
+          }
+          
+          // Method 3: Find by old reminderId (for backward compatibility)
+          if (maintenance.reminderId != null) {
+            reminder ??= await _databaseHelper.getReminderById(maintenance.reminderId!, userId);
+          }
+          
+          // Method 4: Fallback - if user has only one reminder, use that one
+          // This handles cases where old backups don't have reminder_title
+          if (reminder == null) {
+            final allReminders = await _databaseHelper.getAllReminders(userId);
+            if (allReminders.length == 1) {
+              reminder = allReminders.first;
+            } else if (allReminders.isNotEmpty) {
+              // Try fuzzy matching by reminder title (if available)
+              if (reminderTitle != null && reminderTitle.isNotEmpty) {
+                try {
+                  reminder = allReminders.firstWhere(
+                    (r) => r.title.toLowerCase().contains(reminderTitle.toLowerCase()) || 
+                           reminderTitle.toLowerCase().contains(r.title.toLowerCase()),
+                  );
+                } catch (e) {
+                  // No fuzzy match found
+                }
+              }
+              
+              // If still no match, try matching maintenance title to reminder title
+              // (sometimes maintenance title is similar to reminder title)
+              if (reminder == null && maintenance.title.isNotEmpty) {
+                try {
+                  reminder = allReminders.firstWhere(
+                    (r) => r.title.toLowerCase().contains(maintenance.title.toLowerCase()) || 
+                           maintenance.title.toLowerCase().contains(r.title.toLowerCase()),
+                  );
+                } catch (e) {
+                  // No match found
+                }
+              }
+            }
+          }
+          
+          if (reminder == null) {
+            AppLogger.warning('Maintenance "${maintenance.title}" skipped: associated reminder not found. Please restore reminders first.');
+            failureCount++;
+            continue;
+          }
+
+          // Update maintenance with the new local reminder ID
+          final maintenanceWithUpdatedReminderId = maintenance.copyWith(reminderId: reminder.id!);
+
+          // Check if maintenance record already exists (by id if available)
+          BackupMaintenance? existingMaintenance;
+          final localId = maintenanceData['local_id'] as int?;
+          if (localId != null) {
+            existingMaintenance = await _databaseHelper.getMaintenanceById(localId, userId);
+          } else if (maintenance.id != null) {
+            existingMaintenance = await _databaseHelper.getMaintenanceById(maintenance.id!, userId);
+          }
 
           if (existingMaintenance == null) {
-            // Insert new maintenance record
-            await _databaseHelper.insertMaintenance(maintenance);
+            // Insert new maintenance record with updated reminder ID
+            await _databaseHelper.insertMaintenance(maintenanceWithUpdatedReminderId);
             successCount++;
             AppLogger.info('Restored maintenance record: ${maintenance.title}');
           } else {
             // Update existing maintenance record if cloud version is newer
             if (maintenance.updatedAt.isAfter(existingMaintenance.updatedAt)) {
-              await _databaseHelper.updateMaintenance(maintenance, userId);
+              final updatedMaintenance = maintenanceWithUpdatedReminderId.copyWith(id: existingMaintenance.id);
+              await _databaseHelper.updateMaintenance(updatedMaintenance, userId);
               successCount++;
               AppLogger.info('Updated maintenance record: ${maintenance.title}');
             }

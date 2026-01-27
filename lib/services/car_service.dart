@@ -196,10 +196,20 @@ class CarService {
         return CarOperationResult.error('You already have a car with this license plate');
       }
       
-      // Validate image path if provided
+      // Validate image path if provided and it's a new image (different from existing)
+      // Skip validation if it's the same path (might be restored from cloud with missing file)
+      String? finalImagePath = imagePath;
       if (imagePath != null && imagePath.isNotEmpty) {
-        if (!await File(imagePath).exists()) {
-          return CarOperationResult.error('Selected image file does not exist');
+        final imageFile = File(imagePath);
+        if (!await imageFile.exists()) {
+          // If the image doesn't exist and it's the same as existing path, clear it
+          // If it's a new path that doesn't exist, that's an error
+          if (imagePath == existingCar.imagePath) {
+            // Old restored path that no longer exists - clear it
+            finalImagePath = null;
+          } else {
+            return CarOperationResult.error('Selected image file does not exist');
+          }
         }
       }
       
@@ -215,7 +225,7 @@ class CarService {
         turbo: turbo,
         licensePlate: licensePlate.trim().toUpperCase(),
         vin: vin.trim().toUpperCase(),
-        imagePath: imagePath,
+        imagePath: finalImagePath,
         updatedAt: DateTime.now(),
       );
       
@@ -406,6 +416,60 @@ class CarService {
     }
     
     return CarOperationResult.success(message: 'Validation passed');
+  }
+
+  /// Update car mileage by adding distance
+  /// Used by automated mileage tracking system
+  Future<CarOperationResult> updateCarMileage(int carId, double additionalMileage) async {
+    try {
+      // Check if user is authenticated
+      if (!isUserAuthenticated) {
+        return CarOperationResult.error('User must be signed in to update car mileage');
+      }
+      
+      final userId = _currentUserId!;
+      
+      // Get existing car
+      final existingCar = await _databaseHelper.getCarById(carId, userId);
+      if (existingCar == null) {
+        return CarOperationResult.error('Car not found');
+      }
+      
+      // Calculate new mileage
+      final newMileage = existingCar.mileage + additionalMileage.toInt();
+      
+      // Validate new mileage
+      if (newMileage < 0) {
+        return CarOperationResult.error('Mileage cannot be negative');
+      }
+      
+      if (newMileage > 9999999) {
+        return CarOperationResult.error('Mileage exceeds maximum value');
+      }
+      
+      // Update car with new mileage
+      final updatedCar = existingCar.copyWith(
+        mileage: newMileage,
+        updatedAt: DateTime.now(),
+      );
+      
+      // Update car in database
+      final rowsAffected = await _databaseHelper.updateCar(updatedCar);
+      
+      if (rowsAffected == 0) {
+        return CarOperationResult.error('Failed to update car mileage');
+      }
+      
+      final savedCar = await _databaseHelper.getCarById(carId, userId);
+      
+      return CarOperationResult.success(
+        message: 'Car mileage updated successfully',
+        car: savedCar,
+      );
+      
+    } catch (e) {
+      return CarOperationResult.error('Failed to update car mileage: ${e.toString()}');
+    }
   }
 }
 

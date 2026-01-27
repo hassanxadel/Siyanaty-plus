@@ -1,10 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../shared/constants/app_theme.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../../../shared/utils/responsive_utils.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 import '../../../services/car_service.dart';
+import '../../../services/reminder_service.dart';
 import '../../../models/backup_car.dart';
+import '../../../models/backup_reminder.dart';
 import 'package:image_picker/image_picker.dart';
+import 'reminders_screen.dart';
 
 
 class MyCarsScreen extends StatefulWidget {
@@ -107,7 +111,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
   }
 
   void _showEditCarDialog(BackupCar car) {
-    Navigator.pop(context); // Close details dialog first
+    // Note: CarDetailsDialog already pops, so we don't need to pop again
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -122,22 +126,145 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
   }
 
   Future<void> _deleteCar(BackupCar car) async {
-    Navigator.pop(context); // Close details dialog first
+    // Note: CarDetailsDialog already pops, so we don't need to pop again
     
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Car'),
-        content: Text('Are you sure you want to delete ${car.year} ${car.brand} ${car.model}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Column(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.delete_outline,
+                color: Colors.red,
+                size: 40,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Delete Car',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete\n${car.brand} ${car.model} ${car.year}?',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).brightness == Brightness.dark 
+                ? AppTheme.lightBackground.withOpacity(0.8) 
+                : Colors.black87,
+            fontFamily: 'Orbitron',
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+        ),
+        actions: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Cancel button with gradient
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.darkAccentGreen,
+                        AppTheme.backgroundGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Delete button with red gradient
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFD32F2F), // Dark red
+                        Color(0xFFF44336), // Red
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.red.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Delete',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -181,7 +308,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
 
   Widget _buildHeaderWithBackground() {
     return Container(
-      height: 240,
+      height: 220,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -308,9 +435,10 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
-      body: Column(
+    return ScreenWithNavBar(
+      child: Scaffold(
+        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        body: Column(
         children: [
           // Header with gradient background
           _buildHeaderWithBackground(),
@@ -326,55 +454,62 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 0,
-        onTap: (int i) {},
-      ),
+    ),
     );
   }
 
   Widget _buildEmptyState() {
     final bool isSearching = _searchQuery.isNotEmpty;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 235,
-            height: 130,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.05),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(
-              isSearching ? Icons.search_off : const IconData(0xe800, fontFamily: 'MyFlutterApp'),
-              size: 75,
-              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.3),
+    return RefreshIndicator(
+      onRefresh: _loadCars,
+      color: AppTheme.primaryGreen,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: 400, // Give enough height for pull-to-refresh
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 235,
+                  height: 130,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    isSearching ? Icons.search_off : const IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                    size: 75,
+                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.3),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  isSearching ? 'No cars found' : 'No cars added yet',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.getThemeAwareTextColor(context),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isSearching 
+                      ? 'Try adjusting your search terms\nor clear the search to see all cars'
+                      : 'Add your first car to start tracking\nmaintenance and services',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+                  ),
+                ),
+                  const SizedBox(height: 32),
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-          Text(
-            isSearching ? 'No cars found' : 'No cars added yet',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.getThemeAwareTextColor(context),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            isSearching 
-                ? 'Try adjusting your search terms\nor clear the search to see all cars'
-                : 'Add your first car to start tracking\nmaintenance and services',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
-              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 32),
-        ],
+        ),
       ),
     );
   }
@@ -421,13 +556,17 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
   }
 
   Widget _buildCarsList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(20),
-      itemCount: _filteredCars.length,
-      itemBuilder: (context, index) {
-        final car = _filteredCars[index];
-        return _buildCarCard(car, index);
-      },
+    return RefreshIndicator(
+      onRefresh: _loadCars,
+      color: AppTheme.primaryGreen,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(20),
+        itemCount: _filteredCars.length,
+        itemBuilder: (context, index) {
+          final car = _filteredCars[index];
+          return _buildCarCard(car, index);
+        },
+      ),
     );
   }
 
@@ -435,17 +574,24 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
         ),
-      ),
-      child: InkWell(
-        onTap: () => _navigateToCarDetails(car),
         borderRadius: BorderRadius.circular(16),
-        child: Padding(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,8 +599,8 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
               Row(
                 children: [
                   Container(
-                    width: 90,
-                    height: 60,
+                    width: 120,
+                    height: 100,
                     decoration: BoxDecoration(
                       color: AppTheme.primaryGreen.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -464,8 +610,8 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                       child: car.imagePath != null && car.imagePath!.isNotEmpty
                           ? Image.file(
                               File(car.imagePath!),
-                              width: 90,
-                              height: 60,
+                              width: 80,
+                              height: 70,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) {
                                 return Container(
@@ -473,7 +619,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                                   child: const Icon(
                                     IconData(0xe800, fontFamily: 'MyFlutterApp'),
                                     color: AppTheme.primaryGreen,
-                                    size: 30,
+                                    size: 40,
                                   ),
                                 );
                               },
@@ -483,7 +629,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                        child: const Icon(
                          IconData(0xe800, fontFamily: 'MyFlutterApp'),
                          color: AppTheme.primaryGreen,
-                         size: 30,
+                         size: 40,
                               ),
                        ),
                      ),
@@ -494,36 +640,46 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${car.year} ${car.brand} ${car.model}',
+                          '${car.brand} ${car.model} ${car.year}',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontFamily: 'Orbitron',
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${car.mileage} km',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
-                            color: Colors.grey[600],
+                            color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryGreen.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppTheme.primaryGreen.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            car.licensePlate,
+                            style: const TextStyle(
+                              color: AppTheme.primaryGreen,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              fontFamily: 'Orbitron',
+                            ),
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryGreen.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      car.licensePlate,
-                      style: const TextStyle(
-                        color: AppTheme.primaryGreen,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
                     ),
                   ),
                 ],
@@ -547,56 +703,398 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
               
               const SizedBox(height: 16),
               
-              // Action buttons
+              // Action buttons with gradient backgrounds
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      
-                      onPressed: () => _navigateToCarDetails(car),
-                      icon: const Icon(Icons.visibility, size: 18),
-                      label: const Text('View'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.primaryGreen,
-                        side: const BorderSide(color: AppTheme.primaryGreen),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryGreen.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _navigateToCarDetails(car),
+                        label: const Text('View', style: TextStyle(fontFamily: 'Orbitron', fontSize: 14, fontWeight: FontWeight.w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                     Expanded(
-                     child: ElevatedButton(
-                       onPressed: () {
-                       // TODO: Add maintenance
-                       },
-                       style: ElevatedButton.styleFrom(
-                         backgroundColor: AppTheme.primaryGreen,
-                         foregroundColor: Colors.white,
-                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                       ),
-                       child: const Row(
-                         mainAxisAlignment: MainAxisAlignment.center,
-                         mainAxisSize: MainAxisSize.min,
-                         children: [
-                           Icon(
-                             IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                             size: 16,
-                             
-                           ),
-                           SizedBox(width: 35),
-                           Text(
-                             'Service',
-                             style: TextStyle(fontSize: 16),
-                           ),
-                         ],
-                       ),
-                     ),
-                   ),
-
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.darkAccentGreen,
+            AppTheme.backgroundGreen,
+          ],
+        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryGreen.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showCarReminders(car),
+                        label: const Text(
+                          'Service',
+                          style: TextStyle(fontSize: 14, fontFamily: 'Orbitron', fontWeight: FontWeight.w600),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
         ),
+    );
+  }
+
+  void _showCarReminders(BackupCar car) async {
+    final reminderService = ReminderService();
+    
+    showDialog(
+      context: context,
+      builder: (context) => FutureBuilder<ReminderOperationResult>(
+        future: reminderService.getRemindersByCar(car.id!),
+        builder: (context, snapshot) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            elevation: 20,
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 500),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF1A362A),
+                    Color(0xFF2E4032),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppTheme.primaryGreen.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryGreen.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.build_circle,
+                          color: AppTheme.primaryGreen,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Service Reminders',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Orbitron',
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${car.brand} ${car.model}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white.withOpacity(0.7),
+                                fontFamily: 'Orbitron',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Content
+                  Flexible(
+                    child: snapshot.connectionState == ConnectionState.waiting
+                        ? const Center(
+                            child: CircularProgressIndicator(color: AppTheme.primaryGreen),
+                          )
+                        : snapshot.hasError || !snapshot.hasData || snapshot.data!.reminders == null || snapshot.data!.reminders!.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.notifications_none,
+                                      size: 48,
+                                      color: Colors.white.withOpacity(0.5),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'No reminders for this car',
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.7),
+                                        fontFamily: 'Orbitron',
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Add service reminders to keep track\nof maintenance schedules',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.5),
+                                        fontFamily: 'Orbitron',
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: snapshot.data!.reminders!.length > 5 
+                                    ? 5 
+                                    : snapshot.data!.reminders!.length,
+                                itemBuilder: (context, index) {
+                                  final reminder = snapshot.data!.reminders![index];
+                                  return _buildReminderItem(reminder);
+                                },
+                              ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // View All Button
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SmartRemindersScreen(),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.2),
+                            Colors.white.withOpacity(0.1),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.5),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.white.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'View All Reminders',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Orbitron',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildReminderItem(BackupReminder reminder) {
+    Color statusColor;
+    IconData statusIcon;
+    
+    switch (reminder.status) {
+      case ReminderStatus.overdue:
+        statusColor = Colors.red;
+        statusIcon = Icons.warning;
+        break;
+      case ReminderStatus.upcoming:
+        statusColor = Colors.orange;
+        statusIcon = Icons.schedule;
+        break;
+      case ReminderStatus.completed:
+        statusColor = Colors.green;
+        statusIcon = Icons.check_circle;
+        break;
+      default:
+        statusColor = Colors.grey;
+        statusIcon = Icons.info;
+    }
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: statusColor.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              statusIcon,
+              color: statusColor,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reminder.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    fontFamily: 'Orbitron',
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  reminder.targetDate != null
+                      ? '${reminder.targetDate!.day}/${reminder.targetDate!.month}/${reminder.targetDate!.year}'
+                      : reminder.targetMileage != null
+                          ? '${reminder.targetMileage} km'
+                          : 'No date set',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 11,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              reminder.status.name.toUpperCase(),
+              style: TextStyle(
+                color: statusColor,
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -606,9 +1104,9 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
         children: [
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
             fontSize: 12,
-              color: Colors.grey[600],
+              color: Colors.white70,
             fontWeight: FontWeight.w500,
             ),
             textAlign: TextAlign.center,
@@ -619,6 +1117,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
           textAlign: TextAlign.center,
           maxLines: 1,
@@ -656,167 +1155,285 @@ class CarDetailsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header with car image
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24))),
+      elevation: 20,
+      child: SingleChildScrollView(
+        child: Container(
+          padding: EdgeInsets.all(context.r(20)),
+          constraints: BoxConstraints(
+            maxWidth: context.r(480),
+            maxHeight: context.screenHeight * 0.95,
+          ),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF1A362A), // Dark green
+                Color(0xFF2E4032), // Slightly lighter dark green
+              ],
+            ),
+            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24)),
+            border: Border.all(
+              color: AppTheme.primaryGreen.withOpacity(0.3),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            // Header with close button
             Row(
               children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryGreen.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: car.imagePath != null && car.imagePath!.isNotEmpty
-                        ? Image.file(
-                            File(car.imagePath!),
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(
-                                IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                                color: AppTheme.primaryGreen,
-                                size: 40,
-                              );
-                            },
-                          )
-                        : const Icon(
-                            IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                            color: AppTheme.primaryGreen,
-                            size: 40,
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 16),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Text(
-                        '${car.year} ${car.brand} ${car.model}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Orbitron',
+                      Container(
+                        width: 80,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryGreen.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: car.imagePath != null && car.imagePath!.isNotEmpty
+                              ? Image.file(
+                                  File(car.imagePath!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                      color: AppTheme.primaryGreen,
+                                      size: 24,
+                                    );
+                                  },
+                                )
+                              : const Icon(
+                                  IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                  color: AppTheme.primaryGreen,
+                                  size: 24,
+                                ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryGreen.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          car.licensePlate,
-                          style: const TextStyle(
-                            color: AppTheme.primaryGreen,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                               '${car.brand} ${car.model} ${car.year}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Orbitron',
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                      }
+                    },
+                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             
-            // Car details
-            _buildDetailRow('Mileage', '${car.mileage} km'),
-            _buildDetailRow('Color', car.color),
-            _buildDetailRow('Fuel Type', car.fuelType),
-            _buildDetailRow('Engine', car.engineCC + (car.turbo ? ' Turbo' : '')),
-            _buildDetailRow('VIN', car.vin),
-            _buildDetailRow('Added', _formatDate(car.createdAt)),
-            if (car.updatedAt != car.createdAt)
-              _buildDetailRow('Last Updated', _formatDate(car.updatedAt)),
+            // Details section with modern styling
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  _buildModernDetailRow('Mileage', '${car.mileage} km', Icons.speed, Colors.blue),
+                  _buildModernDetailRow('Color', car.color, Icons.color_lens, Colors.purple),
+                  _buildModernDetailRow('Fuel Type', car.fuelType, Icons.local_gas_station, Colors.orange),
+                  _buildModernDetailRow('Engine', car.engineCC + (car.turbo ? ' Turbo' : ''), Icons.build, Colors.red),
+                  _buildModernDetailRow('VIN', car.vin, Icons.qr_code, Colors.cyan),
+                  _buildModernDetailRow('Added', _formatDate(car.createdAt), Icons.calendar_today, Colors.green),
+                  if (car.updatedAt != car.createdAt)
+                    _buildModernDetailRow('Last Updated', _formatDate(car.updatedAt), Icons.update, Colors.teal),
+                ],
+              ),
+            ),
             
             const SizedBox(height: 24),
             
-            // Action buttons
-            Row(
+            // Modern action buttons
+            Column(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('Edit'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryGreen,
-                      side: const BorderSide(color: AppTheme.primaryGreen),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                // Top row - Edit and Delete
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildModernButton(
+                        icon: Icons.edit_rounded,
+                        label: 'Edit',
+                        color: const Color(0xFF2196F3),
+                        onPressed: () {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            onEdit();
+                          }
+                        },
+                      ),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildModernButton(
+                        icon: Icons.delete_rounded,
+                        label: 'Delete',
+                        color: const Color.fromARGB(255, 219, 25, 25),
+                        onPressed: () {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            onDelete();
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              
+              ],
+            ),
+          ],
+        ), // Column
+      ), // Container
+      ), // SingleChildScrollView
+    ); // Dialog
+  }
+
+  Widget _buildModernDetailRow(String label, String value, IconData icon, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[400],
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onDelete,
-                    icon: const Icon(Icons.delete, size: 18),
-                    label: const Text('Delete'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
+                    const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryGreen,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: const Text('Close'),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
+  Widget _buildModernButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.8),
+            color,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -866,6 +1483,21 @@ class _EditCarFormState extends State<EditCarForm> {
     license = widget.car.licensePlate;
     vin = widget.car.vin;
     imagePath = widget.car.imagePath ?? '';
+    
+    // Check if the image file actually exists
+    _checkImageExists();
+  }
+  
+  Future<void> _checkImageExists() async {
+    if (imagePath.isNotEmpty) {
+      final exists = await File(imagePath).exists();
+      if (mounted && !exists) {
+        setState(() {
+          // Clear the path if image doesn't exist (restored from cloud without local file)
+          imagePath = '';
+        });
+      }
+    }
   }
 
   @override
@@ -913,7 +1545,7 @@ class _EditCarFormState extends State<EditCarForm> {
                 Expanded(child: _field(label: 'Mileage (optional)', initialValue: mileage, keyboard: TextInputType.number, onChanged: (v) => mileage = v)),
               ],
             ),
-            const SizedBox(height: 12),
+                  const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(child: _field(label: 'Color (optional)', initialValue: color, onChanged: (v) => color = v)),
@@ -963,7 +1595,7 @@ class _EditCarFormState extends State<EditCarForm> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton.icon(
+                ElevatedButton(
                   onPressed: () async {
                     final picker = ImagePicker();
                     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
@@ -973,17 +1605,50 @@ class _EditCarFormState extends State<EditCarForm> {
                       });
                     }
                   },
-                  icon: const Icon(Icons.photo),
-                  label: const Text('Pick Image', style: TextStyle(fontFamily: 'Orbitron')),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryGreen,
+                    backgroundColor: Colors.transparent,
                     foregroundColor: Colors.white,
+                    shadowColor: Colors.transparent,
+                  ),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.darkAccentGreen,
+                          AppTheme.backgroundGreen,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.photo, size: 20, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('Pick Image', style: TextStyle(fontFamily: 'Orbitron', fontSize: 16)),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
             SizedBox(
+              child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.darkAccentGreen,
+                        AppTheme.backgroundGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                  ),
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _isLoading ? null : () async {
@@ -1064,21 +1729,22 @@ class _EditCarFormState extends State<EditCarForm> {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryGreen,
+                  backgroundColor: Colors.transparent,
                   foregroundColor: Colors.white,
+                  shadowColor: Colors.transparent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: _isLoading 
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text('Update Car', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
+                  child: _isLoading 
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text('Update Car', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -1139,18 +1805,26 @@ class AddCarForm extends StatefulWidget {
 
 class _AddCarFormState extends State<AddCarForm> {
   final CarService _carService = CarService();
-        String make = '';
-        String model = '';
-        String year = '';
-        String mileage = '';
-        String color = '';
-        String fuelType = '';
-        String engineCc = '';
-        bool turbo = false;
-        String license = '';
-        String vin = '';
-        String imagePath = '';
+  String make = '';
+  String model = '';
+  String year = '';
+  String mileage = '';
+  String color = '';
+  String fuelType = '';
+  String engineCc = '';
+  bool turbo = false;
+  String license = '';
+  String vin = '';
+  String imagePath = '';
   bool _isLoading = false;
+  
+  // Error states for inline validation
+  String? _makeError;
+  String? _modelError;
+  String? _yearError;
+  String? _mileageError;
+  String? _vinError;
+  String? _licensePlateError;
 
   @override
   Widget build(BuildContext context) {
@@ -1177,24 +1851,54 @@ class _AddCarFormState extends State<AddCarForm> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
                 const Text('Add New Car', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18)),
                 const SizedBox(height: 8),
                 Text('* Required fields', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _field(label: 'Brand*', onChanged: (v) => make = v)),
+                    Expanded(child: _field(
+                      label: 'Brand*', 
+                      onChanged: (v) {
+                        make = v;
+                        if (_makeError != null) setState(() => _makeError = null);
+                      },
+                      errorText: _makeError,
+                    )),
                     const SizedBox(width: 12),
-                    Expanded(child: _field(label: 'Model*', onChanged: (v) => model = v)),
+                    Expanded(child: _field(
+                      label: 'Model*', 
+                      onChanged: (v) {
+                        model = v;
+                        if (_modelError != null) setState(() => _modelError = null);
+                      },
+                      errorText: _modelError,
+                    )),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _field(label: 'Year (optional)', keyboard: TextInputType.number, onChanged: (v) => year = v)),
+                    Expanded(child: _field(
+                      label: 'Year (optional)', 
+                      keyboard: TextInputType.number, 
+                      onChanged: (v) {
+                        year = v;
+                        if (_yearError != null) setState(() => _yearError = null);
+                      },
+                      errorText: _yearError,
+                    )),
                     const SizedBox(width: 12),
-                    Expanded(child: _field(label: 'Mileage (optional)', keyboard: TextInputType.number, onChanged: (v) => mileage = v)),
+                    Expanded(child: _field(
+                      label: 'Mileage (optional)', 
+                      keyboard: TextInputType.number, 
+                      onChanged: (v) {
+                        mileage = v;
+                        if (_mileageError != null) setState(() => _mileageError = null);
+                      },
+                      errorText: _mileageError,
+                    )),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1230,9 +1934,23 @@ class _AddCarFormState extends State<AddCarForm> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _field(label: 'License Plate (optional)', onChanged: (v) => license = v)),
+                    Expanded(child: _field(
+                      label: 'License Plate (optional)', 
+                      onChanged: (v) {
+                        license = v;
+                        if (_licensePlateError != null) setState(() => _licensePlateError = null);
+                      },
+                      errorText: _licensePlateError,
+                    )),
                     const SizedBox(width: 12),
-                    Expanded(child: _field(label: 'VIN (optional)', onChanged: (v) => vin = v)),
+                    Expanded(child: _field(
+                      label: 'VIN (optional)', 
+                      onChanged: (v) {
+                        vin = v;
+                        if (_vinError != null) setState(() => _vinError = null);
+                      },
+                      errorText: _vinError,
+                    )),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1247,7 +1965,7 @@ class _AddCarFormState extends State<AddCarForm> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    ElevatedButton.icon(
+                    ElevatedButton(
                       onPressed: () async {
                         final picker = ImagePicker();
                         final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
@@ -1257,62 +1975,114 @@ class _AddCarFormState extends State<AddCarForm> {
                           });
                         }
                       },
-                      icon: const Icon(Icons.photo),
-                      label: const Text('Pick Image', style: TextStyle(fontFamily: 'Orbitron')),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryGreen,
+                        backgroundColor: Colors.transparent,
                         foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                      ),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppTheme.darkAccentGreen,
+                              AppTheme.backgroundGreen,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.all(Radius.circular(8)),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.photo, size: 20, color: Colors.white),
+                            SizedBox(width: 8),
+                            Text('Pick Image', style: TextStyle(fontFamily: 'Orbitron', fontSize: 16)),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
+                  ], 
                 ),
                 const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
+                SizedBox(  
                   child: Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppTheme.primaryGreen,
-                          AppTheme.darkAccentGreen,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryGreen.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.darkAccentGreen,
+                            AppTheme.backgroundGreen,
+                          ],
                         ),
-                      ],
-                    ),
-                    child: ElevatedButton(
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                  width: double.infinity,
+                  child: ElevatedButton(
                     onPressed: _isLoading ? null : () async {
+                      // Clear previous errors
+                      setState(() {
+                        _makeError = null;
+                        _modelError = null;
+                        _yearError = null;
+                        _mileageError = null;
+                        _vinError = null;
+                        _licensePlateError = null;
+                      });
+                      
+                      // Validate fields
+                      bool hasError = false;
+                      
+                      if (make.isEmpty) {
+                        setState(() => _makeError = 'Brand is required');
+                        hasError = true;
+                      }
+                      
+                      if (model.isEmpty) {
+                        setState(() => _modelError = 'Model is required');
+                        hasError = true;
+                      }
+                      
+                      // Validate year format if provided
+                      if (year.isNotEmpty) {
+                        final yearInt = int.tryParse(year);
+                        if (yearInt == null || yearInt < 1900 || yearInt > DateTime.now().year + 1) {
+                          setState(() => _yearError = 'Invalid year (1900-${DateTime.now().year + 1})');
+                          hasError = true;
+                        }
+                      }
+                      
+                      // Validate mileage format if provided
+                      if (mileage.isNotEmpty) {
+                        final mileageInt = int.tryParse(mileage);
+                        if (mileageInt == null || mileageInt < 0) {
+                          setState(() => _mileageError = 'Invalid mileage');
+                          hasError = true;
+                        }
+                      }
+                      
+                      // Validate VIN format if provided (must be 17 characters)
+                      if (vin.isNotEmpty && vin.length != 17) {
+                        setState(() => _vinError = 'VIN must be exactly 17 characters');
+                        hasError = true;
+                      }
+                      
+                      if (hasError) {
+                        return; // Don't close form, just show errors
+                      }
+                      
                       setState(() {
                         _isLoading = true;
                       });
-                      // Only require brand and model as minimum
-                      if (make.isEmpty || model.isEmpty) {
-                        setState(() {
-                          _isLoading = false;
-                        });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please fill in at least Brand and Model'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
-                      }
                       
                       try {
                         // Save to backup system using CarService
                         final result = await _carService.addCar(
                           brand: make,
-                        model: model,
-                        year: int.tryParse(year) ?? DateTime.now().year,
+                          model: model,
+                          year: int.tryParse(year) ?? DateTime.now().year,
                           mileage: int.tryParse(mileage) ?? 0,
                           color: color.isEmpty ? 'Not specified' : color,
                           fuelType: fuelType.isEmpty ? 'Not specified' : fuelType,
@@ -1323,9 +2093,8 @@ class _AddCarFormState extends State<AddCarForm> {
                           imagePath: imagePath.isEmpty ? null : imagePath,
                         );
                         
-                        Navigator.pop(context);
-                        
                         if (result.isSuccess) {
+                          Navigator.pop(context);
                           // Call the callback to reload cars list
                           widget.onCarAdded();
                           
@@ -1338,18 +2107,29 @@ class _AddCarFormState extends State<AddCarForm> {
                             );
                           }
                         } else {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(result.message),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
+                          // Check for specific field errors from the service
+                          if (result.message.toLowerCase().contains('vin')) {
+                            setState(() => _vinError = result.message);
+                          } else if (result.message.toLowerCase().contains('license')) {
+                            setState(() => _licensePlateError = result.message);
+                          } else if (result.message.toLowerCase().contains('year')) {
+                            setState(() => _yearError = result.message);
+                          } else if (result.message.toLowerCase().contains('mileage')) {
+                            setState(() => _mileageError = result.message);
+                          } else {
+                            // Generic error - show snackbar but don't close
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(result.message),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
                           }
                         }
                       } catch (e) {
                         if (mounted) {
-                          Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Error adding car: $e'),
@@ -1359,20 +2139,22 @@ class _AddCarFormState extends State<AddCarForm> {
                         }
                       } finally {
                         if (mounted) {
-                      setState(() {
+                          setState(() {
                             _isLoading = false;
-                      });
+                          });
                         }
                       }
                     },
+                    
                     style: ElevatedButton.styleFrom(
+                      
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: _isLoading 
+                   
+                      child: _isLoading 
                       ? const SizedBox(
                           height: 20,
                           width: 20,
@@ -1385,7 +2167,7 @@ class _AddCarFormState extends State<AddCarForm> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
               ],
             ),
           ),
@@ -1396,16 +2178,19 @@ class _AddCarFormState extends State<AddCarForm> {
     required String label,
     TextInputType? keyboard,
     required Function(String) onChanged,
+    String? errorText,
   }) {
+    final hasError = errorText != null && errorText.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Orbitron',
             fontSize: 12,
             fontWeight: FontWeight.w600,
+            color: hasError ? Colors.red : null,
           ),
         ),
         const SizedBox(height: 4),
@@ -1416,15 +2201,36 @@ class _AddCarFormState extends State<AddCarForm> {
           decoration: InputDecoration(
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+              borderSide: BorderSide(color: hasError ? Colors.red : AppTheme.primaryGreen),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: hasError ? Colors.red : AppTheme.primaryGreen.withOpacity(0.5),
+                width: hasError ? 2 : 1,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+              borderSide: BorderSide(
+                color: hasError ? Colors.red : AppTheme.primaryGreen, 
+                width: 2,
+              ),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
         ),
+        if (hasError) ...[
+            const SizedBox(height: 4),
+          Text(
+            errorText,
+            style: const TextStyle(
+              fontFamily: 'Orbitron',
+              fontSize: 10,
+              color: Colors.red,
+            ),
+          ),
+        ],
       ],
     );
   }

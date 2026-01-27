@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/backup_car.dart';
@@ -34,7 +35,7 @@ class FirebaseBackupService {
         .collection(carsCollection);
   }
   
-  /// Backup all cars to Firebase
+  /// Backup all cars to Firebase (prevents duplicates by checking VIN)
   Future<BackupResult> backupAllCarsToFirebase() async {
     try {
       if (!isUserAuthenticated) {
@@ -51,7 +52,23 @@ class FirebaseBackupService {
         );
       }
       
+      // Get existing cloud cars to check for duplicates
+      final existingCloudCars = await _userCarsCollection.get();
+      final existingVins = <String>{};
+      final existingLocalIds = <int>{};
+      
+      for (final doc in existingCloudCars.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['vin'] != null) {
+          existingVins.add(data['vin'] as String);
+        }
+        if (data['local_id'] != null) {
+          existingLocalIds.add(data['local_id'] as int);
+        }
+      }
+      
       int successCount = 0;
+      int skippedCount = 0;
       int failureCount = 0;
       List<String> errors = [];
       
@@ -60,6 +77,12 @@ class FirebaseBackupService {
       
       for (BackupCar car in cars) {
         try {
+          // Skip if car already exists in cloud (by VIN or local_id)
+          if (existingVins.contains(car.vin) || existingLocalIds.contains(car.id)) {
+            skippedCount++;
+            continue;
+          }
+          
           // Prepare car data for Firestore (images stored locally only)
           final carData = car.toFirebaseMap();
           carData['local_id'] = car.id; // Keep reference to local ID
@@ -76,20 +99,25 @@ class FirebaseBackupService {
         }
       }
       
-      // Commit batch
-      await batch.commit();
+      // Commit batch if there are new cars to backup
+      if (successCount > 0) {
+        await batch.commit();
+      }
       
       // Update backup metadata
       await _updateBackupMetadata(successCount, failureCount);
       
       if (failureCount == 0) {
+        final message = skippedCount > 0
+            ? '$successCount cars backed up, $skippedCount already in cloud'
+            : 'All cars backed up successfully';
         return BackupResult.success(
-          message: 'All cars backed up successfully',
+          message: message,
           carsProcessed: successCount,
         );
       } else {
         return BackupResult.partialSuccess(
-          message: '$successCount cars backed up, $failureCount failed',
+          message: '$successCount cars backed up, $failureCount failed, $skippedCount skipped',
           carsProcessed: successCount,
           errors: errors,
         );
@@ -154,10 +182,30 @@ class FirebaseBackupService {
           // Create car from Firebase data
           final car = BackupCar.fromFirebaseMap(data);
           
+          // Check if the image file exists locally, if not clear the path
+          String? validImagePath = car.imagePath;
+          if (validImagePath != null && validImagePath.isNotEmpty) {
+            final imageFile = File(validImagePath);
+            if (!await imageFile.exists()) {
+              // Image file doesn't exist locally, clear the path
+              validImagePath = null;
+            }
+          }
+          
           // Check if car already exists locally (by VIN)
           final existingCar = await _databaseHelper.getCarByVin(car.vin, _currentUserId!);
           if (existingCar != null) {
             // Update existing car
+            // Keep existing local image if cloud image doesn't exist locally
+            // Check if existing car's image still exists
+            String? existingImagePath = existingCar.imagePath;
+            if (existingImagePath != null && existingImagePath.isNotEmpty) {
+              final existingImageFile = File(existingImagePath);
+              if (!await existingImageFile.exists()) {
+                existingImagePath = null;
+              }
+            }
+            final finalImagePath = validImagePath ?? existingImagePath;
             final updatedCar = existingCar.copyWith(
               brand: car.brand,
               model: car.model,
@@ -168,13 +216,18 @@ class FirebaseBackupService {
               engineCC: car.engineCC,
               turbo: car.turbo,
               licensePlate: car.licensePlate,
-              imagePath: car.imagePath,
+              imagePath: finalImagePath,
+              clearImagePath: finalImagePath == null,
               updatedAt: DateTime.now(),
             );
             await _databaseHelper.updateCar(updatedCar);
           } else {
-            // Insert new car
-            await _databaseHelper.insertCar(car);
+            // Insert new car with validated image path
+            final carToInsert = car.copyWith(
+              imagePath: validImagePath,
+              clearImagePath: validImagePath == null,
+            );
+            await _databaseHelper.insertCar(carToInsert);
           }
           
           successCount++;

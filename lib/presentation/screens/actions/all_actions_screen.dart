@@ -3,15 +3,15 @@ import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../services/vin_lookup_screen.dart';
 import '../services/ocr_scanner_screen.dart';
-import '../services/barcode_scanner_screen.dart';
+import '../health/car_health_dashboard_screen.dart';
 import '../services/voice_notes_screen.dart';
 import '../services/mileage_track_screen.dart';
 import '../services/reminders_screen.dart';
-import '../services/obd_screen.dart';
 import '../services/services_screen.dart';
 import '../services/cars_screen.dart';
 import '../services/maintenance_screen.dart';
-import '../../widgets/bottom_nav_bar.dart';
+import '../services/obd_screen.dart';
+import '../../widgets/screen_with_nav_bar.dart';
 
 class AllActionsScreen extends StatelessWidget {
   const AllActionsScreen({super.key});
@@ -21,7 +21,7 @@ class AllActionsScreen extends StatelessWidget {
     final actions = [
       {'label': 'VIN Lookup', 'subtitle': 'Maintenance Recommendations', 'icon': Icons.search, 'color': AppTheme.primaryGreen},
       {'label': 'OCR Scanner', 'subtitle': 'Extract Data from Service Reports', 'icon': Icons.document_scanner, 'color': const Color(0xFF8E44AD)},
-      {'label': 'Barcode Scanner', 'subtitle': 'Part Details & Product Information', 'icon': Icons.qr_code_scanner, 'color': AppTheme.darkAccentGreen},
+      {'label': 'Car Health Dashboard', 'subtitle': 'Health Score, Analytics & Insights', 'icon': Icons.health_and_safety, 'color': AppTheme.darkAccentGreen},
       {'label': 'Voice Notes', 'subtitle': 'Quick Maintenance Notes', 'icon': Icons.mic, 'color': const Color(0xFF7B2CBF)},
       {'label': 'Mileage Track', 'subtitle': 'Tracking & Predictive Alerts', 'icon': Icons.track_changes, 'color': const Color(0xFFFF6B35)},
       {'label': 'Maintenance', 'subtitle': 'Service History & Records', 'icon': Icons.home_repair_service_rounded, 'color': const Color(0xFF8B5CF6)},
@@ -30,8 +30,9 @@ class AllActionsScreen extends StatelessWidget {
       {'label': 'Service Reminders', 'subtitle': 'Maintenance Logs & Reminders', 'icon': Icons.schedule, 'color': const Color(0xFFF59E0B)},
     ];
 
-    return Scaffold(
-      body: Column(
+    return ScreenWithNavBar(
+      child: Scaffold(
+        body: Column(
         children: [
           // Header with gradient background
           _buildHeader(context),
@@ -63,7 +64,7 @@ class AllActionsScreen extends StatelessWidget {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavBar(currentIndex: 0, onTap: (i) {}),
+    ),
     );
   }
 
@@ -103,14 +104,16 @@ class AllActionsScreen extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   const Text(
-                    'All Actions',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
+                          'All Actions',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontFamily: 'Orbitron',
+
+                          ),
+                        ),
                 ],
               ),
               
@@ -146,12 +149,22 @@ class AllActionsScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppTheme.darkAccentGreen.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: color.withOpacity(0.3),
-            width: 1,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
+            ],
           ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.darkAccentGreen.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -173,12 +186,10 @@ class AllActionsScreen extends StatelessWidget {
             Text(
               label,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppTheme.lightBackground
-                    : Colors.black,
+                color: Colors.white,
                 fontFamily: 'Orbitron',
               ),
               maxLines: 1,
@@ -189,11 +200,9 @@ class AllActionsScreen extends StatelessWidget {
               child: Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 8,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? AppTheme.lightBackground.withOpacity(0.8)
-                      : Colors.black,
+                  color: Colors.white70,
                   fontFamily: 'Orbitron',
                 ),
                 maxLines: 2,
@@ -221,10 +230,10 @@ class AllActionsScreen extends StatelessWidget {
           MaterialPageRoute(builder: (context) => const OcrScannerScreen()),
         );
         break;
-      case 'barcode scanner':
+      case 'car health dashboard':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+          MaterialPageRoute(builder: (context) => const CarHealthDashboardScreen()),
         );
         break;
       case 'voice notes':
