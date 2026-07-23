@@ -634,9 +634,23 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   }
 
   void _navigateToNextScreen() {
-    // Authentication successful - just pop (for non-MFA flows)
-    if (mounted) {
+    if (!mounted) return;
+
+    // SecurityWrapper renders this screen as a ROOT route, so there is
+    // usually nothing to pop — popping the last route leaves an empty
+    // navigator, which shows as a black screen. Ask the wrapper to
+    // re-evaluate auth state instead (it decides PIN setup vs. home), and
+    // only pop when this screen really was pushed on top of something.
+    //
+    // This must not rely on Firebase's authStateChanges alone: on this
+    // plugin version `user.reload()` throws a PigeonUserInfo cast error,
+    // so the state change never fires and the UI would never advance.
+    widget.onAuthenticationComplete?.call();
+
+    if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
+    } else {
+      setState(() => _isLoading = false);
     }
   }
 

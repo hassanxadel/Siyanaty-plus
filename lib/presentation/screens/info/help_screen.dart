@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../services/data_export_service.dart';
+import '../../../shared/constants/app_constants.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../widgets/app_dialog.dart';
 
 class HelpScreen extends StatelessWidget {
   const HelpScreen({super.key});
@@ -71,16 +77,26 @@ class HelpScreen extends StatelessWidget {
                       size: 28,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  const Text(
-                    'Help & Support',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
+                  const Expanded(
+                    child: Text(
+                      'Help & Support',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 48),
                 ],
               ),
               const SizedBox(height: 16),
@@ -116,13 +132,11 @@ class HelpScreen extends StatelessWidget {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.45),
+          width: 1,
+        ),
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,13 +280,11 @@ class HelpScreen extends StatelessWidget {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.45),
+          width: 1,
+        ),
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,13 +384,11 @@ class HelpScreen extends StatelessWidget {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.45),
+          width: 1,
+        ),
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,198 +413,168 @@ class HelpScreen extends StatelessWidget {
           ),
               const SizedBox(height: 16),
           
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.backgroundGreen,
-                        AppTheme.primaryGreen,
-                        AppTheme.darkAccentGreen,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryGreen.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      // Open email
-                    },
-                    icon: const Icon(Icons.email, size: 18, color: Colors.white),
-                    label: const Text(
-                      'Email',
-                      style: TextStyle(fontFamily: 'Orbitron', fontSize: 14, color: Colors.white),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.backgroundGreen,
-                        AppTheme.primaryGreen,
-                        AppTheme.darkAccentGreen,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryGreen.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      // Open chat or phone
-                    },
-                    icon: const Icon(Icons.chat, size: 18, color: Colors.white),
-                    label: const Text(
-                      'Chat',
-                      style: TextStyle(fontFamily: 'Orbitron', fontSize: 14, color: Colors.white),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          // Email support — opens the phone's mail app with a draft to the
+          // support address. (The "Chat" button was removed — there is no
+          // chat backend.)
+          SizedBox(
+            width: double.infinity,
+            child: _buildFadedPill(
+              label: 'Email Support',
+              icon: Icons.email_outlined,
+              accent: AppTheme.secondaryGreen,
+              onTap: () => _emailSupport(context),
+            ),
           ),
         ],
       ),
     );
   }
 
+  /// Faded pill button — tinted fill, glowing rim, accent-coloured label.
+  Widget _buildFadedPill({
+    required String label,
+    required IconData icon,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: AppTheme.glowButtonDecoration(accent: accent),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: accent),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: accent,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _emailSupport(BuildContext context) async {
+    // A mailto: URI opens the user's default mail app with the fields
+    // pre-filled; the user reviews and sends it themselves.
+    final uri = Uri(
+      scheme: 'mailto',
+      path: AppConstants.supportEmail,
+      query: 'subject=${Uri.encodeComponent('Siyanaty+ Support Request')}',
+    );
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && context.mounted) {
+      AppSnackbar.show(
+        context,
+        const SnackBar(
+          content: Text(
+            'No email app found. Reach us at ${AppConstants.supportEmail}',
+            style: TextStyle(fontFamily: 'Orbitron'),
+          ),
+          backgroundColor: AppTheme.primaryGreen,
+        ),
+      );
+    }
+  }
+
   void _showGettingStarted(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text(
-          'Getting Started',
-          style: TextStyle(color: Colors.white, fontFamily: 'Orbitron', fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          '1. Add your car details in the Home screen\n'
+    AppDialog.message(
+      context,
+      title: 'Getting Started',
+      message: '1. Add your car details in the Home screen\n'
           '2. Set up maintenance reminders\n'
           '3. Connect your OBD device (optional)\n'
           '4. Start tracking your car\'s health!\n\n'
           'Need more help? Check our full tutorial in the app.',
-          style: TextStyle(color: Colors.white70, fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Got it!',
-                style: TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
-              ),
-            ),
-          ),
-        ],
-      ),
+      icon: Icons.rocket_launch_outlined,
+      buttonLabel: 'Got it!',
     );
   }
 
-  void _showResetDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text(
-          'Reset Account Data',
-          style: TextStyle(color: Colors.red, fontFamily: 'Orbitron', fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
+  Future<void> _showResetDialog(BuildContext context) async {
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Reset Account Data',
+      message:
           'This will permanently delete all your cars, maintenance records, and settings. This action cannot be undone.',
-          style: TextStyle(color: Colors.white70, fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.red,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // Implement reset logic
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Account data reset successfully', style: TextStyle(fontFamily: 'Orbitron')),
-                    backgroundColor: AppTheme.primaryGreen,
-                  ),
-                );
-              },
-              child: const Text(
-                'Reset',
-                style: TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
-              ),
-            ),
-          ),
-        ],
-      ),
+      icon: Icons.restart_alt,
+      confirmLabel: 'Reset',
+      isDestructive: true,
     );
-  }
 
-  void _exportData(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    if (confirmed != true || !context.mounted) return;
+
+    // Implement reset logic
+    AppSnackbar.show(context,
       const SnackBar(
-        content: Text('Exporting your data...', style: TextStyle(fontFamily: 'Orbitron')),
+        content: Text('Account data reset successfully', style: TextStyle(fontFamily: 'Orbitron')),
         backgroundColor: AppTheme.primaryGreen,
       ),
     );
-    // Implement export logic
+  }
+
+  Future<void> _exportData(BuildContext context) async {
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Export Data',
+      message:
+          'This gathers your cars, maintenance records, reminders and mileage '
+          'into a file you can save or share, so you have your own copy of '
+          'everything stored in the app.\n\n'
+          'Do you want to export your data now?',
+      icon: Icons.download_outlined,
+      confirmLabel: 'Export',
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    AppSnackbar.show(context,
+      const SnackBar(
+        content: Text('Preparing your data export...', style: TextStyle(fontFamily: 'Orbitron')),
+        backgroundColor: AppTheme.primaryGreen,
+      ),
+    );
+
+    final result = await DataExportService.instance.exportToFile();
+    if (!context.mounted) return;
+
+    if (!result.isSuccess || result.file == null) {
+      AppSnackbar.show(context,
+        SnackBar(
+          content: Text(result.message, style: const TextStyle(fontFamily: 'Orbitron')),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
+    // Hand the file to the OS share sheet — from there the user can save it to
+    // Files/Drive or send it through any app.
+    await Share.shareXFiles(
+      [XFile(result.file!.path)],
+      subject: 'Siyanaty+ data export',
+      text: 'My Siyanaty+ data export.',
+    );
   }
 }
 

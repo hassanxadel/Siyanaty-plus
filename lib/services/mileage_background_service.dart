@@ -66,69 +66,113 @@ class MileageBackgroundService {
       // Update mileage for each car
       final carService = CarService();
       final now = DateTime.now();
-      
+
       for (final carId in entriesByCar.keys) {
         final carEntries = entriesByCar[carId]!;
         double totalMileageToAdd = 0;
-        
+
         for (final entry in carEntries) {
-          // Calculate mileage to add based on frequency
-          switch (entry.tripFrequency) {
-            case TripFrequency.oneTime:
-              // One-time trips were already added when created
-              break;
-              
-            case TripFrequency.daily:
-              // For daily trips, we need to check if we've already counted today
-              // We'll add the daily mileage
-              final daysSinceCreation = now.difference(entry.createdAt).inDays;
-              if (daysSinceCreation >= 0) {
-                // Add today's mileage
-                totalMileageToAdd += entry.mileage;
-              }
-              break;
-              
-            case TripFrequency.weekly:
-              // Check if it's the right day of the week
-              final daysSinceCreation = now.difference(entry.createdAt).inDays;
-              final creationDayOfWeek = entry.createdAt.weekday;
-              final currentDayOfWeek = now.weekday;
-              
-              // If it's the same day of week as creation, add mileage
-              if (currentDayOfWeek == creationDayOfWeek && daysSinceCreation >= 7) {
-                totalMileageToAdd += entry.mileage;
-              }
-              break;
-              
-            case TripFrequency.monthly:
-              // Check if it's the right day of the month
-              final creationDay = entry.createdAt.day;
-              final currentDay = now.day;
-              
-              // If it's the same day of month as creation, add mileage
-              if (currentDay == creationDay && 
-                  now.month != entry.updatedAt.month) {
-                totalMileageToAdd += entry.mileage;
-              }
-              break;
+          if (entry.tripFrequency == TripFrequency.oneTime || entry.id == null) {
+            // One-time trips were already added when created.
+            continue;
           }
+
+          // Anchor from the last time this entry was credited, or its creation
+          // if it never has been. Counting whole ELAPSED periods (rather than
+          // "is today the right day?") makes the update both idempotent —
+          // running twice in a day credits nothing the second time — and
+          // catch-up safe: if the task didn't run for 3 days, 3 days are
+          // credited now. This is the fix for the daily double-count/miss,
+          // the weekly "only fires on the exact weekday" gap, and the monthly
+          // day-of-month gap.
+          final anchor = entry.lastAppliedAt ?? entry.createdAt;
+          final periods = _elapsedPeriods(entry.tripFrequency, anchor, now);
+          if (periods <= 0) continue;
+
+          totalMileageToAdd += entry.mileage * periods;
+
+          // Advance the anchor by exactly the credited periods (not to `now`),
+          // so the leftover partial period carries forward instead of drifting.
+          final newAnchor = _advance(entry.tripFrequency, anchor, periods);
+          await MileageDatabaseHelper.markApplied(db, entry.id!, newAnchor);
+
+          print('Credited ${entry.mileage * periods} km for entry '
+              '${entry.id} ($periods period(s))');
         }
-        
+
         // Update car mileage if there's mileage to add
         if (totalMileageToAdd > 0) {
           await carService.updateCarMileage(
             int.parse(carId),
             totalMileageToAdd,
           );
-          
+
           print('Updated car $carId with $totalMileageToAdd km');
         }
       }
-      
+
       print('Mileage update completed successfully');
     } catch (e) {
       print('Error updating car mileage: $e');
     }
+  }
+
+  /// Number of whole recurrence periods between [anchor] and [now].
+  static int _elapsedPeriods(TripFrequency freq, DateTime anchor, DateTime now) {
+    if (!now.isAfter(anchor)) return 0;
+    switch (freq) {
+      case TripFrequency.daily:
+        return now.difference(anchor).inDays;
+      case TripFrequency.weekly:
+        return now.difference(anchor).inDays ~/ 7;
+      case TripFrequency.monthly:
+        return _wholeMonthsBetween(anchor, now);
+      case TripFrequency.oneTime:
+        return 0;
+    }
+  }
+
+  /// Advance [anchor] forward by [periods] recurrence periods.
+  static DateTime _advance(TripFrequency freq, DateTime anchor, int periods) {
+    switch (freq) {
+      case TripFrequency.daily:
+        return anchor.add(Duration(days: periods));
+      case TripFrequency.weekly:
+        return anchor.add(Duration(days: 7 * periods));
+      case TripFrequency.monthly:
+        return _addMonths(anchor, periods);
+      case TripFrequency.oneTime:
+        return anchor;
+    }
+  }
+
+  /// Completed calendar-month anniversaries between [from] and [to].
+  /// e.g. Jan 15 → Mar 14 is 1 (the Feb 15 anniversary passed, Mar 15 has not).
+  static int _wholeMonthsBetween(DateTime from, DateTime to) {
+    var months = (to.year - from.year) * 12 + (to.month - from.month);
+    // If we haven't yet reached the anniversary day/time this month, the
+    // current month doesn't count as complete.
+    final anniversary = _addMonths(from, months);
+    if (anniversary.isAfter(to)) months -= 1;
+    return months < 0 ? 0 : months;
+  }
+
+  /// Add [months] to [date], clamping the day to the target month's length so
+  /// e.g. Jan 31 + 1 month = Feb 28/29 rather than rolling into March.
+  static DateTime _addMonths(DateTime date, int months) {
+    final totalMonth = date.month - 1 + months;
+    final year = date.year + (totalMonth ~/ 12);
+    final month = totalMonth % 12 + 1;
+    final lastDayOfMonth = DateTime(year, month + 1, 0).day;
+    final day = date.day < lastDayOfMonth ? date.day : lastDayOfMonth;
+    return DateTime(
+      year,
+      month,
+      day,
+      date.hour,
+      date.minute,
+      date.second,
+    );
   }
 }
 

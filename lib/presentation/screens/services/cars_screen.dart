@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/material.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/utils/responsive_utils.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 import '../../../services/car_service.dart';
 import '../../../services/reminder_service.dart';
@@ -53,7 +55,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Text('Failed to load cars: $e'),
             backgroundColor: Colors.red,
@@ -128,146 +130,14 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
   Future<void> _deleteCar(BackupCar car) async {
     // Note: CarDetailsDialog already pops, so we don't need to pop again
     
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Column(
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.delete_outline,
-                color: Colors.red,
-                size: 40,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Delete Car',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          'Are you sure you want to delete\n${car.brand} ${car.model} ${car.year}?',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 14,
-            color: Theme.of(context).brightness == Brightness.dark 
-                ? AppTheme.lightBackground.withOpacity(0.8) 
-                : Colors.black87,
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        actions: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              // Cancel button with gradient
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.darkAccentGreen,
-                        AppTheme.backgroundGreen,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryGreen.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Delete button with red gradient
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFFD32F2F), // Dark red
-                        Color(0xFFF44336), // Red
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.red.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'Delete',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Delete Car',
+      message:
+          'Are you sure you want to delete ${car.brand} ${car.model} ${car.year}? This action cannot be undone.',
+      icon: Icons.delete_outline,
+      confirmLabel: 'Delete',
+      isDestructive: true,
     );
 
     if (confirmed == true && mounted) {
@@ -276,7 +146,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
         if (result.isSuccess) {
           await _loadCars();
           if (mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
                 content: Text(result.message),
         backgroundColor: AppTheme.primaryGreen,
@@ -285,7 +155,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
           }
         } else {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            AppSnackbar.show(context, 
               SnackBar(
                 content: Text(result.message),
                 backgroundColor: Colors.red,
@@ -295,7 +165,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackbar.show(context, 
             SnackBar(
               content: Text('Error deleting car: $e'),
               backgroundColor: Colors.red,
@@ -797,25 +667,38 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
         future: reminderService.getRemindersByCar(car.id!),
         builder: (context, snapshot) {
           return Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            elevation: 20,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
             child: Container(
               padding: const EdgeInsets.all(24),
-              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 500),
+              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 520),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                   colors: [
-                    Color(0xFF1A362A),
-                    Color(0xFF2E4032),
+                    AppTheme.backgroundGreen,
+                    AppTheme.darkAccentGreen,
                   ],
                 ),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: AppTheme.primaryGreen.withOpacity(0.3),
+                  color: AppTheme.secondaryGreen.withOpacity(0.6),
                   width: 1,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 30,
+                    offset: const Offset(0, 12),
+                    spreadRadius: -4,
+                  ),
+                  BoxShadow(
+                    color: AppTheme.secondaryGreen.withOpacity(0.3),
+                    blurRadius: 24,
+                  ),
+                ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -825,14 +708,24 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(11),
                         decoration: BoxDecoration(
-                          color: AppTheme.primaryGreen.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
+                          color: AppTheme.secondaryGreen.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppTheme.secondaryGreen.withOpacity(0.5),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.secondaryGreen.withOpacity(0.25),
+                              blurRadius: 12,
+                            ),
+                          ],
                         ),
                         child: const Icon(
                           Icons.build_circle,
-                          color: AppTheme.primaryGreen,
+                          color: AppTheme.secondaryGreen,
                           size: 24,
                         ),
                       ),
@@ -847,15 +740,16 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Orbitron',
-                                color: Colors.white,
+                                color: AppTheme.lightBackground,
+                                letterSpacing: 0.3,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 3),
                             Text(
                               '${car.brand} ${car.model}',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.white.withOpacity(0.7),
+                                color: AppTheme.lightBackground.withOpacity(0.7),
                                 fontFamily: 'Orbitron',
                               ),
                             ),
@@ -864,43 +758,84 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                       ),
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: AppTheme.backgroundGreen.withOpacity(0.6),
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.secondaryGreen.withOpacity(0.35),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: IconButton(
                           onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                          icon: const Icon(
+                            Icons.close,
+                            color: AppTheme.lightBackground,
+                            size: 20,
+                          ),
                           padding: const EdgeInsets.all(8),
                           constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  
+                  const SizedBox(height: 18),
+
+                  // Hairline divider under the header
+                  Container(
+                    height: 1,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppTheme.secondaryGreen.withOpacity(0.5),
+                          AppTheme.secondaryGreen.withOpacity(0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   // Content
                   Flexible(
                     child: snapshot.connectionState == ConnectionState.waiting
                         ? const Center(
-                            child: CircularProgressIndicator(color: AppTheme.primaryGreen),
+                            child: CircularProgressIndicator(color: AppTheme.secondaryGreen),
                           )
                         : snapshot.hasError || !snapshot.hasData || snapshot.data!.reminders == null || snapshot.data!.reminders!.isEmpty
                             ? Center(
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
-                                      Icons.notifications_none,
-                                      size: 48,
-                                      color: Colors.white.withOpacity(0.5),
+                                    Container(
+                                      padding: const EdgeInsets.all(18),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.secondaryGreen.withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: AppTheme.secondaryGreen.withOpacity(0.3),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        Icons.notifications_none,
+                                        size: 40,
+                                        color: AppTheme.secondaryGreen.withOpacity(0.8),
+                                      ),
                                     ),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 14),
                                     Text(
                                       'No reminders for this car',
                                       style: TextStyle(
-                                        color: Colors.white.withOpacity(0.7),
+                                        color: AppTheme.lightBackground.withOpacity(0.85),
                                         fontFamily: 'Orbitron',
                                         fontSize: 14,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -908,9 +843,10 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                                       'Add service reminders to keep track\nof maintenance schedules',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        color: Colors.white.withOpacity(0.5),
+                                        color: AppTheme.lightBackground.withOpacity(0.5),
                                         fontFamily: 'Orbitron',
                                         fontSize: 11,
+                                        height: 1.5,
                                       ),
                                     ),
                                   ],
@@ -918,8 +854,8 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                               )
                             : ListView.builder(
                                 shrinkWrap: true,
-                                itemCount: snapshot.data!.reminders!.length > 5 
-                                    ? 5 
+                                itemCount: snapshot.data!.reminders!.length > 5
+                                    ? 5
                                     : snapshot.data!.reminders!.length,
                                 itemBuilder: (context, index) {
                                   final reminder = snapshot.data!.reminders![index];
@@ -927,66 +863,71 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
                                 },
                               ),
                   ),
-                  
-                  const SizedBox(height: 16),
-                  
+
+                  const SizedBox(height: 18),
+
                   // View All Button
-                  InkWell(
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SmartRemindersScreen(),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.white.withOpacity(0.2),
-                            Colors.white.withOpacity(0.1),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.5),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.white.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppTheme.secondaryGreen.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppTheme.secondaryGreen.withOpacity(0.7),
+                        width: 1,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            'View All Reminders',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'Orbitron',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.secondaryGreen.withOpacity(0.3),
+                          blurRadius: 18,
+                          spreadRadius: -2,
+                        ),
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.25),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                          spreadRadius: -2,
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SmartRemindersScreen(),
                             ),
+                          );
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'View All Reminders',
+                                style: TextStyle(
+                                  color: AppTheme.secondaryGreen,
+                                  fontFamily: 'Orbitron',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 14,
+                                color: AppTheme.secondaryGreen,
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.arrow_forward_ios,
-                            size: 14,
-                            color: Colors.white.withOpacity(0.9),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -1022,15 +963,27 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
     }
     
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.backgroundGreen.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: statusColor.withOpacity(0.3),
+          color: statusColor.withOpacity(0.45),
           width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+            spreadRadius: -2,
+          ),
+          BoxShadow(
+            color: statusColor.withOpacity(0.15),
+            blurRadius: 12,
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -1038,7 +991,11 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: statusColor.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: statusColor.withOpacity(0.4),
+                width: 1,
+              ),
             ),
             child: Icon(
               statusIcon,
@@ -1155,8 +1112,9 @@ class CarDetailsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24))),
-      elevation: 20,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
       child: SingleChildScrollView(
         child: Container(
           padding: EdgeInsets.all(context.r(20)),
@@ -1164,85 +1122,117 @@ class CarDetailsDialog extends StatelessWidget {
             maxWidth: context.r(480),
             maxHeight: context.screenHeight * 0.95,
           ),
+          // Matches AppDialogPanel so this card is visually part of the same
+          // family as every other pop-up in the app.
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: [
-                Color(0xFF1A362A), // Dark green
-                Color(0xFF2E4032), // Slightly lighter dark green
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
               ],
             ),
             borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24)),
             border: Border.all(
-              color: AppTheme.primaryGreen.withOpacity(0.3),
+              color: AppTheme.secondaryGreen.withOpacity(0.6),
               width: 1,
             ),
+            boxShadow: AppTheme.glowShadow(elevated: true),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            // Header with close button
+            // Header — same structure as the Service Reminders card:
+            // glowing thumbnail chip, title + subtitle, raised close button.
             Row(
               children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 80,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryGreen.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: car.imagePath != null && car.imagePath!.isNotEmpty
-                              ? Image.file(
-                                  File(car.imagePath!),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Icon(
-                                      IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                                      color: AppTheme.primaryGreen,
-                                      size: 24,
-                                    );
-                                  },
-                                )
-                              : const Icon(
-                                  IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                                  color: AppTheme.primaryGreen,
-                                  size: 24,
-                                ),
-                        ),
+                Container(
+                  width: 72,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppTheme.secondaryGreen.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.5),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.secondaryGreen.withOpacity(0.25),
+                        blurRadius: 12,
+                        spreadRadius: -2,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                               '${car.brand} ${car.model} ${car.year}',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Orbitron',
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-
-                          ],
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(13),
+                    child: car.imagePath != null && car.imagePath!.isNotEmpty
+                        ? Image.file(
+                            File(car.imagePath!),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(
+                                IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                                color: AppTheme.secondaryGreen,
+                                size: 24,
+                              );
+                            },
+                          )
+                        : const Icon(
+                            IconData(0xe800, fontFamily: 'MyFlutterApp'),
+                            color: AppTheme.secondaryGreen,
+                            size: 24,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${car.brand} ${car.model}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Orbitron',
+                          color: AppTheme.lightBackground,
+                          letterSpacing: 0.3,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${car.year} · ${car.color}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.lightBackground.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: AppTheme.backgroundGreen.withOpacity(0.6),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.35),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: IconButton(
                     onPressed: () {
@@ -1250,7 +1240,11 @@ class CarDetailsDialog extends StatelessWidget {
                         Navigator.pop(context);
                       }
                     },
-                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    icon: const Icon(
+                      Icons.close,
+                      color: AppTheme.lightBackground,
+                      size: 20,
+                    ),
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(
                       minWidth: 32,
@@ -1260,14 +1254,40 @@ class CarDetailsDialog extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            
+            const SizedBox(height: 18),
+
+            // Hairline divider under the header
+            Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.secondaryGreen.withOpacity(0.5),
+                    AppTheme.secondaryGreen.withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // Details section with modern styling
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.2),
+                color: AppTheme.backgroundGreen.withOpacity(0.55),
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppTheme.secondaryGreen.withOpacity(0.3),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                    spreadRadius: -2,
+                  ),
+                ],
               ),
               child: Column(
                 children: [
@@ -1295,7 +1315,7 @@ class CarDetailsDialog extends StatelessWidget {
                       child: _buildModernButton(
                         icon: Icons.edit_rounded,
                         label: 'Edit',
-                        color: const Color(0xFF2196F3),
+                        color: AppTheme.secondaryGreen,
                         onPressed: () {
                           if (context.mounted) {
                             Navigator.pop(context);
@@ -1309,7 +1329,7 @@ class CarDetailsDialog extends StatelessWidget {
                       child: _buildModernButton(
                         icon: Icons.delete_rounded,
                         label: 'Delete',
-                        color: const Color.fromARGB(255, 219, 25, 25),
+                        color: AppDialog.destructive,
                         onPressed: () {
                           if (context.mounted) {
                             Navigator.pop(context);
@@ -1341,7 +1361,11 @@ class CarDetailsDialog extends StatelessWidget {
             height: 32,
             decoration: BoxDecoration(
               color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: color.withOpacity(0.4),
+                width: 1,
+              ),
             ),
             child: Icon(
               icon,
@@ -1357,18 +1381,20 @@ class CarDetailsDialog extends StatelessWidget {
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[400],
+                    fontSize: 11,
+                    color: AppTheme.lightBackground.withOpacity(0.6),
                     fontWeight: FontWeight.w500,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
-                    const SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.white,
+                    fontSize: 13,
+                    color: AppTheme.lightBackground,
                     fontWeight: FontWeight.w600,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
               ],
@@ -1379,6 +1405,8 @@ class CarDetailsDialog extends StatelessWidget {
     );
   }
 
+  /// Pill action matching the "View All Reminders" button on the Service
+  /// Reminders card — tinted fill, glowing rim, accent-coloured label.
   Widget _buildModernButton({
     required IconData icon,
     required String label,
@@ -1386,53 +1414,36 @@ class CarDetailsDialog extends StatelessWidget {
     required VoidCallback onPressed,
   }) {
     return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(0.8),
-            color,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: Colors.white,
-              size: 18,
+      decoration: AppTheme.glowButtonDecoration(accent: color),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 17),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontFamily: 'Orbitron',
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1611,16 +1622,26 @@ class _EditCarFormState extends State<EditCarForm> {
                     shadowColor: Colors.transparent,
                   ),
                   child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                         colors: [
-                          AppTheme.darkAccentGreen,
                           AppTheme.backgroundGreen,
+                          AppTheme.darkAccentGreen,
                         ],
                       ),
-                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppTheme.secondaryGreen.withOpacity(0.6),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.secondaryGreen.withOpacity(0.3),
+                          blurRadius: 18,
+                        ),
+                      ],
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                     child: const Row(
@@ -1638,17 +1659,27 @@ class _EditCarFormState extends State<EditCarForm> {
             const SizedBox(height: 16),
             SizedBox(
               child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.darkAccentGreen,
-                        AppTheme.backgroundGreen,
+                  decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppTheme.backgroundGreen,
+                          AppTheme.darkAccentGreen,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppTheme.secondaryGreen.withOpacity(0.6),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.secondaryGreen.withOpacity(0.3),
+                          blurRadius: 18,
+                        ),
                       ],
                     ),
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
-                  ),
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _isLoading ? null : () async {
@@ -1660,7 +1691,7 @@ class _EditCarFormState extends State<EditCarForm> {
                     setState(() {
                       _isLoading = false;
                     });
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    AppSnackbar.show(context, 
                       const SnackBar(
                         content: Text('Please fill in at least Brand and Model'),
                         backgroundColor: Colors.red,
@@ -1693,7 +1724,7 @@ class _EditCarFormState extends State<EditCarForm> {
                       widget.onCarUpdated();
                       
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        AppSnackbar.show(context, 
                           SnackBar(
                             content: Text(result.message),
                             backgroundColor: AppTheme.primaryGreen,
@@ -1702,7 +1733,7 @@ class _EditCarFormState extends State<EditCarForm> {
                       }
                     } else {
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        AppSnackbar.show(context, 
                           SnackBar(
                             content: Text(result.message),
                             backgroundColor: Colors.red,
@@ -1713,7 +1744,7 @@ class _EditCarFormState extends State<EditCarForm> {
                   } catch (e) {
                     if (mounted) {
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      AppSnackbar.show(context, 
                         SnackBar(
                           content: Text('Error updating car: $e'),
                           backgroundColor: Colors.red,
@@ -1765,28 +1796,65 @@ class _EditCarFormState extends State<EditCarForm> {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Orbitron',
             fontSize: 12,
             fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+            color: AppTheme.lightBackground.withOpacity(0.8),
           ),
         ),
-        const SizedBox(height: 4),
-        TextFormField(
-          initialValue: initialValue,
-          keyboardType: keyboard,
-          onChanged: onChanged,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.secondaryGreen.withOpacity(0.25),
+                blurRadius: 14,
+              ),
+            ],
+          ),
+          child: TextFormField(
+            initialValue: initialValue,
+            keyboardType: keyboard,
+            onChanged: onChanged,
+            style: const TextStyle(
+              fontFamily: 'Orbitron',
+              color: AppTheme.lightBackground,
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: InputDecoration(
+              filled: false,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: AppTheme.secondaryGreen.withOpacity(0.4),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: AppTheme.secondaryGreen.withOpacity(0.4),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                  color: AppTheme.secondaryGreen,
+                  width: 1.5,
+                ),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            ),
           ),
         ),
       ],
@@ -1981,17 +2049,27 @@ class _AddCarFormState extends State<AddCarForm> {
                         shadowColor: Colors.transparent,
                       ),
                       child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppTheme.darkAccentGreen,
-                              AppTheme.backgroundGreen,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.all(Radius.circular(8)),
+                        decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppTheme.backgroundGreen,
+                          AppTheme.darkAccentGreen,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppTheme.secondaryGreen.withOpacity(0.6),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.secondaryGreen.withOpacity(0.3),
+                          blurRadius: 18,
                         ),
+                      ],
+                    ),
                         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -2008,17 +2086,27 @@ class _AddCarFormState extends State<AddCarForm> {
                 const SizedBox(height: 16),
                 SizedBox(  
                   child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            AppTheme.darkAccentGreen,
-                            AppTheme.backgroundGreen,
-                          ],
-                        ),
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppTheme.backgroundGreen,
+                          AppTheme.darkAccentGreen,
+                        ],
                       ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppTheme.secondaryGreen.withOpacity(0.6),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.secondaryGreen.withOpacity(0.3),
+                          blurRadius: 18,
+                        ),
+                      ],
+                    ),
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : () async {
@@ -2099,7 +2187,7 @@ class _AddCarFormState extends State<AddCarForm> {
                           widget.onCarAdded();
                           
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            AppSnackbar.show(context, 
                               SnackBar(
                                 content: Text(result.message),
                                 backgroundColor: AppTheme.primaryGreen,
@@ -2119,7 +2207,7 @@ class _AddCarFormState extends State<AddCarForm> {
                           } else {
                             // Generic error - show snackbar but don't close
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              AppSnackbar.show(context, 
                                 SnackBar(
                                   content: Text(result.message),
                                   backgroundColor: Colors.red,
@@ -2130,7 +2218,7 @@ class _AddCarFormState extends State<AddCarForm> {
                         }
                       } catch (e) {
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          AppSnackbar.show(context, 
                             SnackBar(
                               content: Text('Error adding car: $e'),
                               backgroundColor: Colors.red,
@@ -2193,31 +2281,62 @@ class _AddCarFormState extends State<AddCarForm> {
             color: hasError ? Colors.red : null,
           ),
         ),
-        const SizedBox(height: 4),
-        TextFormField(
-          keyboardType: keyboard,
-          onChanged: onChanged,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: hasError ? Colors.red : AppTheme.primaryGreen),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
+              ],
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(
-                color: hasError ? Colors.red : AppTheme.primaryGreen.withOpacity(0.5),
-                width: hasError ? 2 : 1,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: (hasError ? Colors.red : AppTheme.secondaryGreen)
+                    .withOpacity(0.25),
+                blurRadius: 14,
               ),
+            ],
+          ),
+          child: TextFormField(
+            keyboardType: keyboard,
+            onChanged: onChanged,
+            style: const TextStyle(
+              fontFamily: 'Orbitron',
+              color: AppTheme.lightBackground,
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(
-                color: hasError ? Colors.red : AppTheme.primaryGreen, 
-                width: 2,
+            decoration: InputDecoration(
+              filled: false,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: hasError
+                      ? Colors.red
+                      : AppTheme.secondaryGreen.withOpacity(0.4),
+                ),
               ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: hasError
+                      ? Colors.red
+                      : AppTheme.secondaryGreen.withOpacity(0.4),
+                  width: hasError ? 1.5 : 1,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: hasError ? Colors.red : AppTheme.secondaryGreen,
+                  width: 1.5,
+                ),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
         ),
         if (hasError) ...[

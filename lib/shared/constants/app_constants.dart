@@ -2,6 +2,9 @@ class AppConstants {
   // App Info
   static const String appName = 'siyanaty+';
   static const String appVersion = '1.0.0';
+
+  // Support / contact
+  static const String supportEmail = 'siyanatyplus@gmail.com';
   
   // Database
   static const String databaseName = 'siyana_database.db';

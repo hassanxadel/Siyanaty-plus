@@ -51,6 +51,12 @@ class MileageEntry {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  /// The last time this recurring entry's mileage was credited to the car by
+  /// the background updater. Null until first credited (treated as
+  /// [createdAt]). Drives the catch-up math so mileage is never double-counted
+  /// or missed regardless of when the periodic task actually runs.
+  final DateTime? lastAppliedAt;
+
   MileageEntry({
     this.id,
     required this.mileage,
@@ -64,6 +70,7 @@ class MileageEntry {
     this.tripFrequency = TripFrequency.oneTime,
     DateTime? createdAt,
     DateTime? updatedAt,
+    this.lastAppliedAt,
   }) : createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
 
@@ -98,6 +105,9 @@ class MileageEntry {
       tripFrequency: parseTripFrequency(map['trip_frequency'] as String? ?? map['tripFrequency'] as String?),
       createdAt: DateTime.parse(map['created_at'] as String? ?? map['createdAt'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String? ?? map['updatedAt'] as String),
+      lastAppliedAt: (map['last_applied_at'] ?? map['lastAppliedAt']) != null
+          ? DateTime.parse(map['last_applied_at'] as String? ?? map['lastAppliedAt'] as String)
+          : null,
     );
   }
 
@@ -129,6 +139,7 @@ class MileageEntry {
       'trip_frequency': tripFrequencyToString(tripFrequency),  // Use snake_case for database
       'created_at': createdAt.toIso8601String(),  // Use snake_case for database
       'updated_at': updatedAt.toIso8601String(),  // Use snake_case for database
+      'last_applied_at': lastAppliedAt?.toIso8601String(),
     };
   }
 
@@ -163,6 +174,9 @@ class MileageEntry {
       tripFrequency: parseTripFrequency(data['tripFrequency'] as String?),
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+      lastAppliedAt: data['lastAppliedAt'] != null
+          ? (data['lastAppliedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -193,6 +207,8 @@ class MileageEntry {
       'tripFrequency': tripFrequencyToString(tripFrequency),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'lastAppliedAt':
+          lastAppliedAt != null ? Timestamp.fromDate(lastAppliedAt!) : null,
     };
   }
 
@@ -210,6 +226,7 @@ class MileageEntry {
     TripFrequency? tripFrequency,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? lastAppliedAt,
   }) {
     return MileageEntry(
       id: id ?? this.id,
@@ -224,6 +241,7 @@ class MileageEntry {
       tripFrequency: tripFrequency ?? this.tripFrequency,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
+      lastAppliedAt: lastAppliedAt ?? this.lastAppliedAt,
     );
   }
 

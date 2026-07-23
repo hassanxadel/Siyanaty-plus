@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/utils/responsive_utils.dart';
@@ -157,7 +158,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
         _startTimer();
         _clearOtpFields();
         
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Row(
               children: [
@@ -203,8 +204,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
               _buildHeader(),
               SizedBox(height: context.r(32)),
               Expanded(
-                child: SingleChildScrollView(
+                // Center gives the scroll view its natural height so the
+                // content sits in the middle of the free space (a Column's
+                // mainAxisAlignment cannot centre inside a scroll view).
+                child: Center(
+                  child: SingleChildScrollView(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       _buildOtpInfo(),
                       SizedBox(height: context.r(32)),
@@ -218,6 +224,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                       SizedBox(height: context.r(24)),
                       _buildResendButton(),
                     ],
+                  ),
                   ),
                 ),
               ),
@@ -331,46 +338,59 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
           child: child,
         );
       },
+      // Expanded children share the available width, so the six boxes can
+      // never overflow regardless of screen size or text scale.
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(6, (index) {
-          return Container(
-            width: context.r(50),
-            height: context.r(60),
-            margin: EdgeInsets.symmetric(horizontal: context.r(4)),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen.withOpacity(0.3),
-                  AppTheme.backgroundGreen.withOpacity(0.3),
+          final isFilled = _controllers[index].text.isNotEmpty;
+          return Expanded(
+            child: Container(
+              height: context.r(60),
+              margin: EdgeInsets.symmetric(horizontal: context.r(3)),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppTheme.backgroundGreen,
+                    AppTheme.darkAccentGreen,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(context.responsiveBorderRadius(16)),
+                border: Border.all(
+                  color: isFilled
+                      ? AppTheme.secondaryGreen
+                      : AppTheme.secondaryGreen.withOpacity(0.4),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.secondaryGreen
+                        .withOpacity(isFilled ? 0.35 : 0.2),
+                    blurRadius: context.r(18),
+                  ),
                 ],
               ),
-              borderRadius: BorderRadius.circular(context.responsiveBorderRadius(12)),
-              border: Border.all(
-                color: _controllers[index].text.isNotEmpty
-                    ? AppTheme.primaryGreen
-                    : Colors.white.withOpacity(0.3),
-                width: 2,
-              ),
-            ),
-            child: TextField(
-              controller: _controllers[index],
-              focusNode: _focusNodes[index],
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              maxLength: 1,
-              style: context.responsiveTextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.getThemeAwareTextColor(context),
-                fontFamily: 'Orbitron',
-              ),
-              decoration: const InputDecoration(
-                counterText: '',
-                border: InputBorder.none,
-              ),
+              child: TextField(
+                controller: _controllers[index],
+                focusNode: _focusNodes[index],
+                textAlign: TextAlign.center,
+                textAlignVertical: TextAlignVertical.center,
+                keyboardType: TextInputType.number,
+                maxLength: 1,
+                style: context.responsiveTextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.lightBackground,
+                  fontFamily: 'Orbitron',
+                ),
+                decoration: const InputDecoration(
+                  counterText: '',
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 16),
+                ),
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
               ],
@@ -385,6 +405,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                 }
                 setState(() {});
               },
+              ),
             ),
           );
         }),
@@ -455,17 +476,61 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   }
 
   Widget _buildResendButton() {
-    return TextButton(
-      onPressed: _remainingSeconds > 0 ? null : _resendOtp,
-      child: Text(
-        _remainingSeconds > 0 ? 'Resend code available after timeout' : 'Resend Code',
-        style: context.responsiveTextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: _remainingSeconds > 0
-              ? AppTheme.getThemeAwareTextColor(context).withOpacity(0.4)
-              : AppTheme.primaryGreen,
-          fontFamily: 'Orbitron',
+    final waiting = _remainingSeconds > 0;
+
+    return GestureDetector(
+      onTap: waiting ? null : _resendOtp,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: context.r(20),
+          vertical: context.r(10),
+        ),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppTheme.backgroundGreen,
+              AppTheme.darkAccentGreen,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(context.responsiveBorderRadius(20)),
+          border: Border.all(
+            color: AppTheme.secondaryGreen.withOpacity(waiting ? 0.25 : 0.6),
+            width: 1,
+          ),
+          boxShadow: waiting
+              ? null
+              : [
+                  BoxShadow(
+                    color: AppTheme.secondaryGreen.withOpacity(0.3),
+                    blurRadius: context.r(18),
+                  ),
+                ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              waiting ? Icons.timer_outlined : Icons.refresh_rounded,
+              size: context.responsiveIconSize(14),
+              color: waiting
+                  ? AppTheme.lightBackground.withOpacity(0.4)
+                  : AppTheme.secondaryGreen,
+            ),
+            SizedBox(width: context.r(8)),
+            Text(
+              waiting ? 'Resend after timeout' : 'Resend Code',
+              style: context.responsiveTextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: waiting
+                    ? AppTheme.lightBackground.withOpacity(0.4)
+                    : AppTheme.lightBackground,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -477,19 +542,22 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
       height: context.responsiveButtonHeight(50),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [
-            AppTheme.primaryGreen,
+            AppTheme.backgroundGreen,
             AppTheme.darkAccentGreen,
           ],
         ),
-        borderRadius: BorderRadius.circular(context.responsiveBorderRadius(12)),
+        borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24)),
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.6),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryGreen.withOpacity(0.3),
-            blurRadius: context.r(12),
-            offset: Offset(0, context.r(6)),
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: context.r(18),
           ),
         ],
       ),
@@ -499,7 +567,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(12)),
+            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(24)),
           ),
         ),
         child: _isLoading
@@ -516,7 +584,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                 style: context.responsiveTextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: AppTheme.lightBackground,
                   fontFamily: 'Orbitron',
                 ),
               ),

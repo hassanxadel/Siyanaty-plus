@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../services/obd_service.dart';
 import '../../../services/car_service.dart';
 import '../../../models/obd_scan.dart';
 import '../../../models/backup_car.dart';
 import '../../../shared/constants/app_theme.dart';
+import '../../widgets/app_dialog.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class OBDScreen extends StatefulWidget {
@@ -172,7 +174,7 @@ class _OBDScreenState extends State<OBDScreen> {
   }
 
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.green,
@@ -182,7 +184,7 @@ class _OBDScreenState extends State<OBDScreen> {
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
@@ -192,7 +194,7 @@ class _OBDScreenState extends State<OBDScreen> {
   }
 
   void _showInfoSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.blue,
@@ -896,22 +898,14 @@ class _OBDScreenState extends State<OBDScreen> {
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Delete Scan'),
-                          content: const Text('Are you sure you want to delete this scan?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                            ),
-                          ],
-                        ),
+                      final confirm = await AppDialog.show(
+                        context,
+                        title: 'Delete Scan',
+                        message:
+                            'Are you sure you want to delete this scan? This action cannot be undone.',
+                        icon: Icons.delete_outline,
+                        confirmLabel: 'Delete',
+                        isDestructive: true,
                       );
 
                       if (confirm == true && scan.id != null) {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,6 +7,7 @@ import '../../../shared/constants/app_theme.dart';
 import '../../../models/mileage_entry.dart';
 import '../../../services/mileage_service.dart';
 import '../../../services/car_service.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 
 class MileageTrackScreen extends StatefulWidget {
@@ -269,6 +271,10 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
+          ),
         ],
       ),
       child: Column(
@@ -362,15 +368,25 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
           height: 24,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.primaryGreen,
-                AppTheme.darkAccentGreen,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(12),
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppTheme.backgroundGreen,
+            AppTheme.darkAccentGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.5),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
           ),
+        ],
+      ),
           child: Center(
             child: Text(
               number,
@@ -443,6 +459,10 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
+          ),
         ],
       ),
       child: Column(
@@ -512,12 +532,25 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(15),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppTheme.backgroundGreen,
+            AppTheme.darkAccentGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: color.withOpacity(0.3),
+          color: color.withOpacity(0.45),
           width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.25),
+            blurRadius: 16,
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -570,6 +603,10 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
             color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 5),
+          ),
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
           ),
         ],
       ),
@@ -708,42 +745,62 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
     required String hintText,
     TextInputType? keyboardType,
   }) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      style: const TextStyle(
-        color: Colors.white,
-              fontFamily: 'Orbitron',
-              fontSize: 14,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppTheme.backgroundGreen,
+            AppTheme.darkAccentGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.25),
+            blurRadius: 14,
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        style: const TextStyle(
+          color: AppTheme.lightBackground,
+          fontFamily: 'Orbitron',
+          fontSize: 14,
+        ),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: TextStyle(
+            color: AppTheme.lightBackground.withOpacity(0.45),
+            fontFamily: 'Orbitron',
+          ),
+          filled: false,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: AppTheme.secondaryGreen.withOpacity(0.4),
             ),
-            decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: const TextStyle(
-          color: Colors.white54,
-                fontFamily: 'Orbitron',
-              ),
-              filled: true,
-        fillColor: Colors.white.withOpacity(0.1),
-              border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(
-            color: Colors.white.withOpacity(0.3),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(
-            color: Colors.white.withOpacity(0.3),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(
-            color: Colors.white,
-                  width: 2,
-                ),
-              ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: AppTheme.secondaryGreen.withOpacity(0.4),
             ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: AppTheme.secondaryGreen,
+              width: 1.5,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1911,41 +1968,12 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
   }
 
   void _showAutomatedMileageInfo() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryGreen.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.auto_awesome,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-                'Automated Mileage Tracking',
-                style: TextStyle(
-                  fontFamily: 'Orbitron',
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
+    AppDialog.custom<void>(
+      context,
+      title: 'Automated Mileage Tracking',
+      icon: Icons.auto_awesome,
+      closeLabel: 'Got It!',
+      content: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1953,8 +1981,8 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
                 'How It Works:',
                 style: TextStyle(
                   fontFamily: 'Orbitron',
-                  color: Colors.white,
-                  fontSize: 16,
+                  color: AppTheme.lightBackground,
+                  fontSize: 15,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -1986,10 +2014,10 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  color: AppTheme.secondaryGreen.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: AppTheme.primaryGreen.withOpacity(0.5),
+                    color: AppTheme.secondaryGreen.withOpacity(0.45),
                     width: 1,
                   ),
                 ),
@@ -1997,8 +2025,8 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
                   children: [
                     const Icon(
                       Icons.lightbulb_outline,
-                      color: Colors.amber,
-                      size: 24,
+                      color: AppTheme.costHighlight,
+                      size: 22,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -2006,8 +2034,9 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
                         'No need to manually update your car\'s mileage anymore! The app does it automatically based on your trip entries.',
                         style: TextStyle(
                           fontFamily: 'Orbitron',
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 12,
+                          color: AppTheme.lightBackground.withOpacity(0.85),
+                          fontSize: 11,
+                          height: 1.4,
                         ),
                       ),
                     ),
@@ -2016,29 +2045,6 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
               ),
             ],
           ),
-        ),
-        actions: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Got It!',
-                style: TextStyle(
-                  fontFamily: 'Orbitron',
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -2106,6 +2112,10 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
             color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 5),
+          ),
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
           ),
         ],
       ),
@@ -2177,6 +2187,10 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
               blurRadius: 10,
               offset: const Offset(0, 5),
             ),
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
+          ),
           ],
         ),
         child: Column(
@@ -2682,46 +2696,20 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
     }
   }
 
-  void _confirmDeleteEntry(MileageEntry entry) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        title: const Text(
-          'Delete Entry',
-          style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        content: const Text(
+  Future<void> _confirmDeleteEntry(MileageEntry entry) async {
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Delete Entry',
+      message:
           'Are you sure you want to delete this entry? This action cannot be undone.',
-          style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.red,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _deleteEntry(entry);
-              },
-              child: const Text(
-                'Delete',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      ),
+      icon: Icons.delete_outline,
+      confirmLabel: 'Delete',
+      isDestructive: true,
     );
+
+    if (confirmed == true && mounted) {
+      _deleteEntry(entry);
+    }
   }
 
   Future<void> _deleteEntry(MileageEntry entry) async {
@@ -2822,33 +2810,25 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
       
       // For now, just show the CSV data in a dialog
       // In a real app, you'd save this to a file or share it
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: AppTheme.backgroundGreen,
-          title: const Text(
-            'Export Data (CSV)',
-            style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-          ),
-          content: SingleChildScrollView(
-            child: Text(
-              csvData,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: Colors.white,
-              ),
+      if (!mounted) return;
+
+      AppDialog.custom<void>(
+        context,
+        title: 'Export Data (CSV)',
+        icon: Icons.table_chart_outlined,
+        content: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: AppTheme.glowFieldDecoration(),
+          child: Text(
+            csvData,
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 11,
+              height: 1.5,
+              color: AppTheme.lightBackground.withOpacity(0.9),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Close',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-              ),
-            ),
-          ],
         ),
       );
     } catch (e) {
@@ -2857,7 +2837,7 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,
@@ -2869,28 +2849,12 @@ class _MileageTrackScreenState extends State<MileageTrackScreen> {
   }
 
   void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        title: const Text(
-          'Error',
-          style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'OK',
-              style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-            ),
-          ),
-        ],
-      ),
+    AppDialog.message(
+      context,
+      title: 'Error',
+      message: message,
+      icon: Icons.error_outline,
+      isError: true,
     );
   }
 }
@@ -2911,94 +2875,110 @@ class MileageEntryDetailsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      elevation: 20,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
       child: Container(
         padding: const EdgeInsets.all(24),
         constraints: const BoxConstraints(maxWidth: 420, maxHeight: 700),
+        // Matches AppDialogPanel so this card belongs to the same family as
+        // every other pop-up in the app.
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: [
-              AppTheme.darkAccentGreen,
               AppTheme.backgroundGreen,
+              AppTheme.darkAccentGreen,
             ],
           ),
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          border: Border.all(
+            color: AppTheme.secondaryGreen.withOpacity(0.6),
+            width: 1,
+          ),
+          boxShadow: AppTheme.glowShadow(elevated: true),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with close button
+            // Header — same anatomy as the car details card: glowing icon
+            // chip, title + subtitle stack, raised close button.
             Row(
               children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryGreen.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.speed,
-                          color: AppTheme.primaryGreen,
-                          size: 24,
-                        ),
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppTheme.secondaryGreen.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.5),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.secondaryGreen.withOpacity(0.25),
+                        blurRadius: 12,
+                        spreadRadius: -2,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              entry.entryName != null && entry.entryName!.isNotEmpty
-                                  ? entry.entryName!
-                                  : 'Mileage Entry',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Orbitron',
-                                color: Colors.white,
-                              ),
-                            ),
-                                  const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryGreen.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                'Mileage Entry - ${_formatDate(entry.date)}',
-                                style: const TextStyle(
-                                  color: AppTheme.primaryGreen,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.speed,
+                    color: AppTheme.secondaryGreen,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.entryName != null && entry.entryName!.isNotEmpty
+                            ? entry.entryName!
+                            : 'Mileage Entry',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Orbitron',
+                          color: AppTheme.lightBackground,
+                          letterSpacing: 0.3,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Mileage Entry · ${_formatDate(entry.date)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.lightBackground.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: AppTheme.backgroundGreen.withOpacity(0.6),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.35),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: IconButton(
                     onPressed: () {
@@ -3006,7 +2986,11 @@ class MileageEntryDetailsDialog extends StatelessWidget {
                         Navigator.pop(context);
                       }
                     },
-                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    icon: const Icon(
+                      Icons.close,
+                      color: AppTheme.lightBackground,
+                      size: 20,
+                    ),
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(
                       minWidth: 32,
@@ -3016,21 +3000,48 @@ class MileageEntryDetailsDialog extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            
+            const SizedBox(height: 18),
+
+            // Hairline divider under the header
+            Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.secondaryGreen.withOpacity(0.5),
+                    AppTheme.secondaryGreen.withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // Details section with modern styling
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.2),
+                color: AppTheme.backgroundGreen.withOpacity(0.55),
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppTheme.secondaryGreen.withOpacity(0.3),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                    spreadRadius: -2,
+                  ),
+                ],
               ),
               child: Column(
                 children: [
-                  _buildModernDetailRow('Mileage', '${entry.mileage.toStringAsFixed(0)} km', Icons.speed, AppTheme.primaryGreen),
+                  _buildModernDetailRow('Mileage', '${entry.mileage.toStringAsFixed(0)} km', Icons.speed, AppTheme.secondaryGreen),
                   _buildModernDetailRow('Fuel', '${entry.fuel.toStringAsFixed(1)} L', Icons.local_gas_station, Colors.orange),
-                  _buildModernDetailRow('Cost', 'EGP ${entry.cost.toStringAsFixed(2)}', Icons.attach_money, Colors.green),
-                  _buildModernDetailRow('Date', _formatDate(entry.date), Icons.calendar_today, Colors.blue),
+                  // Amber for money, matching the maintenance cost styling.
+                  _buildModernDetailRow('Cost', 'EGP ${entry.cost.toStringAsFixed(2)}', Icons.attach_money, AppTheme.costHighlight),
+                  _buildModernDetailRow('Date', _formatDate(entry.date), Icons.calendar_today, AppTheme.infoBlue),
                   _buildModernDetailRow('Created', _formatDate(entry.createdAt), Icons.schedule, Colors.purple),
                   if (entry.notes != null && entry.notes!.isNotEmpty)
                     _buildModernDetailRow('Notes', entry.notes!, Icons.description, Colors.grey),
@@ -3050,7 +3061,7 @@ class MileageEntryDetailsDialog extends StatelessWidget {
                       child: _buildModernButton(
                         icon: Icons.edit_rounded,
                         label: 'Edit',
-                        color: const Color(0xFF2196F3),
+                        color: AppTheme.infoBlue,
                         onPressed: () {
                           if (context.mounted) {
                             Navigator.pop(context);
@@ -3070,7 +3081,7 @@ class MileageEntryDetailsDialog extends StatelessWidget {
                       child: _buildModernButton(
                         icon: Icons.delete_rounded,
                         label: 'Delete',
-                        color: const Color.fromARGB(255, 219, 25, 25),
+                        color: AppDialog.destructive,
                         onPressed: () {
                           if (context.mounted) {
                             Navigator.pop(context);
@@ -3084,7 +3095,7 @@ class MileageEntryDetailsDialog extends StatelessWidget {
                       child: _buildModernButton(
                         icon: Icons.close_rounded,
                         label: 'Close',
-                        color: Colors.grey[600]!,
+                        color: AppTheme.lightBackground,
                         onPressed: () {
                           if (context.mounted) {
                             Navigator.pop(context);
@@ -3112,7 +3123,11 @@ class MileageEntryDetailsDialog extends StatelessWidget {
             height: 32,
             decoration: BoxDecoration(
               color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: color.withOpacity(0.4),
+                width: 1,
+              ),
             ),
             child: Icon(
               icon,
@@ -3128,18 +3143,20 @@ class MileageEntryDetailsDialog extends StatelessWidget {
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[400],
+                    fontSize: 11,
+                    color: AppTheme.lightBackground.withOpacity(0.6),
                     fontWeight: FontWeight.w500,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.white,
+                    fontSize: 13,
+                    color: AppTheme.lightBackground,
                     fontWeight: FontWeight.w600,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
               ],
@@ -3150,6 +3167,8 @@ class MileageEntryDetailsDialog extends StatelessWidget {
     );
   }
 
+  /// Pill action matching the car details card — tinted "faded" fill with a
+  /// glowing rim and an accent-coloured label, instead of a solid block.
   Widget _buildModernButton({
     required IconData icon,
     required String label,
@@ -3157,53 +3176,36 @@ class MileageEntryDetailsDialog extends StatelessWidget {
     required VoidCallback onPressed,
   }) {
     return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(0.8),
-            color,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: Colors.white,
-              size: 18,
+      decoration: AppTheme.glowButtonDecoration(accent: color),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 17),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontFamily: 'Orbitron',
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

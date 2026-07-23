@@ -6,6 +6,7 @@ import '../../../services/ocr_service.dart';
 import '../../../services/car_service.dart';
 import 'ocr_review_screen.dart';
 import 'ocr_history_screen.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 
 class OcrScannerScreen extends StatefulWidget {
@@ -1106,28 +1107,13 @@ class _OcrScannerScreenState extends State<OcrScannerScreen> {
 
   void _showErrorDialog(String message) {
     if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Error',
-          style: TextStyle(fontFamily: 'Orbitron'),
-        ),
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'OK',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-        ],
-      ),
+
+    AppDialog.message(
+      context,
+      title: 'Error',
+      message: message,
+      icon: Icons.error_outline,
+      isError: true,
     );
   }
 }

@@ -1,12 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Splash screen shown while the Flutter engine starts (Android 5.0 - 11) -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
+    <!-- Dark green app background (AppTheme.backgroundGreen) -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#062117" />
+        </shape>
+    </item>
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <!-- Logo, enlarged (artwork square matches the background color) -->
+    <item
+        android:width="220dp"
+        android:height="220dp"
+        android:gravity="center">
         <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:gravity="fill"
+            android:src="@mipmap/ic_launcher_foreground" />
+    </item>
 </layer-list>

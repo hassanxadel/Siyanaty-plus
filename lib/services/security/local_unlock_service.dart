@@ -133,6 +133,11 @@ class LocalUnlockService {
 
       await _secureStorage.storePinHash(pin);
       await _secureStorage.clearFailedAttempts();
+      // Setting a PIN proves the user is present, so start the auto-lock
+      // window now. Without this the app can immediately demand the PIN
+      // that was just created (and, after a reset, still expect the old one
+      // because the lock screen was built before the change).
+      await _secureStorage.updateLastUnlockTime();
       return true;
     } catch (e) {
       return false;
@@ -171,6 +176,12 @@ class LocalUnlockService {
   /// Check if PIN is set up
   Future<bool> isPinSet() async {
     return await _secureStorage.hasPinSet();
+  }
+
+  /// Length of the stored PIN, or null for PINs saved before length
+  /// tracking existed (backfilled automatically on successful verification)
+  Future<int?> getPinLength() async {
+    return await _secureStorage.getPinLength();
   }
 
   /// Check if any local unlock method is available

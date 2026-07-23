@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import '../../../services/vin_decoder_service.dart';
 import '../../../services/car_service.dart' as car_logic;
 import '../../../shared/constants/app_theme.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 
 class VinLookupScreen extends StatefulWidget {
@@ -85,17 +87,28 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
                       size: 28,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  const Text(
-                          'VIN Lookup',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontFamily: 'Orbitron',
+                  // The trailing SizedBox mirrors the leading IconButton's width
+                  // so the title stays optically centred on the screen.
+                  const Expanded(
+                    child: Text(
+                      'VIN Lookup',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
                           ),
-                        ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48),
                 ],
               ),
               const SizedBox(height: 16),
@@ -473,30 +486,42 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+          // Matches AppDialogPanel so this card belongs to the same family as
+          // every other pop-up in the app.
           child: Container(
-            constraints: const BoxConstraints(maxHeight: 600),
+            clipBehavior: Clip.antiAlias,
+            constraints: const BoxConstraints(maxHeight: 600, maxWidth: 420),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppTheme.backgroundGreen,
+                  AppTheme.darkAccentGreen,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: AppTheme.secondaryGreen.withOpacity(0.6),
+                width: 1,
+              ),
+              boxShadow: AppTheme.glowShadow(elevated: true),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Header with close button
                 Container(
                   padding: const EdgeInsets.all(20),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.backgroundGreen,
-                        AppTheme.darkAccentGreen,
-                        AppTheme.primaryGreen,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: AppTheme.secondaryGreen.withOpacity(0.4),
+                        width: 1,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -717,261 +742,91 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
   }
 
   void _showConfirmUpdateDialog(Map<String, dynamic> newInfo, dynamic existingCar) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Column(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.info_outline,
-                  color: AppTheme.primaryGreen,
-                  size: 40,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Vehicle Already Exists',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                'This vehicle is already in your garage:',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).brightness == Brightness.dark 
-                      ? AppTheme.lightBackground.withOpacity(0.8) 
-                      : Colors.black87,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: AppTheme.primaryGreen.withOpacity(0.3),
+    AppDialog.custom<void>(
+      context,
+      title: 'Vehicle Already Exists',
+      message: 'This vehicle is already in your garage:',
+      icon: Icons.info_outline,
+      closeLabel: 'OK',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: AppTheme.glowFieldDecoration(),
+            child: Column(
+              children: [
+                Text(
+                  '${existingCar.brand} ${existingCar.model}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.secondaryGreen,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      '${existingCar.brand} ${existingCar.model}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryGreen,
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Year: ${existingCar.year}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).brightness == Brightness.dark 
-                            ? AppTheme.lightBackground.withOpacity(0.8) 
-                            : Colors.black87,
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-                const SizedBox(height: 16),
-              Text(
-                'You can view and manage this vehicle in "My Cars".',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).brightness == Brightness.dark 
-                      ? AppTheme.lightBackground.withOpacity(0.8) 
-                      : Colors.black87,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            Center(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppTheme.darkAccentGreen,
-                      AppTheme.backgroundGreen,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryGreen.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'OK',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Orbitron',
-                    ),
+                const SizedBox(height: 4),
+                Text(
+                  'Year: ${existingCar.year}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.lightBackground.withOpacity(0.75),
+                    fontFamily: 'Orbitron',
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        );
-      },
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'You can view and manage this vehicle in "My Cars".',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: AppTheme.lightBackground.withOpacity(0.65),
+              fontFamily: 'Orbitron',
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   void _showSuccessDialog() {
-    showDialog(
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Column(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_circle,
-                  color: AppTheme.primaryGreen,
-                  size: 40,
-                ),
-              ),
-                  const SizedBox(height: 16),
-              const Text(
-                'Vehicle Saved!',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ],
-          ),
-          content: Text(
+      barrierColor: Colors.black.withOpacity(0.6),
+      builder: (dialogContext) => AppDialogPanel(
+        title: 'Vehicle Saved!',
+        message:
             'The vehicle has been successfully added to your garage. You can now view and manage it in "My Cars".',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: Theme.of(context).brightness == Brightness.dark 
-                  ? AppTheme.lightBackground.withOpacity(0.8) 
-                  : Colors.black87,
-              fontFamily: 'Orbitron',
-            ),
+        icon: Icons.check_circle_outline,
+        actions: [
+          AppDialogAction(
+            label: 'Got it!',
+            filled: true,
+            onTap: () {
+              // Close the dialog only — stay on the VIN Lookup screen, then
+              // reset the field so another lookup can start immediately.
+              Navigator.of(dialogContext).pop();
+              _vinController.clear();
+              setState(() {
+                _vehicleInfo = null;
+              });
+            },
           ),
-          actions: [
-            Center(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppTheme.darkAccentGreen,
-                      AppTheme.backgroundGreen,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryGreen.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(); // Close success dialog only, stay on VIN Lookup screen
-                    // Clear VIN field and reset state for new lookup
-                    _vinController.clear();
-                    setState(() {
-                      _vehicleInfo = null;
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Got it!',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -7,6 +8,7 @@ import '../../../services/license_service.dart';
 import '../../../services/car_service.dart';
 import '../../../models/license_image.dart';
 import '../../../models/backup_car.dart';
+import '../../widgets/app_dialog.dart';
 
 class LicenseScreen extends StatefulWidget {
   const LicenseScreen({super.key});
@@ -76,7 +78,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,
@@ -173,13 +175,11 @@ class _LicenseScreenState extends State<LicenseScreen> {
           ],
         ),
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryGreen.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.45),
+          width: 1,
+        ),
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Material(
         color: Colors.transparent,
@@ -500,13 +500,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.darkAccentGreen.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: const Row(
         children: [
@@ -544,13 +538,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
           ],
         ),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.darkAccentGreen.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: const Column(
         children: [
@@ -687,13 +675,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
           ],
         ),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.darkAccentGreen.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -826,8 +808,8 @@ class _LicenseScreenState extends State<LicenseScreen> {
             children: [
               Expanded(
                 child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
@@ -835,7 +817,12 @@ class _LicenseScreenState extends State<LicenseScreen> {
                         AppTheme.backgroundGreen,
                       ],
                     ),
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.6),
+                      width: 1,
+                    ),
+                    boxShadow: AppTheme.glowShadow(),
                   ),
                   child: ElevatedButton.icon(
                     onPressed: () => _requestPermissionsAndShowOptions(context, licenseType: licenseType),
@@ -864,8 +851,12 @@ class _LicenseScreenState extends State<LicenseScreen> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.white, width: 1),
-                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.secondaryGreen.withOpacity(0.7),
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: AppTheme.glowShadow(),
                     ),
                     child: ElevatedButton.icon(
                       onPressed: () => _viewImage(context, imagePath, title),
@@ -906,62 +897,18 @@ class _LicenseScreenState extends State<LicenseScreen> {
     
     if (cameraStatus.isPermanentlyDenied || photosStatus.isPermanentlyDenied) {
       // Show dialog to open settings
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: AppTheme.getThemeAwareBackground(context),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text(
-            'Permissions Required',
-            style: TextStyle(
-              fontFamily: 'Orbitron',
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          content: const Text(
+      final openSettings = await AppDialog.show(
+        context,
+        title: 'Permissions Required',
+        message:
             'Camera and photo library permissions are required to add license images. Please enable them in your device settings.',
-            style: TextStyle(
-              fontFamily: 'Orbitron',
-              color: Colors.white70,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  fontFamily: 'Orbitron',
-                  color: Colors.white70,
-                ),
-              ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  openAppSettings();
-                },
-                child: const Text(
-                  'Open Settings',
-                  style: TextStyle(
-                    fontFamily: 'Orbitron',
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+        icon: Icons.lock_outline,
+        confirmLabel: 'Open Settings',
       );
+
+      if (openSettings == true) {
+        openAppSettings();
+      }
       return;
     }
     

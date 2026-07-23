@@ -30,6 +30,14 @@ class AppTheme {
   static const Color darkModeSurfaceColor = backgroundGreen;
   static const Color darkModeTextColor = lightBackground; // Light yellow text
   
+  /// Amber used to call out monetary values (maintenance cost, expenses) so
+  /// they stand apart from the green used for status/health.
+  static const Color costHighlight = Color(0xFFFFC53D);
+
+  /// Blue for neutral/informational actions (Edit) — light enough to stay
+  /// legible as a tinted "faded" pill on the dark green panels.
+  static const Color infoBlue = Color(0xFF64B5F6);
+
   // Status Colors (Updated to automotive theme)
   static const Color successColor = primaryGreen;
   static const Color warningColor = Color(0xFFFFB02E);
@@ -545,6 +553,111 @@ class AppTheme {
           blurRadius: 10,
           offset: const Offset(0, 3),
           spreadRadius: -2,
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // "Backlit HUD" design language
+  //
+  // Shared by the glow treatment introduced on Home / PIN / OTP: a dark green
+  // gradient panel, a `secondaryGreen` rim, and a soft coloured glow behind it.
+  // Use these helpers instead of re-declaring gradients and shadows in screens
+  // so every surface in the app stays consistent.
+  // ---------------------------------------------------------------------
+
+  /// Drop shadow + coloured glow used behind panels and buttons.
+  static List<BoxShadow> glowShadow({
+    Color? accent,
+    bool elevated = false,
+  }) {
+    final glow = accent ?? secondaryGreen;
+    return [
+      BoxShadow(
+        color: Colors.black.withOpacity(elevated ? 0.45 : 0.3),
+        blurRadius: elevated ? 24 : 14,
+        offset: Offset(0, elevated ? 10 : 6),
+        spreadRadius: -3,
+      ),
+      BoxShadow(
+        color: glow.withOpacity(elevated ? 0.35 : 0.22),
+        blurRadius: elevated ? 26 : 18,
+      ),
+    ];
+  }
+
+  /// Dark green gradient panel with a glowing rim — the standard card/box
+  /// surface. Pass [accent] to tint the rim (e.g. red for a destructive panel).
+  static BoxDecoration glowCardDecoration({
+    double radius = 20,
+    Color? accent,
+    bool elevated = false,
+    Gradient? gradient,
+  }) {
+    final rim = accent ?? secondaryGreen;
+    return BoxDecoration(
+      gradient: gradient ??
+          const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [darkAccentGreen, backgroundGreen],
+          ),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: rim.withOpacity(0.45), width: 1),
+      boxShadow: glowShadow(accent: rim, elevated: elevated),
+    );
+  }
+
+  /// Pill button surface. [filled] gives the accent-tinted "primary" look;
+  /// otherwise the button reads as a quiet outline.
+  static BoxDecoration glowButtonDecoration({
+    Color? accent,
+    bool filled = true,
+    double radius = 20,
+  }) {
+    final color = accent ?? secondaryGreen;
+    return BoxDecoration(
+      color: filled ? color.withOpacity(0.18) : backgroundGreen.withOpacity(0.35),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: color.withOpacity(filled ? 0.7 : 0.45),
+        width: 1,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: color.withOpacity(filled ? 0.3 : 0.15),
+          blurRadius: 16,
+        ),
+        BoxShadow(
+          color: Colors.black.withOpacity(0.25),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    );
+  }
+
+  /// Input-field surface so form fields carry the same depth as buttons.
+  static BoxDecoration glowFieldDecoration({
+    Color? accent,
+    double radius = 16,
+  }) {
+    final color = accent ?? secondaryGreen;
+    return BoxDecoration(
+      color: backgroundGreen.withOpacity(0.55),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: color.withOpacity(0.35), width: 1),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.3),
+          blurRadius: 12,
+          offset: const Offset(0, 5),
+          spreadRadius: -3,
+        ),
+        BoxShadow(
+          color: color.withOpacity(0.12),
+          blurRadius: 14,
         ),
       ],
     );

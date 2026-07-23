@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import '../services/firebase_backup_service.dart';
 import '../services/firebase_reminder_service.dart';
 import '../services/comprehensive_backup_service.dart';
 import '../shared/constants/app_theme.dart';
 import '../presentation/screens/settings/detailed_backup_screen.dart';
+import '../presentation/widgets/app_dialog.dart';
 
 /// Widget for handling backup to cloud functionality
 /// Displays backup status and provides backup/restore options
@@ -119,498 +121,274 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
 
   /// Show backup confirmation dialog
   Future<bool> _showBackupConfirmationDialog() async {
-    return await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          backgroundColor: Colors.transparent,
-          contentPadding: EdgeInsets.zero,
-          content: Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primaryGreen.withOpacity(0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title with icon
-                  Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryGreen.withOpacity(0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.cloud_upload,
-                          color: AppTheme.primaryGreen,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Backup to Cloud',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontFamily: 'Orbitron',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  // Content
-                  Text(
-                    'This will backup all your cars and reminders to the cloud.',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontFamily: 'Orbitron',
-                      fontSize: 14,
+      barrierColor: Colors.black.withOpacity(0.6),
+      builder: (dialogContext) => AppDialogPanel(
+        title: 'Backup to Cloud',
+        message:
+            'This will backup all your cars and reminders to the cloud. Do you want to continue?',
+        icon: Icons.cloud_upload_outlined,
+        content: _backupStatus == null
+            ? const SizedBox.shrink()
+            : Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: AppTheme.glowFieldDecoration(),
+                child: Column(
+                  children: [
+                    _buildRestoreStat(
+                      'Local cars',
+                      '${_backupStatus!.localCarsCount}',
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (_backupStatus != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Local cars:',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontFamily: 'Orbitron',
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                '${_backupStatus!.localCarsCount}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'Orbitron',
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Cloud cars:',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontFamily: 'Orbitron',
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                '${_backupStatus!.cloudCarsCount}',
-                                style: TextStyle(
-                                  color: _backupStatus!.cloudCarsCount == 0
-                                      ? Colors.white.withOpacity(0.5)
-                                      : Colors.white,
-                                  fontFamily: 'Orbitron',
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  decoration: _backupStatus!.cloudCarsCount == 0
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                    const SizedBox(height: 6),
+                    _buildRestoreStat(
+                      'Cloud cars',
+                      '${_backupStatus!.cloudCarsCount}',
                     ),
-                    const SizedBox(height: 16),
                   ],
-                  Text(
-                    'Do you want to continue?',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontFamily: 'Orbitron',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  // Action buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white.withOpacity(0.1),
-                                Colors.white.withOpacity(0.05),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              'Cancel',
-                              style: TextStyle(
-                                fontFamily: 'Orbitron',
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                AppTheme.primaryGreen,
-                                AppTheme.darkAccentGreen,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primaryGreen.withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              'Backup All',
-                              style: TextStyle(
-                                fontFamily: 'Orbitron',
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
+        actions: [
+          AppDialogAction(
+            label: 'Cancel',
+            onTap: () => Navigator.of(dialogContext).pop(false),
           ),
-        );
-      },
-    ) ?? false;
+          AppDialogAction(
+            label: 'Backup All',
+            filled: true,
+            onTap: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   /// Show restore confirmation dialog
   Future<bool> _showRestoreConfirmationDialog() async {
-    return await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: AppTheme.getThemeAwareCardBackground(context),
-          title: Text(
-            'Restore from Cloud',
-            style: TextStyle(
-              color: AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'This will restore cars and reminders from your cloud backup.',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareTextColor(context),
-                  fontFamily: 'Orbitron',
+      barrierColor: Colors.black.withOpacity(0.6),
+      builder: (dialogContext) => AppDialogPanel(
+        title: 'Restore from Cloud',
+        message: 'This will restore cars and reminders from your cloud backup.',
+        icon: Icons.cloud_download_outlined,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_backupStatus != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: AppTheme.glowFieldDecoration(),
+                child: Column(
+                  children: [
+                    _buildRestoreStat(
+                      'Local cars',
+                      '${_backupStatus!.localCarsCount}',
+                    ),
+                    const SizedBox(height: 6),
+                    _buildRestoreStat(
+                      'Cloud cars',
+                      '${_backupStatus!.cloudCarsCount}',
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              if (_backupStatus != null) ...[
-                Text(
-                  'Local cars: ${_backupStatus!.localCarsCount}',
-                  style: TextStyle(
-                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
-                    fontFamily: 'Orbitron',
-                    fontSize: 12,
-                  ),
-                ),
-                Text(
-                  'Cloud cars: ${_backupStatus!.cloudCarsCount}',
-                  style: TextStyle(
-                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
-                    fontFamily: 'Orbitron',
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              const Text(
-                'Existing cars with same VIN will be updated.',
-                style: TextStyle(
-                  color: Colors.orange,
-                  fontFamily: 'Orbitron',
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Do you want to continue?',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareTextColor(context),
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              const SizedBox(height: 14),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                'Cancel',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryGreen,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text(
-                'Restore All',
-                style: TextStyle(
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.w600,
-                ),
+            Text(
+              'Existing cars with the same VIN will be updated.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.costHighlight.withOpacity(0.95),
+                fontFamily: 'Orbitron',
+                fontSize: 11,
+                height: 1.4,
               ),
             ),
           ],
-        );
-      },
-    ) ?? false;
+        ),
+        actions: [
+          AppDialogAction(
+            label: 'Cancel',
+            onTap: () => Navigator.of(dialogContext).pop(false),
+          ),
+          AppDialogAction(
+            label: 'Restore All',
+            filled: true,
+            onTap: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  /// Faded pill action for the Cloud Backup card — tinted fill, glowing rim,
+  /// accent-coloured label. A null [onTap] renders it dimmed and inert.
+  Widget _buildCardAction({
+    required String label,
+    required IconData icon,
+    required Color accent,
+    required VoidCallback? onTap,
+    bool busy = false,
+  }) {
+    final enabled = onTap != null;
+    final color = enabled ? accent : accent.withOpacity(0.4);
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.6,
+      child: Container(
+        decoration: AppTheme.glowButtonDecoration(accent: color),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (busy)
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(color),
+                      ),
+                    )
+                  else
+                    Icon(icon, size: 17, color: color),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRestoreStat(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: AppTheme.lightBackground.withOpacity(0.7),
+            fontFamily: 'Orbitron',
+            fontSize: 11,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            color: AppTheme.secondaryGreen,
+            fontFamily: 'Orbitron',
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
   }
 
   /// Show partial success dialog
   void _showPartialSuccessDialog(BackupResult result) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: AppTheme.getThemeAwareCardBackground(context),
-          title: const Text(
-            'Backup Partially Completed',
-            style: TextStyle(
-              color: Colors.orange,
-              fontFamily: 'Orbitron',
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                result.message,
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareTextColor(context),
-                  fontFamily: 'Orbitron',
-                ),
+    _showPartialResultDialog(
+      title: 'Backup Partially Completed',
+      message: result.message,
+      errors: result.errors,
+    );
+  }
+
+  /// Shared amber "finished, but with problems" pop-up for both backup and
+  /// restore, so the two report failures identically.
+  void _showPartialResultDialog({
+    required String title,
+    required String message,
+    List<String>? errors,
+  }) {
+    AppDialog.custom<void>(
+      context,
+      title: title,
+      message: message,
+      icon: Icons.warning_amber_rounded,
+      accent: AppDialog.warning,
+      closeLabel: 'OK',
+      content: (errors == null || errors.isEmpty)
+          ? const SizedBox.shrink()
+          : Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: AppTheme.glowFieldDecoration(
+                accent: AppDialog.destructive,
               ),
-              if (result.errors != null && result.errors!.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                const Text(
-                  'Errors:',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontFamily: 'Orbitron',
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8)  ,
-                ...result.errors!.take(3).map((error) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    '• $error',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Errors:',
                     style: TextStyle(
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
+                      color: AppDialog.destructive,
                       fontFamily: 'Orbitron',
                       fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                )),
-                if (result.errors!.length > 3)
-                  Text(
-                    '... and ${result.errors!.length - 3} more errors',
-                    style: TextStyle(
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
-                      fontFamily: 'Orbitron',
-                      fontSize: 11,
+                  const SizedBox(height: 8),
+                  ...errors.take(3).map((error) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '• $error',
+                          style: TextStyle(
+                            color: AppTheme.lightBackground.withOpacity(0.85),
+                            fontFamily: 'Orbitron',
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      )),
+                  if (errors.length > 3)
+                    Text(
+                      '... and ${errors.length - 3} more errors',
+                      style: TextStyle(
+                        color: AppTheme.lightBackground.withOpacity(0.6),
+                        fontFamily: 'Orbitron',
+                        fontSize: 10,
+                      ),
                     ),
-                  ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'OK',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareIconColor(context),
-                  fontFamily: 'Orbitron',
-                ),
+                ],
               ),
             ),
-          ],
-        );
-      },
     );
   }
 
   /// Show partial restore dialog
   void _showPartialRestoreDialog(RestoreResult result) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: AppTheme.getThemeAwareCardBackground(context),
-          title: const Text(
-            'Restore Partially Completed',
-            style: TextStyle(
-              color: Colors.orange,
-              fontFamily: 'Orbitron',
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                result.message,
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareTextColor(context),
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-              if (result.errors != null && result.errors!.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                const Text(
-                  'Errors:',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontFamily: 'Orbitron',
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                  const SizedBox(height: 8),
-                ...result.errors!.take(3).map((error) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    '• $error',
-                    style: TextStyle(
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
-                      fontFamily: 'Orbitron',
-                      fontSize: 12,
-                    ),
-                  ),
-                )),
-                if (result.errors!.length > 3)
-                  Text(
-                    '... and ${result.errors!.length - 3} more errors',
-                    style: TextStyle(
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
-                      fontFamily: 'Orbitron',
-                      fontSize: 11,
-                    ),
-                  ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'OK',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareIconColor(context),
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    _showPartialResultDialog(
+      title: 'Restore Partially Completed',
+      message: result.message,
+      errors: result.errors,
     );
   }
 
@@ -618,7 +396,7 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
   void _showSnackBar(String message, {required bool isError}) {
     if (!mounted) return;
     
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,
@@ -635,110 +413,135 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // This is the headline feature of the Settings screen, so it gets a
+    // larger radius and the `elevated` glow — deliberately more prominent
+    // than the surrounding sections, which use radius 16 unelevated.
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.darkAccentGreen.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.all(20),
+      decoration: AppTheme.glowCardDecoration(radius: 20, elevated: true),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.cloud_upload,
-                color: Colors.white,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Cloud Backup - All Data',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    fontFamily: 'Orbitron',
+              // Glowing icon chip, matching the pop-up cards
+              Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: AppTheme.secondaryGreen.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppTheme.secondaryGreen.withOpacity(0.5),
+                    width: 1,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.secondaryGreen.withOpacity(0.3),
+                      blurRadius: 14,
+                      spreadRadius: -2,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.cloud_sync,
+                  color: AppTheme.secondaryGreen,
+                  size: 24,
                 ),
               ),
-              // View All button
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const DetailedBackupScreen(),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.white.withOpacity(0.2),
-                        Colors.white.withOpacity(0.1),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.5),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.white.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Cloud Backup',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.lightBackground,
+                        fontFamily: 'Orbitron',
+                        letterSpacing: 0.3,
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'View All',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'Orbitron',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Cars, reminders & maintenance',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.lightBackground.withOpacity(0.7),
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // View All pill
+              Material(
+                color: Colors.transparent,
+                child: Container(
+                  decoration: AppTheme.glowButtonDecoration(radius: 18),
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(18),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const DetailedBackupScreen(),
+                          ),
+                        );
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'View All',
+                              style: TextStyle(
+                                color: AppTheme.secondaryGreen,
+                                fontFamily: 'Orbitron',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            SizedBox(width: 5),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 10,
+                              color: AppTheme.secondaryGreen,
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 12,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          
+
+          // Hairline divider under the header
+          Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.secondaryGreen.withOpacity(0.5),
+                  AppTheme.secondaryGreen.withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // Status information
           if (_backupStatus != null || _reminderBackupStatus != null) ...[
             if (_backupStatus != null)
@@ -772,97 +575,23 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
             Row(
               children: [
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppTheme.primaryGreen,
-                          AppTheme.darkAccentGreen,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryGreen.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _handleBackupToCloud,
-                      icon: _isLoading 
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Icon(Icons.cloud_upload, size: 18, color: Colors.white),
-                      label: Text(
-                        _isLoading ? 'Backing up...' : 'Backup All',
-                        style: const TextStyle(
-                          fontFamily: 'Orbitron',
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
+                  child: _buildCardAction(
+                    label: _isLoading ? 'Backing up...' : 'Backup All',
+                    icon: Icons.cloud_upload,
+                    // Amber, matching the Backup buttons in the Detailed
+                    // Backup screen, so it stands out from the blue Restore.
+                    accent: AppTheme.costHighlight,
+                    busy: _isLoading,
+                    onTap: _isLoading ? null : _handleBackupToCloud,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.blue.shade600,
-                          Colors.blue.shade800,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _handleRestoreFromCloud,
-                      icon: const Icon(Icons.cloud_download, size: 18, color: Colors.white),
-                      label: const Text(
-                        'Restore All',
-                        style: TextStyle(
-                          fontFamily: 'Orbitron',
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
+                  child: _buildCardAction(
+                    label: 'Restore All',
+                    icon: Icons.cloud_download,
+                    accent: AppTheme.infoBlue,
+                    onTap: _isLoading ? null : _handleRestoreFromCloud,
                   ),
                 ),
               ],
@@ -870,23 +599,43 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
           ] else ...[
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+                color: AppDialog.warning.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Colors.orange.withOpacity(0.3),
+                  color: AppDialog.warning.withOpacity(0.45),
                   width: 1,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppDialog.warning.withOpacity(0.18),
+                    blurRadius: 14,
+                    spreadRadius: -3,
+                  ),
+                ],
               ),
-              child: const Text(
-                'Please sign in to use cloud backup features',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.orange,
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.w600,
-                ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: AppDialog.warning,
+                    size: 18,
+                  ),
+                  SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      'Sign in to use cloud backup',
+                      style: TextStyle(
+                        color: AppDialog.warning,
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -931,19 +680,19 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
         children: [
           Text(
             label,
-            style: const TextStyle(
-              color: Colors.white70,
+            style: TextStyle(
+              color: AppTheme.lightBackground.withOpacity(0.65),
               fontFamily: 'Orbitron',
-              fontSize: 12,
+              fontSize: 11,
             ),
           ),
           Text(
             value,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppTheme.secondaryGreen,
               fontFamily: 'Orbitron',
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],

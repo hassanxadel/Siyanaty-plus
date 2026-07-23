@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/constants/app_theme.dart';
@@ -395,7 +396,7 @@ class _ModernForgotPasswordScreenState extends State<ModernForgotPasswordScreen>
 
         // Show success feedback
         HapticFeedback.lightImpact();
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: const Text(
               'Password reset email sent! Check your inbox.',
@@ -422,7 +423,7 @@ class _ModernForgotPasswordScreenState extends State<ModernForgotPasswordScreen>
         
         // Show error message
         HapticFeedback.lightImpact();
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Text(
               'Error: ${e.message ?? 'Password reset failed'}',
@@ -442,7 +443,7 @@ class _ModernForgotPasswordScreenState extends State<ModernForgotPasswordScreen>
           _isLoading = false;
         });
         
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: const Text(
               'An unexpected error occurred. Please try again.',

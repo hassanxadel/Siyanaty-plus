@@ -1,22 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Professional splash screen for Siyana+ -->
+<!-- Splash screen for Siyanaty+ (pre-Android 5.0 fallback) -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Background gradient -->
+    <!-- Dark green app background (AppTheme.backgroundGreen) -->
     <item>
         <shape android:shape="rectangle">
-            <gradient
-                android:startColor="#1B4332"
-                android:centerColor="#2D5A47"
-                android:endColor="#40916C"
-                android:angle="135"
-                android:type="linear" />
+            <solid android:color="#062117" />
         </shape>
     </item>
 
-    <!-- Logo -->
-    <item android:gravity="center">
+    <!-- Logo, enlarged (artwork square matches the background color) -->
+    <item
+        android:width="220dp"
+        android:height="220dp"
+        android:gravity="center">
         <bitmap
-            android:gravity="center"
-            android:src="@mipmap/ic_launcher" />
+            android:gravity="fill"
+            android:src="@mipmap/ic_launcher_foreground" />
     </item>
 </layer-list>

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/services/location_service.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 
 class ServiceCentersScreen extends StatefulWidget {
@@ -141,53 +143,67 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
               color: AppTheme.getThemeAwareBackground(context),
               child: Column(
                 children: [
-                  // Custom Tab Bar
+                  // Custom Tab Bar — glowing segmented control
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    height: 44,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(22),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppTheme.getThemeAwareCardBackground(context).withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: AppTheme.getThemeAwareBorderColor(context).withOpacity(0.3),
-                            width: 1,
-                          ),
-                        ),
-                        child: TabBar(
-                          controller: _tabController,
-                          indicatorSize: TabBarIndicatorSize.tab,
-                          indicator: BoxDecoration(
-                            color: AppTheme.primaryGreen,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: AppTheme.primaryGreen.withOpacity(0.8),
-                              width: 1,
-                            ),
-                          ),
-                          labelColor: Colors.white,
-                          unselectedLabelColor: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                          dividerColor: Colors.transparent,
-                          labelPadding: const EdgeInsets.symmetric(vertical: 6),
-                          labelStyle: const TextStyle(
-                            fontFamily: 'Orbitron',
-                            fontWeight: FontWeight.w600,
-                            fontSize: 10,
-                          ),
-                          unselectedLabelStyle: const TextStyle(
-                            fontFamily: 'Orbitron',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 10,
-                          ),
-                          tabs: const [
-                            Tab(icon: Icon(Icons.map, size: 12), text: 'Maps'),
-                            Tab(icon: Icon(Icons.favorite, size: 12), text: 'Favorites'),
-                            Tab(icon: Icon(Icons.location_on, size: 12), text: 'Centers'),
-                          ],
-                        ),
+                    height: 52,
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.darkAccentGreen,
+                          AppTheme.backgroundGreen,
+                        ],
                       ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppTheme.secondaryGreen.withOpacity(0.45),
+                        width: 1,
+                      ),
+                      boxShadow: AppTheme.glowShadow(),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      // Selected tab is a glowing green pill.
+                      indicator: BoxDecoration(
+                        color: AppTheme.secondaryGreen.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: AppTheme.secondaryGreen.withOpacity(0.7),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.secondaryGreen.withOpacity(0.3),
+                            blurRadius: 14,
+                            spreadRadius: -2,
+                          ),
+                        ],
+                      ),
+                      labelColor: AppTheme.secondaryGreen,
+                      unselectedLabelColor:
+                          AppTheme.lightBackground.withOpacity(0.6),
+                      dividerColor: Colors.transparent,
+                      labelPadding: const EdgeInsets.symmetric(vertical: 4),
+                      labelStyle: const TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                        letterSpacing: 0.3,
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 10,
+                      ),
+                      tabs: const [
+                        Tab(icon: Icon(Icons.map, size: 14), text: 'Maps'),
+                        Tab(icon: Icon(Icons.favorite, size: 14), text: 'Favorites'),
+                        Tab(icon: Icon(Icons.location_on, size: 14), text: 'Centers'),
+                      ],
                     ),
                   ),
                   // Tab Content
@@ -203,53 +219,47 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                     ),
                   ),
                   
-                  // Nearby Centers button - positioned between map and nav bar
+                  // Nearby Centers button — faded pill, positioned between
+                  // map and nav bar
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppTheme.backgroundGreen,
-                          AppTheme.primaryGreen,
-                          AppTheme.darkAccentGreen,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryGreen.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        _tabController.animateTo(2); // Switch to Centers tab
-                        _fetchNearbyServiceCenters();
-                      },
-                      icon: const Icon(Icons.location_searching, color: Colors.white),
-                      label: const Text(
-                        'Find Nearby Centers',
-                        style: TextStyle(
-                          fontFamily: 'Orbitron',
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
+                    decoration: AppTheme.glowButtonDecoration(radius: 24),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(24),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () {
+                          _tabController.animateTo(2); // Switch to Centers tab
+                          _fetchNearbyServiceCenters();
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.location_searching,
+                                color: AppTheme.secondaryGreen,
+                                size: 20,
+                              ),
+                              SizedBox(width: 10),
+                              Text(
+                                'Find Nearby Centers',
+                                style: TextStyle(
+                                  fontFamily: 'Orbitron',
+                                  color: AppTheme.secondaryGreen,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -780,13 +790,11 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+              border: Border.all(
+                color: AppTheme.secondaryGreen.withOpacity(0.45),
+                width: 1,
+              ),
+              boxShadow: AppTheme.glowShadow(),
             ),
             child: InkWell(
             onTap: () => _showServiceCenterBottomSheet(center),
@@ -875,67 +883,25 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                   
                       const SizedBox(height: 12),
                   
-                  // Action buttons
+                  // Action buttons — faded pills
                   Row(
                     children: [
                       Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppTheme.darkAccentGreen, AppTheme.backgroundGreen],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                spreadRadius: 1,
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: ElevatedButton.icon(
-                            onPressed: () => _navigateToServiceCenter(center),
-                            icon: const Icon(Icons.directions, size: 16, color: Colors.white),
-                            label: const Text(
-                              'Navigate',
-                              style: TextStyle(
-                                fontFamily: 'Orbitron', 
-                                fontSize: 12,
-                                color: Colors.white,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
+                        child: _centerActionPill(
+                          label: 'Navigate',
+                          icon: Icons.directions,
+                          accent: AppTheme.secondaryGreen,
+                          onTap: () => _navigateToServiceCenter(center),
                         ),
                       ),
                       if (center.phoneNumber != null) ...[
                         const SizedBox(width: 8),
                         Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => _callServiceCenter(center),
-                            icon: const Icon(Icons.phone, size: 16),
-                            label: const Text(
-                              'Call',
-                              style: TextStyle(fontFamily: 'Orbitron', fontSize: 12),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
+                          child: _centerActionPill(
+                            label: 'Call',
+                            icon: Icons.phone,
+                            accent: AppTheme.infoBlue,
+                            onTap: () => _callServiceCenter(center),
                           ),
                         ),
                       ],
@@ -1061,13 +1027,11 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+              border: Border.all(
+                color: AppTheme.secondaryGreen.withOpacity(0.45),
+                width: 1,
+              ),
+              boxShadow: AppTheme.glowShadow(),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -1173,95 +1137,25 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                   
                   const SizedBox(height: 12),
                   
-                  // Action buttons
+                  // Action buttons — faded pills
                   Row(
                     children: [
                       Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                AppTheme.backgroundGreen,
-                                AppTheme.primaryGreen,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primaryGreen.withOpacity(0.3),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: ElevatedButton.icon(
-                            onPressed: () => _navigateToServiceCenter(center),
-                            icon: const Icon(Icons.directions, size: 16, color: Colors.white),
-                            label: const Text(
-                              'Navigate',
-                              style: TextStyle(
-                                fontFamily: 'Orbitron', 
-                                fontSize: 12,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
+                        child: _centerActionPill(
+                          label: 'Navigate',
+                          icon: Icons.directions,
+                          accent: AppTheme.secondaryGreen,
+                          onTap: () => _navigateToServiceCenter(center),
                         ),
                       ),
                       if (center.phoneNumber != null) ...[
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.blue,
-                                  Colors.blueAccent,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.blue.withOpacity(0.3),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: ElevatedButton.icon(
-                              onPressed: () => _callServiceCenter(center),
-                              icon: const Icon(Icons.phone, size: 16, color: Colors.white),
-                              label: const Text(
-                                'Call',
-                                style: TextStyle(
-                                  fontFamily: 'Orbitron', 
-                                  fontSize: 12,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            ),
+                          child: _centerActionPill(
+                            label: 'Call',
+                            icon: Icons.phone,
+                            accent: AppTheme.infoBlue,
+                            onTap: () => _callServiceCenter(center),
                           ),
                         ),
                       ],
@@ -1612,7 +1506,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         });
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackbar.show(context, 
             const SnackBar(
               content: Text(
                 'Emulator detected. Using your specified Cairo location.',
@@ -1643,7 +1537,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
       });
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Text(
               'Failed to get location. Using fallback location.\nError: ${e.toString()}',
@@ -1988,7 +1882,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
           _updateMarkersWithServiceCenters();
           
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            AppSnackbar.show(context, 
               SnackBar(
                 content: Text(
                   'Found ${centers.length} service centers nearby',
@@ -2020,7 +1914,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
           errorMessage = 'No service centers found in this area';
         }
         
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Text(
               errorMessage,
@@ -2083,7 +1977,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
             _updateMarkersWithServiceCenters();
             
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackbar.show(context, 
                 SnackBar(
                   content: Text(
                     'Found ${centers.length} automotive services nearby',
@@ -2104,7 +1998,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
 
     // If no results found with any keyword
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackbar.show(context, 
         const SnackBar(
           content: Text(
             'No service centers found in this area. Try expanding search radius.',
@@ -2162,56 +2056,64 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
 
   /// Show service center details in bottom sheet
   void _showServiceCenterBottomSheet(ServiceCenter center) {
-    showModalBottomSheet(
+    // Centered pop-up card (not a bottom sheet), matching every other dialog.
+    showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-        ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
+      barrierColor: Colors.black.withOpacity(0.6),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppTheme.backgroundGreen,
+                  AppTheme.darkAccentGreen,
+                ],
               ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: AppTheme.secondaryGreen.withOpacity(0.6),
+                width: 1,
+              ),
+              boxShadow: AppTheme.glowShadow(elevated: true),
             ),
-            
-            Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppTheme.backgroundGreen,
-                      AppTheme.darkAccentGreen,
-                    ],
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                      // Header — glowing wrench chip, name, raised close button
                       Row(
                         children: [
-                          const Icon(
-                            Icons.build,
-                            color: AppTheme.primaryGreen,
-                            size: 28,
+                          Container(
+                            padding: const EdgeInsets.all(11),
+                            decoration: BoxDecoration(
+                              color: AppTheme.secondaryGreen.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: AppTheme.secondaryGreen.withOpacity(0.5),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.secondaryGreen.withOpacity(0.25),
+                                  blurRadius: 12,
+                                  spreadRadius: -2,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.build,
+                              color: AppTheme.secondaryGreen,
+                              size: 22,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -2219,21 +2121,41 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                               center.name,
                               style: const TextStyle(
                                 fontFamily: 'Orbitron',
-                                fontSize: 20,
+                                fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: AppTheme.lightBackground,
+                                letterSpacing: 0.3,
                               ),
                             ),
                           ),
-                          IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.close, color: Colors.white),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppTheme.backgroundGreen.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppTheme.secondaryGreen.withOpacity(0.35),
+                                width: 1,
+                              ),
+                            ),
+                            child: IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(
+                                Icons.close,
+                                color: AppTheme.lightBackground,
+                                size: 20,
+                              ),
+                              padding: const EdgeInsets.all(8),
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      
+
                       const SizedBox(height: 16),
-                      
+
                       // Details
                       _buildServiceCenterDetail(Icons.location_on, center.address),
                       
@@ -2253,124 +2175,51 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
                       
                       const SizedBox(height: 24),
                       
-                      // Action buttons
+                      // Action buttons — faded pills
                       Row(
                         children: [
                           Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: _isFavorite(center.id)
-                                      ? [Colors.red.shade600, Colors.red.shade800]
-                                      : [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: (_isFavorite(center.id) ? Colors.red : AppTheme.primaryGreen).withOpacity(0.3),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: ElevatedButton.icon(
-                                onPressed: () => _addToFavorites(center),
-                                icon: Icon(
-                                  _isFavorite(center.id) ? Icons.favorite : Icons.favorite_border,
-                                  color: Colors.white,
-                                ),
-                                label: Text(
-                                  _isFavorite(center.id) ? 'Favorited' : 'Favorites',
-                                  style: const TextStyle(
-                                    fontFamily: 'Orbitron',
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
+                            child: _centerActionPill(
+                              label: _isFavorite(center.id)
+                                  ? 'Favorited'
+                                  : 'Favorites',
+                              icon: _isFavorite(center.id)
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              accent: _isFavorite(center.id)
+                                  ? AppDialog.destructive
+                                  : AppTheme.secondaryGreen,
+                              onTap: () => _addToFavorites(center),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [Colors.blue.shade600, Colors.blue.shade800],
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.blue.withOpacity(0.3),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: ElevatedButton.icon(
-                                onPressed: () => _navigateToServiceCenter(center),
-                                icon: const Icon(Icons.directions, color: Colors.white),
-                                label: const Text(
-                                  'Navigate',
-                                  style: TextStyle(
-                                    fontFamily: 'Orbitron',
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
+                            child: _centerActionPill(
+                              label: 'Navigate',
+                              icon: Icons.directions,
+                              accent: AppTheme.infoBlue,
+                              onTap: () => _navigateToServiceCenter(center),
                             ),
                           ),
                         ],
                       ),
-                    
+
                       const SizedBox(height: 12),
-                      
+
                       if (center.phoneNumber != null)
                         SizedBox(
                           width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () => _callServiceCenter(center),
-                            icon: const Icon(Icons.phone),
-                            label: const Text(
-                              'Call Service Center',
-                              style: TextStyle(fontFamily: 'Orbitron'),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
+                          child: _centerActionPill(
+                            label: 'Call Service Center',
+                            icon: Icons.phone,
+                            accent: AppTheme.infoBlue,
+                            onTap: () => _callServiceCenter(center),
                           ),
                         ),
-                    ],
-                  ),
-                ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -2402,7 +2251,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
   Future<void> _addToFavorites(ServiceCenter center) async {
     final user = _auth.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackbar.show(context, 
         const SnackBar(
           content: Text(
             'Please log in to save favorites',
@@ -2428,7 +2277,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         });
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackbar.show(context, 
             const SnackBar(
               content: Text(
                 'Removed from favorites',
@@ -2446,7 +2295,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
         });
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackbar.show(context, 
             const SnackBar(
               content: Text(
                 'Added to favorites ✅',
@@ -2460,7 +2309,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
     } catch (e) {
       print('Error managing favorites: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Text(
               'Failed to update favorites: $e',
@@ -2478,6 +2327,50 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
     return _favoriteServiceCenters.any((center) => center.id == centerId);
   }
 
+  /// Faded pill action shared by every service-center card and popup —
+  /// tinted fill, glowing rim, accent-coloured label, well-rounded edges.
+  Widget _centerActionPill({
+    required String label,
+    required IconData icon,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: AppTheme.glowButtonDecoration(accent: accent),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: accent),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: accent,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Navigate to service center using Google Maps
   Future<void> _navigateToServiceCenter(ServiceCenter center) async {
     final url = 'https://www.google.com/maps/dir/?api=1&destination=${center.lat},${center.lng}';
@@ -2490,7 +2383,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Text(
               'Failed to open navigation: $e',
@@ -2517,7 +2410,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Text(
               'Failed to make call: $e',
@@ -2567,7 +2460,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
 
   /// Helper methods for old service center format (Map<String, dynamic>)
   void _showOldServiceCenterCall(Map<String, dynamic> center) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           'Calling ${center['name']}...',
@@ -2579,7 +2472,7 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
   }
 
   void _showOldServiceCenterNavigation(Map<String, dynamic> center) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           'Opening navigation to ${center['name']}...',
@@ -2590,148 +2483,20 @@ class _ServiceCentersScreenState extends State<ServiceCentersScreen>
     );
   }
 
-  void _showRemoveFromFavoritesDialog(ServiceCenter center) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Colors.transparent,
-          content: Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.darkAccentGreen, AppTheme.backgroundGreen],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  spreadRadius: 2,
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.orange,
-                  size: 48,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Remove from Favorites',
-                  style: TextStyle(
-                    fontFamily: 'Orbitron',
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Are you sure you want to remove "${center.name}" from your favorites?',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontFamily: 'Orbitron',
-                    fontSize: 14,
-                    color: Colors.white70,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Colors.grey.shade600, Colors.grey.shade800],
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.3),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Text(
-                            'Cancel',
-                            style: TextStyle(
-                              fontFamily: 'Orbitron',
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Colors.red.shade600, Colors.red.shade800],
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red.withOpacity(0.3),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            _addToFavorites(center); // This will remove it since it's already favorited
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Text(
-                            'Remove',
-                            style: TextStyle(
-                              fontFamily: 'Orbitron',
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+  Future<void> _showRemoveFromFavoritesDialog(ServiceCenter center) async {
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Remove from Favorites',
+      message:
+          'Are you sure you want to remove "${center.name}" from your favorites?',
+      icon: Icons.heart_broken_outlined,
+      confirmLabel: 'Remove',
+      isDestructive: true,
     );
+
+    if (confirmed == true && mounted) {
+      // This removes it, since the centre is already favourited.
+      _addToFavorites(center);
+    }
   }
 }

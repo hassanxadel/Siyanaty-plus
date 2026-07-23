@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/local_notification_service.dart';
@@ -85,7 +86,7 @@ class _NotificationPermissionsScreenState extends State<NotificationPermissionsS
   }
 
   void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(message, style: const TextStyle(fontFamily: 'Orbitron')),
         backgroundColor: Colors.green,
@@ -94,7 +95,7 @@ class _NotificationPermissionsScreenState extends State<NotificationPermissionsS
   }
 
   void _showWarning(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(message, style: const TextStyle(fontFamily: 'Orbitron')),
         backgroundColor: Colors.orange,
@@ -103,7 +104,7 @@ class _NotificationPermissionsScreenState extends State<NotificationPermissionsS
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(message, style: const TextStyle(fontFamily: 'Orbitron')),
         backgroundColor: Colors.red,

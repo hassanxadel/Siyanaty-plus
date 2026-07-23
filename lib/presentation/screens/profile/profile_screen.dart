@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import '../../widgets/profile_avatar.dart';
 import '../../../services/car_service.dart';
 import '../../../services/reminder_service.dart';
 import '../../../services/maintenance_service.dart';
+import '../../../services/profile_image_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -27,6 +31,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final CarService _carService = CarService();
   final ReminderService _reminderService = ReminderService();
   final MaintenanceService _maintenanceService = MaintenanceService();
+  final ProfileImageService _profileImageService = ProfileImageService.instance;
   
   // Real data counts
   int _vehicleCount = 0;
@@ -39,6 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _loadUserData();
     _loadCounts();
+    _profileImageService.loadProfileImage();
   }
 
   @override
@@ -148,7 +154,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context,
       SnackBar(
         content: Text(
           message,
@@ -157,6 +163,131 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: AppTheme.primaryGreen,
       ),
     );
+  }
+
+  /// Bottom sheet offering camera / gallery / remove for the profile picture.
+  void _showImageSourceSheet() {
+    HapticFeedback.lightImpact();
+    final hasImage = _profileImageService.currentPath != null;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        decoration: AppTheme.glowCardDecoration(radius: 24, elevated: true),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Grab handle
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.secondaryGreen.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Profile Picture',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.lightBackground,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 18),
+            _buildSheetAction(
+              icon: Icons.photo_camera_outlined,
+              label: 'Take a photo',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _updateProfileImage(ImageSource.camera);
+              },
+            ),
+            const SizedBox(height: 10),
+            _buildSheetAction(
+              icon: Icons.photo_library_outlined,
+              label: 'Choose from gallery',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _updateProfileImage(ImageSource.gallery);
+              },
+            ),
+            if (hasImage) ...[
+              const SizedBox(height: 10),
+              _buildSheetAction(
+                icon: Icons.delete_outline,
+                label: 'Remove photo',
+                accent: AppTheme.errorColor,
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _removeProfileImage();
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSheetAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color? accent,
+  }) {
+    final color = accent ?? AppTheme.secondaryGreen;
+    return Container(
+      decoration: AppTheme.glowButtonDecoration(accent: color, radius: 18),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 14),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Orbitron',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateProfileImage(ImageSource source) async {
+    final result = await _profileImageService.pickAndSaveImage(source);
+    if (!mounted) return;
+
+    // "No image selected" just means the user backed out — not worth a toast.
+    if (!result.isSuccess && result.message == 'No image selected') return;
+
+    _showMessage(result.message);
+  }
+
+  Future<void> _removeProfileImage() async {
+    final result = await _profileImageService.removeProfileImage();
+    if (!mounted) return;
+    _showMessage(result.message);
   }
 
   @override
@@ -262,36 +393,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileCard(user, AuthProvider authProvider) {
+    final displayName =
+        authProvider.appUser?.fullName ?? user?.displayName ?? 'User Name';
+
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
+      decoration: AppTheme.glowCardDecoration(radius: 20, elevated: true),
       child: Column(
         children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: AppTheme.primaryGreen.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(50),
-              border: Border.all(
-                color: AppTheme.primaryGreen,
-                width: 3,
-              ),
-            ),
-            child: const Icon(
-              Icons.person,
-              size: 50,
-              color: AppTheme.primaryGreen,
+          ProfileAvatar(
+            name: displayName,
+            size: 104,
+            showEditBadge: true,
+            onTap: _showImageSourceSheet,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Tap the photo to change it',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppTheme.lightBackground.withOpacity(0.55),
+              fontFamily: 'Orbitron',
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
             authProvider.appUser?.fullName ?? user?.displayName ?? 'User Name',
             style: TextStyle(
@@ -357,14 +482,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildPersonalInfoCard() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
+      decoration: AppTheme.glowCardDecoration(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -411,14 +529,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildContactInfoCard() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
+      decoration: AppTheme.glowCardDecoration(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -461,14 +572,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildEmergencyContactCard() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
+      decoration: AppTheme.glowCardDecoration(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -527,7 +631,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        TextField(
+        // Shadow lives on a wrapper: TextField paints its own fill, so the
+        // shadow has to come from a box behind it.
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: enabled
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                      spreadRadius: -3,
+                    ),
+                    BoxShadow(
+                      color: AppTheme.secondaryGreen.withOpacity(0.15),
+                      blurRadius: 14,
+                    ),
+                  ]
+                : null,
+          ),
+          child: TextField(
           controller: controller,
           enabled: enabled,
           style: TextStyle(
@@ -586,6 +710,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ),
+        ),
       ],
     );
   }
@@ -595,30 +720,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Expanded(
           child: Container(
-            decoration: BoxDecoration(
-              gradient: _isEditing 
-                  ? null
-                  : const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.darkAccentGreen,
-                        AppTheme.backgroundGreen,
-                      ],
-                    ),
-              color: _isEditing 
-                  ? AppTheme.lightBackground.withOpacity(0.3)
-                  : null,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: _isEditing 
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+            decoration: AppTheme.glowButtonDecoration(
+              accent: _isEditing
+                  ? AppTheme.lightBackground
+                  : AppTheme.secondaryGreen,
+              filled: !_isEditing,
             ),
             child: ElevatedButton.icon(
               onPressed: _isEditing ? null : _toggleEditing,
@@ -641,7 +747,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(20),
                 ),
               ),
             ),
@@ -651,23 +757,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(width: 16),
           Expanded(
             child: Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppTheme.primaryGreen,
-                    AppTheme.secondaryGreen,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryGreen.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+              decoration: AppTheme.glowButtonDecoration(
+                accent: AppTheme.secondaryGreen,
               ),
               child: ElevatedButton.icon(
                 onPressed: _isLoading ? null : _saveChanges,
@@ -699,7 +790,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
               ),

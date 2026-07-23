@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/ocr_service.dart';
 import '../../../models/scan_model.dart';
+import '../../widgets/app_dialog.dart';
 import 'ocr_review_screen.dart';
 
 
@@ -668,42 +670,20 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
     }
   }
 
-  void _confirmDeleteScan(ScanModel scan) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Delete Scan',
-          style: TextStyle(fontFamily: 'Orbitron'),
-        ),
-        content: const Text(
+  Future<void> _confirmDeleteScan(ScanModel scan) async {
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Delete Scan',
+      message:
           'Are you sure you want to delete this scan? This action cannot be undone.',
-          style: TextStyle(fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _deleteScan(scan);
-            },
-            child: const Text(
-              'Delete',
-              style: TextStyle(
-                fontFamily: 'Orbitron',
-                color: Colors.red,
-              ),
-            ),
-          ),
-        ],
-      ),
+      icon: Icons.delete_outline,
+      confirmLabel: 'Delete',
+      isDestructive: true,
     );
+
+    if (confirmed == true && mounted) {
+      _deleteScan(scan);
+    }
   }
 
   Future<void> _deleteScan(ScanModel scan) async {
@@ -719,7 +699,7 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
         _loadScans(); // Refresh the list
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackbar.show(context, 
             const SnackBar(
               content: Text(
                 'Scan deleted successfully',
@@ -737,28 +717,13 @@ class _OcrHistoryScreenState extends State<OcrHistoryScreen> {
 
   void _showErrorDialog(String message) {
     if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Error',
-          style: TextStyle(fontFamily: 'Orbitron'),
-        ),
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'OK',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-        ],
-      ),
+
+    AppDialog.message(
+      context,
+      title: 'Error',
+      message: message,
+      icon: Icons.error_outline,
+      isError: true,
     );
   }
 }

@@ -206,8 +206,6 @@ class _CarHealthDashboardScreenState extends State<CarHealthDashboardScreen> {
             _buildRecommendationsCard(),
             const SizedBox(height: 16),
             _buildExpenseSummaryCard(),
-            const SizedBox(height: 16),
-            _buildQuickActions(),
           ],
         ],
       ),
@@ -773,95 +771,5 @@ class _CarHealthDashboardScreenState extends State<CarHealthDashboardScreen> {
     );
   }
 
-  Widget _buildQuickActions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Quick Actions',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.getThemeAwareTextColor(context),
-            fontFamily: 'Orbitron',
-          ),
-        ),
-          const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildActionButton(
-                'Add Expense',
-                Icons.add_circle_outline,
-                () => _showAddExpenseDialog(),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActionButton(
-                'View Reports',
-                Icons.analytics_outlined,
-                () => _showComingSoon('Reports feature'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton(String label, IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.darkAccentGreen,
-              AppTheme.backgroundGreen,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showAddExpenseDialog() {
-    // TODO: Implement add expense dialog
-    _showComingSoon('Add expense feature');
-  }
-
-  void _showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$feature coming soon!',
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        backgroundColor: AppTheme.primaryGreen,
-      ),
-    );
-  }
 }
 

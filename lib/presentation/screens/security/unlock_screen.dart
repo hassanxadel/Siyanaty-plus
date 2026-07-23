@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/constants/app_theme.dart';
@@ -7,6 +8,7 @@ import '../../../services/security/local_unlock_service.dart';
 import '../../../services/security/authentication_manager.dart';
 import '../../../services/security/otp_service.dart';
 import '../auth/login_screen.dart';
+import '../../widgets/app_dialog.dart';
 import 'otp_verification_screen.dart';
 
 class UnlockScreen extends StatefulWidget {
@@ -31,7 +33,8 @@ class _UnlockScreenState extends State<UnlockScreen>
   String? _errorMessage;
   bool _showBiometricPrompt = true;
   int _remainingAttempts = 5;
-  
+  int? _storedPinLength; // Known PIN length; null for PINs saved before length tracking
+
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
   late AnimationController _fadeController;
@@ -41,7 +44,14 @@ class _UnlockScreenState extends State<UnlockScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
+
+    // Load the stored PIN length so the dots match and entry auto-verifies
+    _localUnlockService.getPinLength().then((length) {
+      if (mounted && length != null) {
+        setState(() => _storedPinLength = length);
+      }
+    });
+
     _shakeController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
@@ -159,6 +169,7 @@ class _UnlockScreenState extends State<UnlockScreen>
             padding: context.responsivePadding(horizontal: 16, vertical: 12),
             child: Column(
               children: [
+                SizedBox(height: context.responsiveSpacing(24)),
                 _buildHeader(),
                 SizedBox(height: context.responsiveSpacing(16)),
                 Expanded(
@@ -167,11 +178,8 @@ class _UnlockScreenState extends State<UnlockScreen>
                     children: [
                       if (_showBiometricPrompt)
                         _buildBiometricPrompt()
-                      else ...[
-                        _buildPinDisplay(),
-                        SizedBox(height: _errorMessage != null ? context.r(12) : context.r(16)),
+                      else
                         _buildNumericKeypad(),
-                      ],
                       if (_errorMessage != null) ...[
                         SizedBox(height: context.r(10)),
                         _buildErrorMessage(),
@@ -192,8 +200,8 @@ class _UnlockScreenState extends State<UnlockScreen>
     return Column(
       children: [
         Container(
-          width: context.r(70),
-          height: context.r(70),
+          width: context.r(90),
+          height: context.r(90),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
@@ -203,7 +211,7 @@ class _UnlockScreenState extends State<UnlockScreen>
                 AppTheme.darkAccentGreen,
               ],
             ),
-            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(35)),
+            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(45)),
             boxShadow: [
               BoxShadow(
                 color: AppTheme.primaryGreen.withOpacity(0.3),
@@ -215,34 +223,23 @@ class _UnlockScreenState extends State<UnlockScreen>
           child: Icon(
             Icons.lock_outline,
             color: Colors.white,
-            size: context.responsiveIconSize(35),
+            size: context.responsiveIconSize(44),
           ),
         ),
-        SizedBox(height: context.r(12)),
+        SizedBox(height: context.r(16)),
         Text(
           'Enter PIN',
           style: context.responsiveTextStyle(
-            fontSize: 20,
+            fontSize: 26,
             fontWeight: FontWeight.bold,
             fontFamily: 'Orbitron',
-            color: AppTheme.primaryGreen,
+            color: AppTheme.getThemeAwareTextColor(context),
           ),
           textAlign: TextAlign.center,
         ),
-        SizedBox(height: context.r(6)),
-        Text(
-          _showBiometricPrompt 
-              ? 'Verify your PIN to access License'
-              : 'Verify your PIN to access License',
-          style: context.responsiveTextStyle(
-            fontSize: 12,
-            color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-            fontFamily: 'Orbitron',
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        SizedBox(height: context.r(16)),
+        // PIN dots directly under the title
+        _buildPinDisplay(),
       ],
     );
   }
@@ -320,7 +317,7 @@ class _UnlockScreenState extends State<UnlockScreen>
           offset: Offset(_shakeAnimation.value, 0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(6, (index) {
+            children: List.generate(_storedPinLength ?? 6, (index) {
               bool isFilled = index < _pin.length;
               bool isActive = index == _pin.length;
               
@@ -359,15 +356,17 @@ class _UnlockScreenState extends State<UnlockScreen>
     return Column(
       children: [
         _buildKeypadRow(['1', '2', '3']),
-        SizedBox(height: context.r(8)),
+        SizedBox(height: context.r(14)),
         _buildKeypadRow(['4', '5', '6']),
-        SizedBox(height: context.r(8)),
+        SizedBox(height: context.r(14)),
         _buildKeypadRow(['7', '8', '9']),
-        SizedBox(height: context.r(8)),
+        SizedBox(height: context.r(14)),
         _buildKeypadRow(['biometric', '0', 'backspace']),
         SizedBox(height: context.r(12)),
-        // Verify button for 4-5 digit PINs
-        if (_pin.length >= 4 && _pin.length < 6)
+        // Legacy fallback only: PINs saved before length tracking may be
+        // 4-5 digits, so manual verification is needed until the length
+        // is learned on the first successful unlock
+        if (_storedPinLength == null && _pin.length >= 4 && _pin.length < 6)
           _buildVerifyButton(),
       ],
     );
@@ -433,8 +432,8 @@ class _UnlockScreenState extends State<UnlockScreen>
   }
 
   Widget _buildKeypadButton(String key) {
-    final buttonSize = context.r(60);
-    final borderRadius = context.responsiveBorderRadius(30);
+    final buttonSize = context.r(78);
+    final borderRadius = context.responsiveBorderRadius(39);
     
     if (key == 'biometric') {
       return Container(
@@ -488,6 +487,10 @@ class _UnlockScreenState extends State<UnlockScreen>
                   blurRadius: context.r(10),
                   offset: Offset(0, context.r(5)),
                 ),
+                BoxShadow(
+                  color: AppTheme.secondaryGreen.withOpacity(0.3),
+                  blurRadius: context.r(18),
+                ),
               ],
       ),
       child: Material(
@@ -505,7 +508,7 @@ class _UnlockScreenState extends State<UnlockScreen>
                 : Text(
                     key,
                     style: context.responsiveTextStyle(
-                      fontSize: 22,
+                      fontSize: 30,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       fontFamily: 'Orbitron',
@@ -574,40 +577,36 @@ class _UnlockScreenState extends State<UnlockScreen>
               ),
             ),
           ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextButton(
-              onPressed: _showForgotPinDialog,
-              child: Text(
-                'Forgot PIN?',
-                style: context.responsiveTextStyle(
-                  fontSize: 12,
-                  color: AppTheme.primaryGreen,
-                  fontFamily: 'Orbitron',
-                  decoration: TextDecoration.underline,
+        // Bottom links placed at the screen corners, iPhone passcode style
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: context.r(20)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: _showForgotPinDialog,
+                child: Text(
+                  'Forgot PIN?',
+                  style: context.responsiveTextStyle(
+                    fontSize: 14,
+                    color: AppTheme.getThemeAwareTextColor(context),
+                    fontFamily: 'Orbitron',
+                  ),
                 ),
               ),
-            ),
-            Text(
-              ' | ',
-              style: context.responsiveTextStyle(
-                fontSize: 12,
-                color: AppTheme.primaryGreen,
-              ),
-            ),
-            TextButton(
-              onPressed: _showSignOutDialog,
-              child: Text(
-                'Sign Out',
-                style: context.responsiveTextStyle(
-                  fontSize: 12,
-                  color: AppTheme.primaryGreen,
-                  fontFamily: 'Orbitron',
+              TextButton(
+                onPressed: _showSignOutDialog,
+                child: Text(
+                  'Sign Out',
+                  style: context.responsiveTextStyle(
+                    fontSize: 14,
+                    color: AppTheme.getThemeAwareTextColor(context),
+                    fontFamily: 'Orbitron',
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -636,9 +635,9 @@ class _UnlockScreenState extends State<UnlockScreen>
       _pin += digit;
     });
 
-    // Auto-verify when PIN reaches 6 digits (full PIN length)
-    // Don't auto-verify at 4 digits as user may have set a 5 or 6 digit PIN
-    if (_pin.length == 6) {
+    // Auto-verify once the PIN reaches its stored length
+    // (6 is the fallback for PINs saved before length tracking)
+    if (_pin.length == (_storedPinLength ?? 6)) {
       _verifyPin();
     }
   }
@@ -715,82 +714,44 @@ class _UnlockScreenState extends State<UnlockScreen>
   }
 
   void _showLockedOutDialog() {
-    showDialog(
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Account Locked',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Text(
-          'Too many failed attempts. Please sign in with your email and password to reset your PIN.',
-          style: TextStyle(fontFamily: 'Orbitron'),
-        ),
+      barrierColor: Colors.black.withOpacity(0.6),
+      builder: (dialogContext) => AppDialogPanel(
+        title: 'Account Locked',
+        message:
+            'Too many failed attempts. Please sign in with your email and password to reset your PIN.',
+        icon: Icons.lock_clock,
+        accent: AppDialog.destructive,
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
+          AppDialogAction(
+            label: 'Sign In',
+            accent: AppDialog.destructive,
+            filled: true,
+            onTap: () {
+              Navigator.of(dialogContext).pop();
               _signOutAndNavigateToLogin();
             },
-            child: const Text(
-              'Sign In',
-              style: TextStyle(
-                color: AppTheme.primaryGreen,
-                fontFamily: 'Orbitron',
-              ),
-            ),
           ),
         ],
       ),
     );
   }
 
-  void _showForgotPinDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Forgot PIN?',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Text(
-          'To reset your PIN, you need to verify your email. A verification code will be sent to your registered email address.',
-          style: TextStyle(fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _initiateEmailVerificationForPinReset();
-            },
-            child: const Text(
-              'Send Code',
-              style: TextStyle(
-                color: AppTheme.primaryGreen,
-                fontFamily: 'Orbitron',
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
+  void _showForgotPinDialog() async {
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Forgot PIN?',
+      message:
+          'We will email a verification code to your registered address so you can set a new PIN.',
+      icon: Icons.lock_reset_rounded,
+      confirmLabel: 'Send Code',
     );
+
+    if (confirmed == true && mounted) {
+      _initiateEmailVerificationForPinReset();
+    }
   }
 
   Future<void> _initiateEmailVerificationForPinReset() async {
@@ -828,7 +789,7 @@ class _UnlockScreenState extends State<UnlockScreen>
           );
 
           // Show development OTP in snackbar (remove in production)
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackbar.show(context, 
             SnackBar(
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -881,46 +842,20 @@ class _UnlockScreenState extends State<UnlockScreen>
     }
   }
 
-  void _showSignOutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Sign Out',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Text(
-          'Are you sure you want to sign out? You will need to sign in again with your email and password.',
-          style: TextStyle(fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _signOutAndNavigateToLogin();
-            },
-            child: const Text(
-              'Sign Out',
-              style: TextStyle(
-                color: Colors.red,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ),
-        ],
-      ),
+  void _showSignOutDialog() async {
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Sign Out',
+      message:
+          'You will need to sign in again with your email and password to continue.',
+      icon: Icons.logout_rounded,
+      confirmLabel: 'Sign Out',
+      isDestructive: true,
     );
+
+    if (confirmed == true && mounted) {
+      _signOutAndNavigateToLogin();
+    }
   }
 
   Future<void> _signOutAndNavigateToLogin() async {

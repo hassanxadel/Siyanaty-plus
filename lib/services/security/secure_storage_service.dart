@@ -107,7 +107,10 @@ class SecureStorageService {
     
     await _storage.write(key: userSpecificHashKey, value: hash);
     await _storage.write(key: userSpecificSaltKey, value: salt);
-    
+    await _storage.write(
+        key: '${_pinHashKey}_length_$currentUserId',
+        value: pin.length.toString());
+
     // Also store the user ID associated with this PIN for validation
     await _storage.write(key: '${_pinHashKey}_owner', value: currentUserId);
   }
@@ -137,7 +140,26 @@ class SecureStorageService {
     }
 
     final inputHash = _hashPin(pin, salt);
-    return storedHash == inputHash;
+    final isValid = _constantTimeEquals(storedHash, inputHash);
+    if (isValid) {
+      // Backfill the length for PINs stored before length tracking existed
+      await _storage.write(
+          key: '${_pinHashKey}_length_$currentUserId',
+          value: pin.length.toString());
+    }
+    return isValid;
+  }
+
+  /// Length of the current user's PIN, or null for PINs stored before
+  /// length tracking existed (backfilled on the next successful verify)
+  Future<int?> getPinLength({String? userId}) async {
+    final currentUserId = userId ?? await getUserId();
+    if (currentUserId == null) {
+      return null;
+    }
+    final value =
+        await _storage.read(key: '${_pinHashKey}_length_$currentUserId');
+    return value != null ? int.tryParse(value) : null;
   }
 
   Future<bool> hasPinSet({String? userId}) async {
@@ -169,6 +191,7 @@ class SecureStorageService {
       final userSpecificSaltKey = '${_pinSaltKey}_$currentUserId';
       await _storage.delete(key: userSpecificHashKey);
       await _storage.delete(key: userSpecificSaltKey);
+      await _storage.delete(key: '${_pinHashKey}_length_$currentUserId');
     }
     
     // Also clear the old global PIN keys for backward compatibility/migration
@@ -295,6 +318,17 @@ class SecureStorageService {
       saltBytes[i] = random.nextInt(256);
     }
     return base64Encode(saltBytes);
+  }
+
+  /// Compare two strings in time independent of how many characters match,
+  /// so a wrong PIN cannot be narrowed down by measuring response timing.
+  bool _constantTimeEquals(String a, String b) {
+    if (a.length != b.length) return false;
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
+    }
+    return diff == 0;
   }
 
   String _hashPin(String pin, String salt) {

@@ -3,18 +3,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/utils/app_logger.dart';
+import '../../../shared/utils/custom_snackbar.dart';
 import '../../../services/security/authentication_manager.dart';
+import '../../widgets/app_dialog.dart';
 
 class MfaVerificationScreen extends StatefulWidget {
   final String userId;
   final String deviceId;
   final VoidCallback? onVerificationSuccess;
 
+  /// Called after the user signs out from this screen. Needed when the screen
+  /// is shown as a root route (SecurityWrapper's MFA gate), where there is no
+  /// route to pop back to.
+  final VoidCallback? onSignOut;
+
   const MfaVerificationScreen({
     super.key,
     required this.userId,
     required this.deviceId,
     this.onVerificationSuccess,
+    this.onSignOut,
   });
 
   @override
@@ -95,7 +103,7 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
     if (success) {
       _startResendCountdown();
       // Note: Email service may not be configured - code is always logged to console
-      _showSuccessMessage('Verification code generated! Check the debug console for your code.');
+      _showSuccessMessage('Verification code generated! Check your Email for the code.');
     } else {
       _showError('Failed to generate verification code. Please try again.');
     }
@@ -124,27 +132,67 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnimation,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 32),
-                  _buildCodeInput(),
-                  if (_errorMessage != null) ...[
-                    const SizedBox(height: 16),
-                    _buildErrorMessage(),
-                  ],
-                  const SizedBox(height: 32),
-                  _buildResendSection(),
-                  const SizedBox(height: 32),
-                  _buildFooter(),
-                ],
+          child: Column(
+            children: [
+              // Logo stays pinned at the top; everything else centers below
+              _buildTopBar(),
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 32),
+                          _buildCodeInput(),
+                          if (_errorMessage != null) ...[
+                            const SizedBox(height: 16),
+                            _buildErrorMessage(),
+                          ],
+                          const SizedBox(height: 32),
+                          _buildResendSection(),
+                          const SizedBox(height: 32),
+                          _buildFooter(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 28, 8, 0),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (Navigator.canPop(context))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(
+                  Icons.arrow_back_ios,
+                  color: AppTheme.primaryGreen,
+                  size: 24,
+                ),
+              ),
+            ),
+          Image.asset(
+            'assets/images/logo.png',
+            width: 160,
+            height: 60,
+            fit: BoxFit.contain,
+          ),
+        ],
       ),
     );
   }
@@ -152,28 +200,6 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
   Widget _buildHeader() {
     return Column(
       children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(
-                Icons.arrow_back_ios,
-                color: AppTheme.primaryGreen,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 28,),
-            Center(
-              child: Image.asset(
-                'assets/images/logo.png',
-                width: 160,
-                height: 60,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
         Container(
           width: 80,
           height: 80,
@@ -192,6 +218,10 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
                 color: AppTheme.primaryGreen.withOpacity(0.3),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: AppTheme.secondaryGreen.withOpacity(0.3),
+                blurRadius: 18,
               ),
             ],
           ),
@@ -214,7 +244,7 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'Enter the 6-digit verification code sent to your registered phone number',
+          'Enter the 6-digit verification code sent to your Email',
           style: TextStyle(
             fontSize: 12,
             color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
@@ -260,6 +290,10 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
+                    BoxShadow(
+                      color: AppTheme.secondaryGreen.withOpacity(0.3),
+                      blurRadius: 18,
+                    ),
                   ],
                 ),
                 child: TextField(
@@ -267,6 +301,7 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
                   focusNode: _focusNodes[index],
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
+                  textAlignVertical: TextAlignVertical.center,
                   maxLength: 1,
                   style: const TextStyle(
                     fontSize: 24,
@@ -277,6 +312,8 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
                   decoration: const InputDecoration(
                     counterText: '',
                     border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 16),
                   ),
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
@@ -344,6 +381,12 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
             color: AppTheme.primaryGreen.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.3)),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.secondaryGreen.withOpacity(0.3),
+                blurRadius: 18,
+              ),
+            ],
           ),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
@@ -394,6 +437,10 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
                   color: AppTheme.primaryGreen.withOpacity(0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: AppTheme.secondaryGreen.withOpacity(0.3),
+                  blurRadius: 18,
                 ),
               ],
             ),
@@ -463,6 +510,10 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
+                      BoxShadow(
+                        color: AppTheme.secondaryGreen.withOpacity(0.3),
+                        blurRadius: 18,
+                      ),
                     ]
                   : null,
             ),
@@ -502,54 +553,22 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
         TextButton.icon(
           onPressed: () async {
             // Show confirmation dialog
-            final shouldSignOut = await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: const Text(
-                  'Sign Out?',
-                  style: TextStyle(
-                    fontFamily: 'Orbitron',
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                content: const Text(
-                  'Are you sure you want to sign out? You will need to log in again.',
-                  style: TextStyle(fontFamily: 'Orbitron'),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(fontFamily: 'Orbitron'),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text(
-                      'Sign Out',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        color: Colors.red,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
+            final shouldSignOut = await _showSignOutDialog();
 
             if (shouldSignOut == true && mounted) {
               // Sign out from Firebase
               await _authManager.signOut();
-              // Pop back to login screen (pop all routes until we reach the first route)
-              if (mounted) {
-                Navigator.of(context).popUntil((route) {
-                  // Pop until we reach the first route (login screen)
-                  return route.isFirst;
-                });
+              if (!mounted) return;
+
+              // This screen is shown two ways: pushed on top of signup, and
+              // as a ROOT screen by SecurityWrapper's MFA gate. In the root
+              // case there is nothing to pop, which is why popping alone left
+              // the user stranded here. Tell the wrapper to leave the MFA
+              // gate, then pop only if this screen was actually pushed.
+              widget.onSignOut?.call();
+
+              if (mounted && Navigator.of(context).canPop()) {
+                Navigator.of(context).popUntil((route) => route.isFirst);
               }
             }
           },
@@ -564,6 +583,18 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
           ),
         ),
       ],
+    );
+  }
+
+  /// Confirmation dialog — uses the shared app-wide pop-up card.
+  Future<bool?> _showSignOutDialog() {
+    return AppDialog.show(
+      context,
+      title: 'Sign Out?',
+      message: 'You will need to log in again to continue.',
+      icon: Icons.logout_rounded,
+      confirmLabel: 'Sign Out',
+      isDestructive: true,
     );
   }
 
@@ -650,7 +681,7 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
     if (success) {
       _startResendCountdown();
       // Note: Email service may not be configured - code is always logged to console
-      _showSuccessMessage('New verification code generated! Check the debug console.');
+      _showSuccessMessage('New verification code generated! Check Your Email.');
     } else {
       _showError('Failed to generate verification code. Please try again.');
     }
@@ -674,16 +705,7 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
   }
 
   void _showSuccessMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        backgroundColor: AppTheme.primaryGreen,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    CustomSnackbar.showSuccess(context, message);
   }
 
   void _performShakeAnimation() {
@@ -721,8 +743,11 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen>
     
     if (mounted) {
       AppLogger.info('Popping MFA screen after verification success');
-      // Pop with a result to indicate success
-      Navigator.of(context).pop(true);
+      // Pop with a result to indicate success (the screen may also be shown
+      // as a root screen by SecurityWrapper, where there is nothing to pop)
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(true);
+      }
       
       // Call the callback AFTER popping to ensure navigation is complete
       // Use a post-frame callback to ensure it happens after the navigation completes
