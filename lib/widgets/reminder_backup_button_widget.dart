@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import '../shared/constants/app_theme.dart';
 import '../services/firebase_reminder_service.dart';
+import '../presentation/widgets/app_dialog.dart';
 
 /// Widget for handling reminder backup and restore operations
 class ReminderBackupButtonWidget extends StatefulWidget {
@@ -220,29 +222,14 @@ class _ReminderBackupButtonWidgetState extends State<ReminderBackupButtonWidget>
     }
 
     // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Restore Reminders'),
-        content: const Text(
-          'This will restore all reminders from your cloud backup. '
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Restore Reminders',
+      message: 'This will restore all reminders from your cloud backup. '
           'This may create duplicates if you have local reminders. '
-          'Do you want to continue?'
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryGreen,
-            ),
-            child: const Text('Restore'),
-          ),
-        ],
-      ),
+          'Do you want to continue?',
+      icon: Icons.cloud_download_outlined,
+      confirmLabel: 'Restore',
     );
 
     if (confirmed != true) return;
@@ -274,7 +261,7 @@ class _ReminderBackupButtonWidgetState extends State<ReminderBackupButtonWidget>
   void _showMessage(String message, {required bool isError}) {
     if (!mounted) return;
     
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,

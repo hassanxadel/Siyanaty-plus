@@ -8,6 +8,7 @@ import '../../../shared/utils/responsive_utils.dart';
 import '../../../services/bluetooth/bluetooth_service.dart';
 import '../../../services/obd/obd_service.dart';
 import '../../../services/obd/obd_models.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 
 class OBDDashboardScreen extends StatefulWidget {
@@ -64,27 +65,19 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
   }
 
   /// Show dialog to enable Bluetooth
-  void _showBluetoothDisabledDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Bluetooth Disabled'),
-        content: const Text('Please enable Bluetooth to connect to OBD-II devices.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _bluetoothService.requestEnableBluetooth();
-            },
-            child: const Text('Enable'),
-          ),
-        ],
-      ),
+  Future<void> _showBluetoothDisabledDialog() async {
+    final enable = await AppDialog.show(
+      context,
+      title: 'Bluetooth Disabled',
+      message:
+          'Please enable Bluetooth to connect to your OBD-II adapter and read live vehicle data.',
+      icon: Icons.bluetooth_disabled,
+      confirmLabel: 'Enable',
     );
+
+    if (enable != true) return;
+
+    await _bluetoothService.requestEnableBluetooth();
   }
 
   /// Scan for OBD devices
@@ -155,66 +148,107 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
 
   /// Show device selection dialog
   void _showDeviceSelectionDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select OBD-II Device'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: _availableDevices.length,
-            itemBuilder: (context, index) {
-              final device = _availableDevices[index];
-              return ListTile(
-                leading: const Icon(Icons.bluetooth),
-                title: Text(device.name ?? 'Unknown Device'),
-                subtitle: Text(device.address),
-                onTap: () {
-                  Navigator.pop(context);
-                  _connectToDevice(device);
-                },
-              );
-            },
+    AppDialog.custom<void>(
+      context,
+      title: 'Select OBD-II Device',
+      message: 'Choose the adapter to connect to',
+      icon: Icons.bluetooth_searching,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final device in _availableDevices) ...[
+            _buildDeviceTile(device),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+      actionsBuilder: (dialogContext) => [
+        AppDialogAction(
+          label: 'Cancel',
+          onTap: () => Navigator.pop(dialogContext),
+        ),
+      ],
+    );
+  }
+
+  /// A single selectable adapter inside the device-selection pop-up.
+  Widget _buildDeviceTile(BluetoothDevice device) {
+    return Container(
+      decoration: AppTheme.glowFieldDecoration(),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            Navigator.pop(context);
+            _connectToDevice(device);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.bluetooth,
+                  color: AppTheme.secondaryGreen,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        device.name ?? 'Unknown Device',
+                        style: const TextStyle(
+                          fontFamily: 'Orbitron',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.lightBackground,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        device.address,
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          fontSize: 10,
+                          color: AppTheme.lightBackground.withOpacity(0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 12,
+                  color: AppTheme.secondaryGreen.withOpacity(0.8),
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
       ),
     );
   }
 
   /// Show no devices found dialog
-  void _showNoDevicesFoundDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('No Devices Found'),
-        content: const Text(
-          'No OBD-II devices found. Please ensure:\n'
+  Future<void> _showNoDevicesFoundDialog() async {
+    final retry = await AppDialog.show(
+      context,
+      title: 'No Devices Found',
+      message: 'No OBD-II devices found. Please ensure:\n'
           '• Your OBD adapter is plugged in\n'
           '• Your vehicle ignition is on\n'
           '• The adapter is paired with your phone',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _scanForDevices();
-            },
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
+      icon: Icons.bluetooth_disabled,
+      cancelLabel: 'OK',
+      confirmLabel: 'Retry',
     );
+
+    if (retry == true && mounted) {
+      _scanForDevices();
+    }
   }
 
   /// Connect to selected device
@@ -433,9 +467,10 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
         color: AppTheme.darkGray.withOpacity(0.3),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
+          color: AppTheme.secondaryGreen.withOpacity(0.45),
           width: 1,
         ),
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -479,7 +514,15 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
             overflow: TextOverflow.ellipsis,
           ),
           SizedBox(height: ResponsiveUtils.spacing(context, 12)),
-          ElevatedButton.icon(
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: AppTheme.glowShadow(
+                accent: isConnected ? AppTheme.errorColor : AppTheme.secondaryGreen,
+                elevated: true,
+              ),
+            ),
+            child: ElevatedButton.icon(
             onPressed: (_isScanning || _isConnecting || _isInitializing)
                 ? null
                 : isConnected
@@ -509,11 +552,23 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
               backgroundColor:
                   isConnected ? AppTheme.errorColor : AppTheme.primaryGreen,
               foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: (isConnected
+                          ? AppTheme.errorColor
+                          : AppTheme.secondaryGreen)
+                      .withOpacity(0.7),
+                  width: 1,
+                ),
+              ),
               padding: EdgeInsets.symmetric(
                 horizontal: ResponsiveUtils.spacing(context, 20),
-                vertical: ResponsiveUtils.spacing(context, 10),
+                vertical: ResponsiveUtils.spacing(context, 12),
               ),
             ),
+          ),
           ),
         ],
       ),
@@ -633,9 +688,10 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
         color: AppTheme.darkGray.withOpacity(0.3),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
+          color: AppTheme.secondaryGreen.withOpacity(0.45),
           width: 1,
         ),
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -698,9 +754,10 @@ class _OBDDashboardScreenState extends State<OBDDashboardScreen> {
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
+          color: AppTheme.secondaryGreen.withOpacity(0.45),
           width: 1,
         ),
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

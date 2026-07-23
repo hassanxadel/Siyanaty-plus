@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../services/vin_lookup_screen.dart';
@@ -91,7 +92,9 @@ class AllActionsScreen extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             children: [
-              // Top row with back button and title
+              // Top row with back button and title.
+              // The trailing SizedBox mirrors the leading IconButton's width so
+              // the title stays optically centred on the screen.
               Row(
                 children: [
                   IconButton(
@@ -102,18 +105,26 @@ class AllActionsScreen extends StatelessWidget {
                       size: 28,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  const Text(
-                          'All Actions',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontFamily: 'Orbitron',
-
+                  const Expanded(
+                    child: Text(
+                      'All Actions',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
                           ),
-                        ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48),
                 ],
               ),
               
@@ -284,7 +295,7 @@ class AllActionsScreen extends StatelessWidget {
   }
 
   void _showMessage(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,

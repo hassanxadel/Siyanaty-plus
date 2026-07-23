@@ -166,6 +166,19 @@ class AuthenticationManager {
     }
   }
 
+  /// Whether the current device still needs OTP verification for [userId]
+  /// (true for devices the account has never trusted — including the device
+  /// a brand-new account was just created on)
+  Future<bool> isMfaRequiredForCurrentDevice(String userId) async {
+    final deviceId = await _getDeviceId();
+    return await _isMfaRequiredForDevice(userId, deviceId);
+  }
+
+  /// Device id used for trust checks (needed by the MFA screen)
+  Future<String> getCurrentDeviceId() async {
+    return await _getDeviceId();
+  }
+
   /// Send MFA code via SMS using Firebase Phone Auth
   Future<bool> _sendMfaCodeViaSMS(String userId) async {
     try {
@@ -254,24 +267,21 @@ class AuthenticationManager {
       
       AppLogger.info('Sending email verification code to $email');
 
-      // Store code hash in Firestore with expiry
+      // Store only the code HASH in Firestore with expiry.
+      // The plaintext code is never persisted — it is passed straight to
+      // the email sender below and then discarded.
       await _firestore.collection('mfa_codes').doc(userId).set({
         'codeHash': _hashCode(code),
-        'code': code, // Store plain code for email (in production, use Cloud Functions)
         'method': 'email',
         'expiresAt': DateTime.now().add(const Duration(minutes: 5)),
         'createdAt': FieldValue.serverTimestamp(),
+        'attempts': 0,
       });
 
-      // Log the code for testing (visible in console)
-      AppLogger.info('═══════════════════════════════════════════════════');
-      AppLogger.info('📧 MFA VERIFICATION CODE FOR $email');
-      AppLogger.info('═══════════════════════════════════════════════════');
-      AppLogger.info('🔐 CODE: $code');
-      AppLogger.info('═══════════════════════════════════════════════════');
-      AppLogger.info('⏰ This code expires in 5 minutes');
-      AppLogger.info('═══════════════════════════════════════════════════');
-      
+      // NOTE: never log the code itself — device logs are readable by
+      // `adb logcat` and by crash/analytics SDKs, which would defeat MFA.
+      AppLogger.info('MFA code generated and stored (expires in 5 minutes)');
+
       // Send email using Firebase Email Service
       // Note: Firebase Extension "Trigger Email" must be installed for emails to be sent
       try {
@@ -516,13 +526,15 @@ class AuthenticationManager {
       final isAuth = await isAuthenticated();
       AppLogger.info('Final isAuthenticated check after storing tokens: $isAuth');
       
-      // Try to reload user to trigger auth state changes (with error handling)
+      // Best-effort user refresh. NOTE: on this firebase_auth version this
+      // reliably throws "type 'List<Object?>' is not a subtype of type
+      // 'PigeonUserInfo'", so callers must NOT depend on it to trigger
+      // authStateChanges — screens explicitly notify SecurityWrapper instead.
       try {
-        AppLogger.info('Reloading user to trigger auth state change');
         await user.reload();
       } catch (e) {
-        // PigeonUserInfo casting errors are benign and can be ignored
-        AppLogger.warning('User reload warning (ignored)', error: e);
+        // Known plugin casting bug; authentication itself already succeeded
+        AppLogger.warning('User reload failed (ignored, see note above)', error: e);
       }
       
       return AuthResult.success(user.uid);
@@ -669,6 +681,17 @@ class AuthenticationManager {
     return base64Encode(bytes);
   }
 
+  /// Compare two strings in time independent of how many characters match,
+  /// so failures cannot be distinguished by response timing.
+  bool _constantTimeEquals(String a, String b) {
+    if (a.length != b.length) return false;
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
+    }
+    return diff == 0;
+  }
+
   Future<bool> _verifyMfaCode(String userId, String code) async {
     try {
       AppLogger.info('Verifying MFA code. Last sent via: ${_lastSentViaEmail ? "Email" : "SMS"}');
@@ -727,6 +750,9 @@ class AuthenticationManager {
     }
   }
 
+  /// Maximum verification attempts allowed per issued MFA code
+  static const int _maxMfaAttempts = 5;
+
   /// Verify email code
   Future<bool> _verifyEmailCode(String userId, String code, Map<String, dynamic> data) async {
     try {
@@ -738,12 +764,24 @@ class AuthenticationManager {
         return false;
       }
 
+      // Brute-force protection: a 6-digit code is only 1M combinations,
+      // so a code is burned after a few wrong guesses and must be re-sent.
+      final attempts = (data['attempts'] as int?) ?? 0;
+      if (attempts >= _maxMfaAttempts) {
+        AppLogger.warning('MFA code invalidated after too many attempts');
+        await _firestore.collection('mfa_codes').doc(userId).delete();
+        return false;
+      }
+
       // Verify code hash
       final storedHash = data['codeHash'] as String;
       final codeHash = _hashCode(code);
-      
-      if (storedHash != codeHash) {
+
+      if (!_constantTimeEquals(storedHash, codeHash)) {
         AppLogger.error('Invalid email code');
+        await _firestore.collection('mfa_codes').doc(userId).update({
+          'attempts': attempts + 1,
+        });
         return false;
       }
 

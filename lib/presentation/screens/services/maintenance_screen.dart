@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:intl/intl.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../models/backup_maintenance.dart';
@@ -62,7 +64,7 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(content: Text('Error loading maintenance: $e')),
         );
       }
@@ -216,14 +218,18 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
                   height: 45,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppTheme.primaryGreen,
-                      AppTheme.darkAccentGreen,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(28),
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppTheme.backgroundGreen,
+              AppTheme.darkAccentGreen,
+            ],
+          ),
+                  borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppTheme.secondaryGreen.withOpacity(0.6),
+            width: 1,
+          ),
                   boxShadow: [
                     BoxShadow(
                       color: AppTheme.primaryGreen.withOpacity(0.4),
@@ -303,6 +309,10 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
             color: Colors.black.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
+          ),
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
           ),
         ],
       ),
@@ -412,6 +422,10 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
+          ),
         ],
       ),
       child: TextField(
@@ -465,6 +479,10 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
               blurRadius: 10,
               offset: const Offset(0, 5),
             ),
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
+          ),
           ],
         ),
         child: InkWell(
@@ -567,39 +585,98 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
                 // Cost and action button row
                 Row(
                   children: [
+                    // Cost is amber so money reads differently from the green
+                    // used for status and health elsewhere in the app.
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryGreen.withOpacity(0.2),
+                        color: AppTheme.costHighlight.withOpacity(0.18),
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppTheme.costHighlight.withOpacity(0.5),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.costHighlight.withOpacity(0.25),
+                            blurRadius: 12,
+                          ),
+                        ],
                       ),
                       child: Text(
                         'EGP ${maintenance.cost.toStringAsFixed(2)}',
                         style: const TextStyle(
-                          color: AppTheme.primaryGreen,
+                          color: AppTheme.costHighlight,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
+                          fontFamily: 'Orbitron',
                         ),
                       ),
                     ),
                     const Spacer(),
-                    ElevatedButton(
-                      onPressed: () => _showMaintenanceDetails(maintenanceWithInfo),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(255, 32, 61, 32),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+                    // Matches the home screen's "View All" pill.
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            AppTheme.backgroundGreen,
+                            AppTheme.darkAccentGreen,
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
                         ),
-                        elevation: 0,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppTheme.secondaryGreen.withOpacity(0.6),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.secondaryGreen.withOpacity(0.3),
+                            blurRadius: 18,
+                            spreadRadius: -2,
+                          ),
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                            spreadRadius: -2,
+                          ),
+                        ],
                       ),
-                      child: const Text(
-                        'View Details',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          fontFamily: 'Orbitron',
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => _showMaintenanceDetails(maintenanceWithInfo),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 9,
+                            ),
+                            child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'View Details',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'Orbitron',
+                                  color: AppTheme.lightBackground,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 11,
+                                color: AppTheme.secondaryGreen,
+                              ),
+                            ],
+                          ),
+                          ),
                         ),
                       ),
                     ),
@@ -771,45 +848,37 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
     if (!mounted) return;
     if (updated == true) {
       await _loadMaintenance();
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackbar.show(context, 
         const SnackBar(content: Text('Maintenance updated successfully')),
       );
     }
   }
 
-  void _deleteMaintenanceRecord(BackupMaintenance maintenance) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Maintenance Record'),
-        content: Text('Are you sure you want to delete "${maintenance.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final result = await _maintenanceService.deleteMaintenance(maintenance.id!);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(result.message),
-                    backgroundColor: result.success ? Colors.green : Colors.red,
-                  ),
-                );
-                if (result.success) {
-                  _loadMaintenance();
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+  Future<void> _deleteMaintenanceRecord(BackupMaintenance maintenance) async {
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Delete Maintenance Record',
+      message:
+          'Are you sure you want to delete "${maintenance.title}"? This action cannot be undone.',
+      icon: Icons.delete_outline,
+      confirmLabel: 'Delete',
+      isDestructive: true,
+    );
+
+    if (confirmed != true) return;
+
+    final result = await _maintenanceService.deleteMaintenance(maintenance.id!);
+    if (!mounted) return;
+
+    AppSnackbar.show(context,
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.success ? Colors.green : Colors.red,
       ),
     );
+    if (result.success) {
+      _loadMaintenance();
+    }
   }
 }
 
@@ -971,8 +1040,8 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
             SizedBox(
               width: double.infinity,
               child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
@@ -980,7 +1049,12 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
                       AppTheme.backgroundGreen,
                     ],
                   ),
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppTheme.secondaryGreen.withOpacity(0.6),
+                    width: 1,
+                  ),
+                  boxShadow: AppTheme.glowShadow(elevated: true),
                 ),
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _saveMaintenance,
@@ -988,7 +1062,8 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
                      backgroundColor: Colors.transparent,
                      shadowColor: Colors.transparent,
                      foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                     padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   ),
                   child: _isLoading 
                     ? const SizedBox(
@@ -1022,7 +1097,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
       setState(() {
         // Show error for reminder selection
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackbar.show(context, 
         const SnackBar(
           content: Text('Please select a reminder'),
           backgroundColor: Colors.red,
@@ -1032,7 +1107,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
     }
     
     if (_selectedReminder!.id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackbar.show(context, 
         const SnackBar(
           content: Text('Invalid reminder selected. Please try again.'),
           backgroundColor: Colors.red,
@@ -1063,7 +1138,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Text(result.message),
             backgroundColor: result.success ? Colors.green : Colors.red,
@@ -1075,7 +1150,7 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Text('Error: $e'),
             backgroundColor: Colors.red,
@@ -1108,8 +1183,14 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
             color: AppTheme.lightBackground,
           ),
         ),
-        const SizedBox(height: 4),
-        TextFormField(
+        const SizedBox(height: 6),
+        // Shadow sits on a wrapper because the field paints its own fill.
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: AppTheme.glowShadow(),
+          ),
+          child: TextFormField(
           controller: controller,
           keyboardType: keyboard,
           maxLines: maxLines,
@@ -1118,17 +1199,19 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
             color: AppTheme.lightBackground,
           ),
           decoration: InputDecoration(
+            filled: true,
+            fillColor: AppTheme.backgroundGreen,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.secondaryGreen, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
@@ -1140,9 +1223,10 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-          validator: customValidator ?? (label.contains('*') 
+          validator: customValidator ?? (label.contains('*')
             ? (value) => value?.isEmpty == true ? 'This field is required' : null
             : null),
+        ),
         ),
       ],
     );
@@ -2026,8 +2110,8 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
               SizedBox(
                 width: double.infinity,
                 child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
@@ -2035,7 +2119,12 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
                         AppTheme.backgroundGreen,
                       ],
                     ),
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.6),
+                      width: 1,
+                    ),
+                    boxShadow: AppTheme.glowShadow(elevated: true),
                   ),
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _save,
@@ -2043,7 +2132,8 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                     child: _isLoading
                         ? const SizedBox(
@@ -2103,13 +2193,13 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
       if (result.success) {
         Navigator.pop(context, true);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(content: Text(result.message), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackbar.show(context, 
         SnackBar(content: Text('Error updating maintenance: $e'), backgroundColor: Colors.red),
       );
     } finally {
@@ -2136,8 +2226,14 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
             color: AppTheme.lightBackground,
           ),
         ),
-        const SizedBox(height: 4),
-        TextFormField(
+        const SizedBox(height: 6),
+        // Shadow sits on a wrapper because the field paints its own fill.
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: AppTheme.glowShadow(),
+          ),
+          child: TextFormField(
           controller: controller,
           keyboardType: keyboard,
           maxLines: maxLines,
@@ -2146,17 +2242,19 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
             color: AppTheme.lightBackground,
           ),
           decoration: InputDecoration(
+            filled: true,
+            fillColor: AppTheme.backgroundGreen,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.secondaryGreen, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
@@ -2171,6 +2269,7 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
           validator: customValidator ?? (label.contains('*')
               ? (value) => value?.isEmpty == true ? 'This field is required' : null
               : null),
+        ),
         ),
       ],
     );
@@ -2193,13 +2292,15 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
           value: _selectedType,
           style: const TextStyle(fontFamily: 'Orbitron'),
           decoration: InputDecoration(
+            filled: true,
+            fillColor: AppTheme.backgroundGreen,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AppTheme.secondaryGreen, width: 1.5),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
@@ -2281,96 +2382,108 @@ class MaintenanceDetailsDialog extends StatelessWidget {
     final typeColor = _getMaintenanceTypeColor(maintenance.type);
     
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      elevation: 20,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
       child: Container(
         padding: const EdgeInsets.all(24),
         constraints: const BoxConstraints(maxWidth: 420, maxHeight: 800),
+        // Matches AppDialogPanel so the details card reads as the same
+        // component family as every other pop-up.
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: [
-              AppTheme.darkAccentGreen,
               AppTheme.backgroundGreen,
+              AppTheme.darkAccentGreen,
             ],
           ),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: typeColor.withOpacity(0.3),
+            color: AppTheme.secondaryGreen.withOpacity(0.6),
             width: 1,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          boxShadow: AppTheme.glowShadow(elevated: true),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with close button
+            // Header — same anatomy as the car details card: glowing icon
+            // chip, title + subtitle stack, raised close button.
             Row(
               children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: typeColor.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(
-                          _getMaintenanceTypeIcon(maintenance.type),
-                          color: typeColor,
-                          size: 24,
-                        ),
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppTheme.secondaryGreen.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.5),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.secondaryGreen.withOpacity(0.25),
+                        blurRadius: 12,
+                        spreadRadius: -2,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              maintenance.title,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Orbitron',
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: typeColor.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${maintenance.type.displayName} - ${DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate)}',
-                                style: TextStyle(
-                                  color: typeColor,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
+                    ],
+                  ),
+                  child: Icon(
+                    _getMaintenanceTypeIcon(maintenance.type),
+                    color: AppTheme.secondaryGreen,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        maintenance.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Orbitron',
+                          color: AppTheme.lightBackground,
+                          letterSpacing: 0.3,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${maintenance.type.displayName} · ${DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.lightBackground.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: AppTheme.backgroundGreen.withOpacity(0.6),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.35),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: IconButton(
                     onPressed: () {
@@ -2378,7 +2491,11 @@ class MaintenanceDetailsDialog extends StatelessWidget {
                         Navigator.pop(context);
                       }
                     },
-                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    icon: const Icon(
+                      Icons.close,
+                      color: AppTheme.lightBackground,
+                      size: 20,
+                    ),
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(
                       minWidth: 32,
@@ -2388,20 +2505,46 @@ class MaintenanceDetailsDialog extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 18),
 
-
+            // Hairline divider under the header
+            Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.secondaryGreen.withOpacity(0.5),
+                    AppTheme.secondaryGreen.withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // Details section with modern styling
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.2),
+                color: AppTheme.backgroundGreen.withOpacity(0.55),
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppTheme.secondaryGreen.withOpacity(0.3),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                    spreadRadius: -2,
+                  ),
+                ],
               ),
               child: Column(
                 children: [
                   _buildModernDetailRow('Type', maintenance.type.displayName, Icons.category, typeColor),
-                  _buildModernDetailRow('Cost', 'EGP ${maintenance.cost.toStringAsFixed(2)}', Icons.attach_money, AppTheme.primaryGreen),
+                  // Amber, matching the cost chip on the maintenance list card.
+                  _buildModernDetailRow('Cost', 'EGP ${maintenance.cost.toStringAsFixed(2)}', Icons.attach_money, AppTheme.costHighlight),
                   _buildModernDetailRow('Date', DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate), Icons.calendar_today, Colors.blue),
                   _buildModernDetailRow('Car', maintenanceWithInfo.carDisplayName, Icons.directions_car, Colors.orange),
                   _buildModernDetailRow('Reminder', maintenanceWithInfo.reminderDisplayName, Icons.notification_important, Colors.purple),
@@ -2427,7 +2570,7 @@ class MaintenanceDetailsDialog extends StatelessWidget {
                       child: _buildModernButton(
                         icon: Icons.edit_rounded,
                         label: 'Edit',
-                        color: const Color(0xFF2196F3),
+                        color: AppTheme.infoBlue,
                         onPressed: onEdit,
                       ),
                     ),
@@ -2436,7 +2579,7 @@ class MaintenanceDetailsDialog extends StatelessWidget {
                       child: _buildModernButton(
                         icon: Icons.delete_rounded,
                         label: 'Delete',
-                        color: const Color.fromARGB(255, 219, 25, 25),
+                        color: AppDialog.destructive,
                         onPressed: onDelete,
                       ),
                     ),
@@ -2463,7 +2606,11 @@ class MaintenanceDetailsDialog extends StatelessWidget {
             height: 32,
             decoration: BoxDecoration(
               color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: color.withOpacity(0.4),
+                width: 1,
+              ),
             ),
             child: Icon(
               icon,
@@ -2479,18 +2626,20 @@ class MaintenanceDetailsDialog extends StatelessWidget {
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[400],
+                    fontSize: 11,
+                    color: AppTheme.lightBackground.withOpacity(0.6),
                     fontWeight: FontWeight.w500,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.white,
+                    fontSize: 13,
+                    color: AppTheme.lightBackground,
                     fontWeight: FontWeight.w600,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
               ],
@@ -2501,6 +2650,8 @@ class MaintenanceDetailsDialog extends StatelessWidget {
     );
   }
 
+  /// Pill action matching the car details card — tinted "faded" fill with a
+  /// glowing rim and an accent-coloured label, instead of a solid block.
   Widget _buildModernButton({
     required IconData icon,
     required String label,
@@ -2508,53 +2659,36 @@ class MaintenanceDetailsDialog extends StatelessWidget {
     required VoidCallback onPressed,
   }) {
     return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(0.8),
-            color,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: Colors.white,
-              size: 18,
+      decoration: AppTheme.glowButtonDecoration(accent: color),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 17),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontFamily: 'Orbitron',
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

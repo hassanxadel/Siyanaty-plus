@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -30,7 +31,9 @@ import '../../../services/notification_database_service.dart';
 import '../../../models/backup_reminder.dart';
 import '../../../models/backup_maintenance.dart';
 import '../../../services/security/local_unlock_service.dart';
+import '../../../services/profile_image_service.dart';
 import '../../../shared/utils/string_extensions.dart';
+import '../../widgets/profile_avatar.dart';
 
 /// Main dashboard screen that serves as the home page
 /// Displays user welcome, quick actions, and vehicle overview
@@ -122,7 +125,9 @@ class _HomeDashboardState extends State<HomeDashboard>
     _loadLatestMaintenance();
     /// Load notification count
     _loadNotificationCount();
-    
+    /// Load the saved profile picture for the greeting card
+    ProfileImageService.instance.loadProfileImage();
+
     /// Add observer to detect app lifecycle changes
     WidgetsBinding.instance.addObserver(this);
   }
@@ -417,12 +422,15 @@ class _HomeDashboardState extends State<HomeDashboard>
   }
 
   Widget _buildCircularIcon(IconData icon, VoidCallback onTap, {bool hasNotificationBadge = false, Color? color}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(25),
-      child: Container(
-        width: 44,
-        height: 44,
+    final iconColor = color ?? AppTheme.getThemeAwareIconColor(context);
+
+    // The decoration lives on an outer Container, NOT on an Ink: Ink paints
+    // into the parent Material's ink layer, which is clipped to the Material's
+    // bounds, so a glow wider than the button gets cut into a hard square.
+    // Material here only hosts the ripple.
+    return Container(
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -432,38 +440,62 @@ class _HomeDashboardState extends State<HomeDashboard>
             AppTheme.backgroundGreen,
           ],
         ),
-        borderRadius: BorderRadius.circular(22),
+        shape: BoxShape.circle,
+        // Rim keeps the button readable against the dark header gradient
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.55),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+            spreadRadius: -3,
+          ),
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.4),
+            blurRadius: 22,
+            spreadRadius: -2,
           ),
         ],
       ),
-        child: Stack(
-          children: [
-            Center(
-              child: Icon(
-                icon,
-                color: (color ?? AppTheme.getThemeAwareIconColor(context)).withOpacity(0.3),
-                size: 20,
-              ),
-            ),
-            if (hasNotificationBadge)
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          splashColor: AppTheme.secondaryGreen.withOpacity(0.25),
+          child: Stack(
+            children: [
+              Center(
+                child: Icon(
+                  icon,
+                  color: iconColor,
+                  size: 22,
                 ),
               ),
-          ],
+              if (hasNotificationBadge)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 11,
+                    height: 11,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE74C3C),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppTheme.backgroundGreen,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -489,31 +521,48 @@ class _HomeDashboardState extends State<HomeDashboard>
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
-        ],
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
+          ),        ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            _getGreeting(),
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.white,
-              fontFamily: 'Orbitron',
-            ),
-            overflow: TextOverflow.ellipsis,
+          // Profile picture, kept small so it reads as an accent next to the
+          // name rather than dominating the greeting card.
+          ProfileAvatar(
+            name: _getUserName(),
+            size: 48,
+            onTap: _showProfile,
           ),
-          const SizedBox(height: 6),
-          Text(
-            _getUserName(),
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontFamily: 'Orbitron',
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _getGreeting(),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontFamily: 'Orbitron',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _getUserName(),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontFamily: 'Orbitron',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -540,7 +589,10 @@ class _HomeDashboardState extends State<HomeDashboard>
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
-        ],
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
+          ),        ],
       ),
       child: Row(
         children: [
@@ -610,13 +662,40 @@ class _HomeDashboardState extends State<HomeDashboard>
                 fontFamily: 'Orbitron',
               ),
             ),
-            TextButton(
-              onPressed: () => _navigateToCarsList(),
-              child: Text(
-                'Manage',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareIconColor(context),
-                  fontFamily: 'Orbitron',
+            GestureDetector(
+              onTap: () => _navigateToCarsList(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      AppTheme.backgroundGreen,
+                      AppTheme.darkAccentGreen,
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppTheme.secondaryGreen.withOpacity(0.6),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.secondaryGreen.withOpacity(0.3),
+                      blurRadius: 18,
+                    ),
+                  ],
+                ),
+                child: const Text(
+                  'Manage',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.lightBackground,
+                    fontFamily: 'Orbitron',
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
             ),
@@ -868,22 +947,47 @@ class _HomeDashboardState extends State<HomeDashboard>
                   ],
                 ),
               ),
+              // Mileage badge styled as a digital odometer chip
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [AppTheme.backgroundGreen, AppTheme.darkAccentGreen],
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppTheme.secondaryGreen.withOpacity(0.6),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.secondaryGreen.withOpacity(0.3),
+                      blurRadius: 18,
+                    ),
+                  ],
                 ),
-                child: Text(
-                  '${car.mileage.toStringAsFixed(0)} km',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    fontFamily: 'Orbitron',
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.speed_rounded,
+                      size: 12,
+                      color: AppTheme.secondaryGreen,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${car.mileage.toStringAsFixed(0)} km',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.lightBackground,
+                        fontFamily: 'Orbitron',
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -970,19 +1074,25 @@ class _HomeDashboardState extends State<HomeDashboard>
           margin: const EdgeInsets.symmetric(horizontal: 4),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: [
-                Colors.white.withOpacity(0.15),
-                Colors.white.withOpacity(0.05),
+                AppTheme.backgroundGreen,
+                AppTheme.darkAccentGreen,
               ],
             ),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: Colors.white.withOpacity(0.2),
+              color: AppTheme.secondaryGreen.withOpacity(0.6),
               width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.secondaryGreen.withOpacity(0.3),
+                blurRadius: 18,
+              ),
+            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -990,12 +1100,12 @@ class _HomeDashboardState extends State<HomeDashboard>
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppTheme.secondaryGreen.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   icon,
-                  color: Colors.white,
+                  color: AppTheme.secondaryGreen,
                   size: 16,
                 ),
               ),
@@ -1005,8 +1115,9 @@ class _HomeDashboardState extends State<HomeDashboard>
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: AppTheme.lightBackground,
                   fontFamily: 'Orbitron',
+                  letterSpacing: 0.5,
                 ),
               ),
             ],
@@ -1058,7 +1169,10 @@ class _HomeDashboardState extends State<HomeDashboard>
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
-        ],
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
+          ),        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1088,24 +1202,23 @@ class _HomeDashboardState extends State<HomeDashboard>
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: context.r(10), vertical: context.r(6)),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [
-                        Colors.white.withOpacity(0.2),
-                        Colors.white.withOpacity(0.1),
+                        AppTheme.backgroundGreen,
+                        AppTheme.darkAccentGreen,
                       ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
-                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
+                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(20)),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.5),
-                      width: 1.5,
+                      color: AppTheme.secondaryGreen.withOpacity(0.6),
+                      width: 1,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.white.withOpacity(0.1),
-                        blurRadius: context.r(4),
-                        offset: Offset(0, context.r(2)),
+                        color: AppTheme.secondaryGreen.withOpacity(0.3),
+                        blurRadius: context.r(18),
                       ),
                     ],
                   ),
@@ -1267,7 +1380,10 @@ class _HomeDashboardState extends State<HomeDashboard>
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
-        ],
+          BoxShadow(
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
+          ),        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1297,24 +1413,23 @@ class _HomeDashboardState extends State<HomeDashboard>
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: context.r(10), vertical: context.r(6)),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [
-                        Colors.white.withOpacity(0.2),
-                        Colors.white.withOpacity(0.1),
+                        AppTheme.backgroundGreen,
+                        AppTheme.darkAccentGreen,
                       ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
-                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
+                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(20)),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.5),
-                      width: 1.5,
+                      color: AppTheme.secondaryGreen.withOpacity(0.6),
+                      width: 1,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.white.withOpacity(0.1),
-                        blurRadius: context.r(4),
-                        offset: Offset(0, context.r(2)),
+                        color: AppTheme.secondaryGreen.withOpacity(0.3),
+                        blurRadius: context.r(18),
                       ),
                     ],
                   ),
@@ -1532,24 +1647,23 @@ class _HomeDashboardState extends State<HomeDashboard>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [
-                      AppTheme.getThemeAwareTextColor(context).withOpacity(0.2),
-                      AppTheme.getThemeAwareTextColor(context).withOpacity(0.1),
+                      AppTheme.backgroundGreen,
+                      AppTheme.darkAccentGreen,
                     ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.5),
-                    width: 1.5,
+                    color: AppTheme.secondaryGreen.withOpacity(0.6),
+                    width: 1,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+                      color: AppTheme.secondaryGreen.withOpacity(0.3),
+                      blurRadius: 18,
                     ),
                   ],
                 ),
@@ -1637,6 +1751,10 @@ class _HomeDashboardState extends State<HomeDashboard>
               color: Colors.black.withOpacity(0.1),
               blurRadius: 10,
               offset: const Offset(0, 5),
+            ),
+            BoxShadow(
+              color: AppTheme.secondaryGreen.withOpacity(0.3),
+              blurRadius: 18,
             ),
           ],
         ),
@@ -1952,6 +2070,10 @@ class _HomeDashboardState extends State<HomeDashboard>
                 blurRadius: 10,
                 offset: const Offset(0, 5),
               ),
+              BoxShadow(
+                color: AppTheme.secondaryGreen.withOpacity(0.3),
+                blurRadius: 18,
+              ),
             ],
           ),
           child: Column(
@@ -2129,7 +2251,7 @@ class _HomeDashboardState extends State<HomeDashboard>
 
   void _navigateToExport() {
     HapticFeedback.lightImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: const Text(
           'Export Data feature coming soon!',
@@ -2196,31 +2318,28 @@ class _HomeDashboardState extends State<HomeDashboard>
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               backgroundColor: Colors.transparent,
+              elevation: 0,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
               child: Container(
                 padding: const EdgeInsets.all(24),
+                // Matches AppDialogPanel so this card belongs to the same
+                // family as every other pop-up in the app.
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                     colors: [
-                      AppTheme.getThemeAwareCardBackground(context),
-                      AppTheme.getThemeAwareCardBackground(context).withOpacity(0.95),
+                      AppTheme.backgroundGreen,
+                      AppTheme.darkAccentGreen,
                     ],
                   ),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: AppTheme.primaryGreen.withOpacity(0.3),
+                    color: AppTheme.secondaryGreen.withOpacity(0.6),
                     width: 1,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    ),
-                  ],
+                  boxShadow: AppTheme.glowShadow(elevated: true),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -2611,8 +2730,9 @@ class _HomeDashboardState extends State<HomeDashboard>
     showDialog(
       context: context,
       builder: (dialogContext) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(24))),
-        elevation: 20,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
         child: SingleChildScrollView(
           child: Container(
             padding: EdgeInsets.all(dialogContext.r(20)),
@@ -2620,20 +2740,23 @@ class _HomeDashboardState extends State<HomeDashboard>
               maxWidth: dialogContext.r(480),
               maxHeight: dialogContext.screenHeight * 0.95,
             ),
+            // Matches AppDialogPanel so this card belongs to the same family
+            // as every other pop-up in the app.
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
-                  Color(0xFF1A362A), // Dark green
-                  Color(0xFF2E4032), // Slightly lighter dark green
+                  AppTheme.backgroundGreen,
+                  AppTheme.darkAccentGreen,
                 ],
               ),
               borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(24)),
               border: Border.all(
-                color: AppTheme.primaryGreen.withOpacity(0.3),
+                color: AppTheme.secondaryGreen.withOpacity(0.6),
                 width: 1,
               ),
+              boxShadow: AppTheme.glowShadow(elevated: true),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2697,15 +2820,33 @@ class _HomeDashboardState extends State<HomeDashboard>
                                       vertical: dialogContext.r(4),
                                     ),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.primaryGreen.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(12)),
+                                      gradient: const LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          AppTheme.backgroundGreen,
+                                          AppTheme.darkAccentGreen,
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(20)),
+                                      border: Border.all(
+                                        color: AppTheme.secondaryGreen.withOpacity(0.6),
+                                        width: 1,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppTheme.secondaryGreen.withOpacity(0.3),
+                                          blurRadius: 12,
+                                        ),
+                                      ],
                                     ),
                                     child: Text(
                                       car.licensePlate,
                                       style: dialogContext.responsiveTextStyle(
                                         fontSize: 11,
-                                        color: AppTheme.primaryGreen,
+                                        color: AppTheme.lightBackground,
                                         fontWeight: FontWeight.w600,
+                                        fontFamily: 'Orbitron',
                                       ),
                                     ),
                                   ),
@@ -2717,8 +2858,25 @@ class _HomeDashboardState extends State<HomeDashboard>
                     ),
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(12)),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            AppTheme.backgroundGreen,
+                            AppTheme.darkAccentGreen,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(16)),
+                        border: Border.all(
+                          color: AppTheme.secondaryGreen.withOpacity(0.5),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.secondaryGreen.withOpacity(0.25),
+                            blurRadius: 12,
+                          ),
+                        ],
                       ),
                       child: IconButton(
                         onPressed: () {
@@ -2727,8 +2885,8 @@ class _HomeDashboardState extends State<HomeDashboard>
                           }
                         },
                         icon: Icon(
-                          Icons.close, 
-                          color: Colors.white, 
+                          Icons.close,
+                          color: AppTheme.secondaryGreen,
                           size: dialogContext.responsiveIconSize(20),
                         ),
                         padding: EdgeInsets.all(dialogContext.r(8)),
@@ -2746,8 +2904,25 @@ class _HomeDashboardState extends State<HomeDashboard>
                 Container(
                   padding: EdgeInsets.all(dialogContext.r(14)),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(16)),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        AppTheme.backgroundGreen,
+                        AppTheme.darkAccentGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(dialogContext.responsiveBorderRadius(20)),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.35),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.secondaryGreen.withOpacity(0.2),
+                        blurRadius: 16,
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
@@ -2792,11 +2967,15 @@ class _HomeDashboardState extends State<HomeDashboard>
       child: Row(
         children: [
           Container(
-            width: context.r(32),
-            height: context.r(32),
+            width: context.r(34),
+            height: context.r(34),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
+              color: color.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(context.responsiveBorderRadius(12)),
+              border: Border.all(
+                color: color.withOpacity(0.45),
+                width: 1,
+              ),
             ),
             child: Icon(
               icon,
@@ -2804,7 +2983,7 @@ class _HomeDashboardState extends State<HomeDashboard>
               size: context.responsiveIconSize(16),
             ),
           ),
-          SizedBox(width: context.r(10)),
+          SizedBox(width: context.r(12)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2813,7 +2992,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                   label,
                   style: context.responsiveTextStyle(
                     fontSize: 11,
-                    color: Colors.grey[400]!,
+                    color: AppTheme.lightBackground.withOpacity(0.55),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -2822,8 +3001,9 @@ class _HomeDashboardState extends State<HomeDashboard>
                   value.isEmpty ? 'N/A' : value,
                   style: context.responsiveTextStyle(
                     fontSize: 14,
-                    color: Colors.white,
+                    color: AppTheme.lightBackground,
                     fontWeight: FontWeight.w600,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
               ],
@@ -2841,22 +3021,25 @@ class _HomeDashboardState extends State<HomeDashboard>
     required VoidCallback onPressed,
   }) {
     return Container(
-      height: 48,
+      height: 52,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [
-            color.withOpacity(0.8),
-            color,
+            AppTheme.backgroundGreen,
+            AppTheme.darkAccentGreen,
           ],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.6),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: AppTheme.secondaryGreen.withOpacity(0.3),
+            blurRadius: 18,
           ),
         ],
       ),
@@ -2866,7 +3049,7 @@ class _HomeDashboardState extends State<HomeDashboard>
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(24),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
@@ -2875,17 +3058,18 @@ class _HomeDashboardState extends State<HomeDashboard>
           children: [
             Icon(
               icon,
-              color: Colors.white,
+              color: AppTheme.secondaryGreen,
               size: 18,
             ),
             const SizedBox(width: 8),
             Text(
               label,
               style: const TextStyle(
-                color: Colors.white,
+                color: AppTheme.lightBackground,
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
                 fontFamily: 'Orbitron',
+                letterSpacing: 0.5,
               ),
             ),
           ],
@@ -2972,7 +3156,7 @@ class _HomeDashboardState extends State<HomeDashboard>
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,

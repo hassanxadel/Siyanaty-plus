@@ -25,6 +25,7 @@ import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/auth/email_verification_screen.dart';
 import 'presentation/screens/security/unlock_screen.dart';
 import 'presentation/screens/security/pin_setup_screen.dart';
+import 'presentation/screens/security/mfa_verification_screen.dart';
 import 'database/database_helper.dart';
 
 /// Main entry point for the Siyanaty+ car maintenance application
@@ -219,6 +220,18 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
   bool _isReinitializing = false; // Prevent multiple simultaneous reinitializations
   bool _justCompletedMFA = false; // Track if user just completed MFA to skip duplicate email
   bool _showLoadingScreen = true; // Show loading screen until initialization completes
+  bool _needsMfaVerification = false; // Untrusted device must pass OTP before anything else
+  String? _mfaUserId;
+  String? _mfaDeviceId;
+
+  /// When the app was last sent to the background. Used on resume to decide
+  /// whether enough time passed to require a re-unlock — see
+  /// [didChangeAppLifecycleState]. Null while the app is in the foreground.
+  DateTime? _backgroundedAt;
+
+  /// Transient lifecycle blips shorter than this (the Android predictive-back
+  /// gesture, a permission dialog, the keyboard) must NOT lock the app.
+  static const Duration _minBackgroundBeforeLock = Duration(seconds: 2);
 
   @override
   void initState() {
@@ -330,11 +343,14 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      // App is going to background (not closed), require unlock on resume
+      // App is going to the background. Only REMEMBER when this happened — do
+      // NOT lock here. Locking on every pause meant transient blips (the
+      // predictive-back gesture, permission dialogs, the image picker, opening
+      // Maps/the phone dialer) sent the user to the PIN screen during ordinary
+      // in-app navigation — e.g. pressing back to go Home landed on the PIN
+      // screen. The decision to lock is made on resume, based on elapsed time.
       if (_isAuthenticated) {
-        setState(() {
-          _needsLocalUnlock = true;
-        });
+        _backgroundedAt = DateTime.now();
       }
     } else if (state == AppLifecycleState.detached) {
       // App is being closed/terminated, reset authentication state
@@ -386,25 +402,39 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
       AppLogger.error('Security initialization failed or timed out', error: e);
       AppLogger.error('Stack trace', error: stackTrace);
       if (!mounted) return;
+
+      // A timeout does NOT mean the user is signed out. `Future.any` does not
+      // cancel the losing future, so the real initialization is still running
+      // and will set the correct state when its Firestore calls return.
+      // Falling back to the login screen here is what made a freshly verified
+      // user see the sign-in page flash before PIN setup.
+      final hasFirebaseUser = FirebaseAuth.instance.currentUser != null;
       if (mounted) {
         setState(() {
           _isInitializing = false;
-          _showLoadingScreen = false;
-          _needsLogin = true;
-          _needsPinSetup = false;
-          _needsEmailVerification = false;
-          _needsLocalUnlock = false;
+          if (hasFirebaseUser) {
+            // Stay on the loading screen until the in-flight init finishes
+            _showLoadingScreen = true;
+          } else {
+            _showLoadingScreen = false;
+            _needsLogin = true;
+            _needsPinSetup = false;
+            _needsEmailVerification = false;
+            _needsLocalUnlock = false;
+          }
         });
       }
     }
   }
 
   Future<void> _initializeSecurityWithTimeout() async {
-    // Wrap entire initialization in a timeout
+    // Wrap entire initialization in a timeout. Generous, because the device
+    // trust check is a Firestore round-trip that is slow on emulators and
+    // poor connections.
     await Future.any([
       _performSecurityInitialization(),
-      Future.delayed(const Duration(seconds: 10)).then((_) {
-        throw TimeoutException('Security initialization timed out after 10 seconds');
+      Future.delayed(const Duration(seconds: 25)).then((_) {
+        throw TimeoutException('Security initialization timed out after 25 seconds');
       }),
     ]);
   }
@@ -445,30 +475,45 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
         return;
       }
 
-      // Check if email is verified
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null && !user.emailVerified) {
-        AppLogger.info('Email not verified, showing email verification screen');
-        if (mounted) {
-          setState(() {
-            _isInitializing = false;
-            _showLoadingScreen = false;
-            _needsLogin = false;
-            _needsPinSetup = false;
-            _needsEmailVerification = true;
-            // _justCompletedMFA flag will be used by EmailVerificationScreen
-          });
-        }
-        return;
-      }
-      
-      // Email is verified, reset MFA flag
+      // Email verification step removed — OTP (MFA) is the only email-based
+      // verification in the auth flow. Firebase's emailVerified flag is
+      // intentionally not checked here.
+
+      // Reset MFA flag
       if (_justCompletedMFA) {
         if (mounted) {
           setState(() {
             _justCompletedMFA = false;
           });
         }
+      }
+
+      // Require OTP verification on devices this account hasn't trusted yet.
+      // This is what routes a freshly created account through the OTP email:
+      // registration signs the user in without passing the login MFA gate.
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        final deviceId = await _authManager.getCurrentDeviceId();
+        final mfaRequired =
+            await _authManager.isMfaRequiredForCurrentDevice(currentUser.uid);
+        if (!mounted) return;
+
+        if (mfaRequired) {
+          AppLogger.info('Device not trusted yet, showing OTP verification');
+          setState(() {
+            _isInitializing = false;
+            _showLoadingScreen = false;
+            _needsLogin = false;
+            _needsPinSetup = false;
+            _needsMfaVerification = true;
+            _mfaUserId = currentUser.uid;
+            _mfaDeviceId = deviceId;
+          });
+          return;
+        }
+      }
+      if (_needsMfaVerification && mounted) {
+        setState(() => _needsMfaVerification = false);
       }
 
       // Validate session
@@ -547,8 +592,21 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
   Future<void> _checkUnlockRequirement() async {
     if (!_isAuthenticated) return;
 
+    // Consume the backgrounded timestamp recorded in the paused handler.
+    final backgroundedAt = _backgroundedAt;
+    _backgroundedAt = null;
+
+    // Resumed without a real pause, or only a transient blip (back gesture,
+    // permission dialog, keyboard): never lock. This is what stops ordinary
+    // in-app navigation from kicking the user to the PIN screen.
+    if (backgroundedAt == null) return;
+    final awayFor = DateTime.now().difference(backgroundedAt);
+    if (awayFor < _minBackgroundBeforeLock) return;
+
+    // Genuinely returned from the background: lock only if the idle timeout
+    // has elapsed since the last unlock.
     final shouldLock = await _localUnlockService.shouldLockApp();
-    if (shouldLock && !_needsLocalUnlock) {
+    if (shouldLock && !_needsLocalUnlock && mounted) {
       setState(() {
         _needsLocalUnlock = true;
       });
@@ -614,6 +672,38 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
                 _initializeSecurity();
               }
             });
+          },
+        );
+      }
+
+      if (_needsMfaVerification && _mfaUserId != null && _mfaDeviceId != null) {
+        return MfaVerificationScreen(
+          userId: _mfaUserId!,
+          deviceId: _mfaDeviceId!,
+          onVerificationSuccess: () {
+            if (mounted) {
+              setState(() {
+                _needsMfaVerification = false;
+                _justCompletedMFA = true;
+              });
+              _initializeSecurity();
+            }
+          },
+          onSignOut: () {
+            // The MFA screen is the root route here, so it cannot pop itself.
+            // Leave the MFA gate and hand control back to the login screen.
+            if (mounted) {
+              setState(() {
+                _needsMfaVerification = false;
+                _mfaUserId = null;
+                _mfaDeviceId = null;
+                _isAuthenticated = false;
+                _needsPinSetup = false;
+                _needsLocalUnlock = false;
+                _showLoadingScreen = false;
+                _needsLogin = true;
+              });
+            }
           },
         );
       }

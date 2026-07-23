@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/constants/app_constants.dart';
 import '../../../shared/constants/app_theme.dart';
 
 class AboutScreen extends StatelessWidget {
@@ -52,7 +53,7 @@ class AboutScreen extends StatelessWidget {
                         const SizedBox(height: 16),
                         
                         const Text(
-                          'Siyana+',
+                          'Siyanaty+',
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
@@ -93,47 +94,69 @@ class AboutScreen extends StatelessWidget {
                   _buildSection(
                     context,
                     'Our Mission',
-                    'Siyana+ revolutionizes car maintenance by providing intelligent, personalized solutions that keep your vehicle running at peak performance. We combine cutting-edge technology with practical insights to make car care simple and effective.',
+                    'Siyanaty+ helps you take care of your car with confidence. We bring '
+                        'your maintenance history, reminders, mileage and diagnostics '
+                        'together in one place, so nothing important slips through the '
+                        'cracks — whether you own one car or a whole garage. Our goal is '
+                        'simple: keep your vehicle safe, reliable and running longer, '
+                        'without the guesswork.',
                     Icons.flag,
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Features Section
                   _buildSection(
                     context,
-                    'Key Features',
-                    '• Smart Maintenance Reminders\n• Real-time Vehicle Diagnostics\n• Service Center Locator\n• Comprehensive Maintenance History\n• OCR Document Scanner\n• VIN Decoder\n• Fuel Tracking\n• Cloud Backup & Sync',
+                    'What You Can Do',
+                    '• Track maintenance history and costs for every car\n'
+                        '• Get smart reminders before services fall due\n'
+                        '• Automatically keep your mileage up to date\n'
+                        '• Read live engine data over an OBD-II adapter\n'
+                        '• Scan service documents with the OCR scanner\n'
+                        '• Decode your VIN and store car & licence details\n'
+                        '• Find nearby service centers and save favourites\n'
+                        '• Back up and restore everything to the cloud',
                     Icons.stars,
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
-                  // Technology Section
+
+                  // Privacy Section
                   _buildSection(
                     context,
-                    'Technology Stack',
-                    'Built with Flutter for cross-platform excellence, powered by Firebase for real-time synchronization, and enhanced with Google ML Kit for intelligent document processing.',
-                    Icons.computer,
+                    'Your Data, Your Control',
+                    'Siyanaty+ is offline-first: your records live on your device and '
+                        'sync to your private cloud backup only when you choose. Sensitive '
+                        'information is encrypted, and you can export or permanently delete '
+                        'all of your data — on the device and in the cloud — at any time '
+                        'from Settings.',
+                    Icons.shield_outlined,
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Contact Section
                   _buildSection(
                     context,
-                    'Contact Us',
-                    'Email: support@siyanaplus.com\nWebsite: www.siyanaplus.com\n\nWe value your feedback and are committed to continuously improving your experience.',
+                    'Get in Touch',
+                    'We\'d love to hear your feedback and ideas.\n\n'
+                        'Email: ${AppConstants.supportEmail}\n\n'
+                        'You can also reach us any time from Help & Support inside the app.',
                     Icons.contact_mail,
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Legal Section
                   _buildSection(
                     context,
                     'Legal',
-                    '© 2024 Siyana+. All rights reserved.\n\nThis application is designed to assist with vehicle maintenance tracking and should not replace professional automotive advice.',
+                    '© 2026 Siyanaty+. All rights reserved.\n\n'
+                        'Siyanaty+ is a maintenance-tracking assistant. It supports, but '
+                        'does not replace, inspection and advice from a qualified '
+                        'mechanic. Always follow your manufacturer\'s guidance for your '
+                        'specific vehicle.',
                     Icons.gavel,
                   ),
                   
@@ -233,16 +256,26 @@ class AboutScreen extends StatelessWidget {
                       size: 28,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  const Text(
-                    'About Siyana+',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
+                  const Expanded(
+                    child: Text(
+                      'About Siyanaty+',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 48),
                 ],
               ),
               const SizedBox(height: 16),
@@ -278,13 +311,11 @@ class AboutScreen extends StatelessWidget {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.45),
+          width: 1,
+        ),
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

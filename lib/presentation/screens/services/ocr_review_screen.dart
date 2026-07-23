@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/ocr_service.dart';
 import '../../../models/scan_model.dart';
+import '../../widgets/app_dialog.dart';
 import 'ocr_history_screen.dart';
 
 class OcrReviewScreen extends StatefulWidget {
@@ -627,7 +629,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
       await _ocrService.saveScanLocal(scan);
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           const SnackBar(
             content: Text(
               'Scan saved locally!',
@@ -683,7 +685,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
           .add(scan.toFirestore());
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           const SnackBar(
             content: Text(
               'Scan saved to cloud!',
@@ -705,7 +707,7 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
 
   void _copyToClipboard() {
     Clipboard.setData(ClipboardData(text: _textController.text));
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       const SnackBar(
         content: Text(
           'Text copied to clipboard!',
@@ -727,55 +729,24 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
 
   void _showErrorDialog(String message) {
     if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Error',
-          style: TextStyle(fontFamily: 'Orbitron'),
-        ),
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'OK',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-        ],
-      ),
+
+    AppDialog.message(
+      context,
+      title: 'Error',
+      message: message,
+      icon: Icons.error_outline,
+      isError: true,
     );
   }
 
   void _showInfoDialog(String title, String message) {
     if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          title,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'OK',
-              style: TextStyle(fontFamily: 'Orbitron'),
-            ),
-          ),
-        ],
-      ),
+
+    AppDialog.message(
+      context,
+      title: title,
+      message: message,
+      icon: Icons.info_outline,
     );
   }
 }

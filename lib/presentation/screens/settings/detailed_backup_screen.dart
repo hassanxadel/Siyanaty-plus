@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/firebase_backup_service.dart';
@@ -28,7 +29,14 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
   final FirebaseOBDService _obdFirebaseService = FirebaseOBDService();
   final OBDService _obdService = OBDService();
   
+  /// Global "an operation is running" flag, still managed by each handler.
   bool _isLoading = false;
+
+  /// Identifies which specific button is currently running, e.g.
+  /// `'cars.backup'` or `'all.restore'`. Only that button shows the busy
+  /// effect — previously a single bool dimmed every button on the screen.
+  String? _loadingKey;
+
   BackupStatus? _backupStatus;
   ReminderBackupStatus? _reminderBackupStatus;
   MaintenanceBackupStatus? _maintenanceBackupStatus;
@@ -91,7 +99,7 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
   void _showSnackBar(String message, {required bool isError}) {
     if (!mounted) return;
     
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,
@@ -131,7 +139,9 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Back button and title
+              // Back button and title.
+              // The trailing SizedBox mirrors the leading IconButton's width so
+              // the title stays optically centred on the screen.
               Row(
                 children: [
                    IconButton(
@@ -145,31 +155,43 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
                   const Expanded(
                     child: Text(
                       'Detailed Backup Management',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 26,
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         fontFamily: 'Orbitron',
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
                       ),
-                      textAlign: TextAlign.left,
                     ),
                   ),
+                  const SizedBox(width: 48),
                 ],
               ),
               const SizedBox(height: 8),
               
-              // Subtitle
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14),
-                child: Text(
-                  'Manage your data backup and restore',
-                  style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white70,
-                        fontFamily: 'Orbitron',
-                      ),
-                      textAlign: TextAlign.center,
+              // Subtitle — full width so textAlign.center actually centres it
+              // (the parent Column uses crossAxisAlignment.start).
+              const SizedBox(
+                width: double.infinity,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  child: Text(
+                    'Manage your data backup and restore',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.white70,
+                      fontFamily: 'Orbitron',
                     ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
               ),
               const SizedBox(height: 22),
               
@@ -197,73 +219,73 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildDataTypeCard(
+                    cardKey: 'cars',
                     title: 'Cars Data',
                     icon: Icons.directions_car,
                     localCount: _backupStatus?.localCarsCount ?? 0,
                     cloudCount: _backupStatus?.cloudCarsCount ?? 0,
                     onBackup: _backupCars,
                     onRestore: _restoreCars,
-                    isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
                   _buildDataTypeCard(
+                    cardKey: 'reminders',
                     title: 'Reminders Data',
                     icon: Icons.notifications_active,
                     localCount: _reminderBackupStatus?.localRemindersCount ?? 0,
                     cloudCount: _reminderBackupStatus?.cloudRemindersCount ?? 0,
                     onBackup: _backupReminders,
                     onRestore: _restoreReminders,
-                    isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
                   _buildDataTypeCard(
+                    cardKey: 'maintenance',
                     title: 'Maintenance Data',
                     icon: Icons.build_circle,
                     localCount: _maintenanceBackupStatus?.localCount ?? 0,
                     cloudCount: _maintenanceBackupStatus?.cloudCount ?? 0,
                     onBackup: _backupMaintenance,
                     onRestore: _restoreMaintenance,
-                    isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
                   _buildDataTypeCard(
+                    cardKey: 'mileage',
                     title: 'Mileage Tracking Data',
                     icon: Icons.speed,
                     localCount: _localMileageCount,
                     cloudCount: _cloudMileageCount,
                     onBackup: _backupMileage,
                     onRestore: _restoreMileage,
-                    isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
                   _buildDataTypeCard(
+                    cardKey: 'license',
                     title: 'License Images',
                     icon: Icons.credit_card,
                     localCount: _licenseBackupStatus?.localCount ?? 0,
                     cloudCount: _licenseBackupStatus?.cloudCount ?? 0,
                     onBackup: _backupLicenseImages,
                     onRestore: _restoreLicenseImages,
-                    isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
                   _buildDataTypeCard(
+                    cardKey: 'ocr',
                     title: 'OCR Scans',
                     icon: Icons.document_scanner,
                     localCount: _ocrBackupStatus?.localScansCount ?? 0,
                     cloudCount: _ocrBackupStatus?.cloudScansCount ?? 0,
                     onBackup: _backupOcrScans,
                     onRestore: _restoreOcrScans,
-                    isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
                   _buildDataTypeCard(
+                    cardKey: 'obd',
                     title: 'OBD-II Scans',
                     icon: Icons.bluetooth_searching,
                     localCount: _localOBDScansCount,
                     cloudCount: _cloudOBDScansCount,
                     onBackup: _backupOBDScans,
                     onRestore: _restoreOBDScans,
-                    isLoading: _isLoading,
                   ),
                   const SizedBox(height: 16),
                   _buildComprehensiveBackupCard(),
@@ -279,14 +301,19 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
   }
 
   Widget _buildDataTypeCard({
+    required String cardKey,
     required String title,
     required IconData icon,
     required int localCount,
     required int cloudCount,
-    required VoidCallback onBackup,
-    required VoidCallback onRestore,
-    required bool isLoading,
+    required Future<void> Function() onBackup,
+    required Future<void> Function() onRestore,
   }) {
+    // Only this card's own buttons show the busy effect; while any operation
+    // runs, the rest are disabled but keep their normal appearance.
+    final busy = _loadingKey != null;
+    final backupKey = '$cardKey.backup';
+    final restoreKey = '$cardKey.restore';
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -299,13 +326,11 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
             AppTheme.backgroundGreen,
           ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.darkAccentGreen.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(
+          color: AppTheme.secondaryGreen.withOpacity(0.45),
+          width: 1,
+        ),
+        boxShadow: AppTheme.glowShadow(),
       ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,92 +363,29 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
             
             const SizedBox(height: 16),
             
-            // Action buttons
+            // Action buttons — faded pills, matching the pop-up cards.
+            // Backup is amber to make it stand out; Restore is blue.
             Row(
               children: [
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppTheme.primaryGreen,
-                          AppTheme.darkAccentGreen,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryGreen.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: isLoading ? null : onBackup,
-                      icon: const Icon(Icons.cloud_upload, size: 18, color: Colors.white),
-                      label: const Text(
-                        'Backup',
-                        style: TextStyle(
-                          fontFamily: 'Orbitron',
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
+                  child: _buildFadedAction(
+                    label: 'Backup',
+                    icon: Icons.cloud_upload,
+                    accent: AppTheme.costHighlight,
+                    busy: _loadingKey == backupKey,
+                    onPressed:
+                        busy ? null : () => _runOp(backupKey, onBackup),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.blue.shade600,
-                          Colors.blue.shade800,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: isLoading ? null : onRestore,
-                      icon: const Icon(Icons.cloud_download, size: 18, color: Colors.white),
-                      label: const Text(
-                        'Restore',
-                        style: TextStyle(
-                          fontFamily: 'Orbitron',
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
+                  child: _buildFadedAction(
+                    label: 'Restore',
+                    icon: Icons.cloud_download,
+                    accent: AppTheme.infoBlue,
+                    busy: _loadingKey == restoreKey,
+                    onPressed:
+                        busy ? null : () => _runOp(restoreKey, onRestore),
                   ),
                 ),
               ],
@@ -431,6 +393,67 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
           ],
         ),
       );
+  }
+
+  /// Faded pill action shared by every card on this screen — tinted fill,
+  /// glowing rim, accent-coloured label.
+  ///
+  /// [busy] renders a spinner and dims *this* button; a disabled-but-not-busy
+  /// button keeps its normal look so only the clicked button shows an effect.
+  Widget _buildFadedAction({
+    required String label,
+    required IconData icon,
+    required Color accent,
+    required VoidCallback? onPressed,
+    bool busy = false,
+  }) {
+    return Opacity(
+      opacity: busy ? 0.6 : 1,
+      child: Container(
+        decoration: AppTheme.glowButtonDecoration(accent: accent),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: busy ? null : onPressed,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (busy)
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(accent),
+                      ),
+                    )
+                  else
+                    Icon(icon, size: 17, color: accent),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: accent,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildStatusRow(String label, String value) {
@@ -492,6 +515,18 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
         ),
       ),
     );
+  }
+
+  /// Runs [action] tagged with [key] so only the button that started it shows
+  /// the busy effect. Guards against a second operation starting concurrently.
+  Future<void> _runOp(String key, Future<void> Function() action) async {
+    if (_loadingKey != null || _isLoading) return;
+    setState(() => _loadingKey = key);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _loadingKey = null);
+    }
   }
 
   Future<void> _backupCars() async {
@@ -743,15 +778,20 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: LinearGradient(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
             colors: [
-              AppTheme.primaryGreen.withOpacity(0.1),
-              AppTheme.primaryGreen.withOpacity(0.05),
+              AppTheme.darkAccentGreen,
+              AppTheme.backgroundGreen,
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
+          border: Border.all(
+            color: AppTheme.secondaryGreen.withOpacity(0.45),
+            width: 1,
+          ),
+          boxShadow: AppTheme.glowShadow(),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -821,92 +861,31 @@ class _DetailedBackupScreenState extends State<DetailedBackupScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            // Action buttons
+            // Action buttons — faded pills, matching the pop-up cards.
+            // Backup is amber to make it stand out; Restore is blue.
             Row(
               children: [
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppTheme.primaryGreen,
-                          AppTheme.darkAccentGreen,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryGreen.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _backupAllData,
-                      icon: const Icon(Icons.cloud_upload, size: 18, color: Colors.white),
-                      label: const Text(
-                        'Backup All',
-                        style: TextStyle(
-                          fontFamily: 'Orbitron',
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
+                  child: _buildFadedAction(
+                    label: 'Backup All',
+                    icon: Icons.cloud_upload,
+                    accent: AppTheme.costHighlight,
+                    busy: _loadingKey == 'all.backup',
+                    onPressed: _loadingKey != null
+                        ? null
+                        : () => _runOp('all.backup', _backupAllData),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.blue.shade600,
-                          Colors.blue.shade800,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _restoreAllData,
-                      icon: const Icon(Icons.cloud_download, size: 18, color: Colors.white),
-                      label: const Text(
-                        'Restore All',
-                        style: TextStyle(
-                          fontFamily: 'Orbitron',
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
+                  child: _buildFadedAction(
+                    label: 'Restore All',
+                    icon: Icons.cloud_download,
+                    accent: AppTheme.infoBlue,
+                    busy: _loadingKey == 'all.restore',
+                    onPressed: _loadingKey != null
+                        ? null
+                        : () => _runOp('all.restore', _restoreAllData),
                   ),
                 ),
               ],

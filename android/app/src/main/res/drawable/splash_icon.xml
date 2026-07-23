@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ splash icon.
+
+  The system masks this drawable to a CIRCLE (~160dp visible out of the
+  240dp canvas). The logo artwork is square and its "SIYANATY+" wordmark
+  runs nearly the full width, so any zoom pushes the text outside the mask
+  and it gets clipped.
+
+  A square only fits inside a circle when it is scaled to roughly 70% of
+  the circle's diameter, so this inset shrinks the artwork instead of
+  enlarging it — that is what keeps the whole logo, text included, visible.
+  Increase the inset if anything still clips; decrease it for a larger logo.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@mipmap/ic_launcher_foreground"
+    android:inset="15%" />

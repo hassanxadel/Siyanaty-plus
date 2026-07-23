@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/notification_database_service.dart';
 import '../../../services/local_notification_service.dart';
+import '../../widgets/app_dialog.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -126,7 +128,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,
@@ -223,6 +225,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             children: [
+              // The trailing SizedBox mirrors the leading IconButton's width so
+              // the title stays optically centred on the screen.
               Row(
                 children: [
                   IconButton(
@@ -233,50 +237,56 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       size: 28,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  const Text(
-                    'Notifications',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
+                  const Expanded(
+                    child: Text(
+                      'Notifications',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 48),
                 ],
               ),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '$unreadCount unread notifications',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white70,
-                      fontFamily: 'Orbitron',
+                  Expanded(
+                    child: Text(
+                      '$unreadCount unread notifications',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Colors.white70,
+                        fontFamily: 'Orbitron',
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (_notifications.isNotEmpty)
                     Row(
                       children: [
-                        IconButton(
-                          onPressed: _markAllAsRead,
-                          icon: const Icon(
-                            Icons.mark_email_read,
-                            color: Colors.white,
-                            size: 24,
-                          ),
+                        _buildHeaderAction(
+                          icon: Icons.mark_email_read,
                           tooltip: 'Mark all as read',
+                          onPressed: _markAllAsRead,
                         ),
-                        IconButton(
-                          onPressed: _clearAllNotifications,
-                          icon: const Icon(
-                            Icons.clear_all,
-                            color: Colors.white,
-                            size: 24,
-                          ),
+                        const SizedBox(width: 10),
+                        _buildHeaderAction(
+                          icon: Icons.clear_all,
                           tooltip: 'Clear all',
+                          onPressed: _clearAllNotifications,
                         ),
                       ],
                     ),
@@ -285,6 +295,82 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Header action rendered as a raised chip so it reads as a button against
+  /// the header gradient rather than a bare icon.
+  Widget _buildHeaderAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    // Decoration on the Container so the glow isn't clipped to the Material's
+    // bounds (which is what an Ink decoration would do).
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.backgroundGreen.withOpacity(0.45),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppTheme.lightBackground.withOpacity(0.35),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+              spreadRadius: -2,
+            ),
+            BoxShadow(
+              color: AppTheme.secondaryGreen.withOpacity(0.25),
+              blurRadius: 14,
+              spreadRadius: -2,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onPressed,
+            child: Padding(
+              padding: const EdgeInsets.all(9),
+              child: Icon(icon, color: Colors.white, size: 21),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Styled entry for the per-notification read/delete menu.
+  PopupMenuItem<String> _buildNotificationMenuItem({
+    required String value,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: color),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Orbitron',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -371,17 +457,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget _buildNotificationCard(NotificationItem notification) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: notification.isRead 
-            ? AppTheme.darkAccentGreen.withOpacity(0.2)
-            : AppTheme.darkAccentGreen.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: notification.isRead 
-              ? AppTheme.primaryGreen.withOpacity(0.2)
-              : AppTheme.primaryGreen.withOpacity(0.4),
-          width: notification.isRead ? 1 : 2,
-        ),
+      // Unread notifications sit "higher" — brighter rim and a stronger glow —
+      // so the read/unread split is visible at a glance.
+      decoration: AppTheme.glowCardDecoration(
+        radius: 16,
+        elevated: !notification.isRead,
+        accent: notification.isRead
+            ? AppTheme.secondaryGreen.withOpacity(0.5)
+            : _getPriorityColor(notification.priority),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
@@ -390,7 +473,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           height: 50,
           decoration: BoxDecoration(
             color: _getPriorityColor(notification.priority).withOpacity(0.2),
-            borderRadius: BorderRadius.circular(25),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: _getPriorityColor(notification.priority).withOpacity(0.5),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _getPriorityColor(notification.priority).withOpacity(0.3),
+                blurRadius: 12,
+              ),
+            ],
           ),
           child: Icon(
             _getTypeIcon(notification.type),
@@ -452,11 +545,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ],
         ),
         trailing: PopupMenuButton<String>(
-          icon: Icon(
-            Icons.more_vert,
-            color: Theme.of(context).brightness == Brightness.dark
-                ? AppTheme.lightBackground.withOpacity(0.7)
-                : AppTheme.darkAccentGreen.withOpacity(0.7),
+          // Dark panel with a green rim so the menu reads as part of the app
+          // rather than a stock white Material sheet.
+          color: AppTheme.backgroundGreen,
+          elevation: 14,
+          offset: const Offset(0, 40),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: AppTheme.secondaryGreen.withOpacity(0.5),
+              width: 1,
+            ),
           ),
           onSelected: (value) {
             switch (value) {
@@ -470,49 +569,42 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           },
           itemBuilder: (context) => [
             if (!notification.isRead)
-              PopupMenuItem(
+              _buildNotificationMenuItem(
                 value: 'mark_read',
-                child: Row(
-                  children: [
-                                         Icon(
-                       Icons.mark_email_read, 
-                       size: 20,
-                       color: Theme.of(context).brightness == Brightness.dark
-                           ? null
-                           : AppTheme.darkAccentGreen,
-                     ),
-                     const SizedBox(width: 8),
-                     Text(
-                       'Mark as read',
-                       style: TextStyle(
-                         color: Theme.of(context).brightness == Brightness.dark
-                             ? null
-                             : AppTheme.darkAccentGreen,
-                         fontFamily: 'Orbitron',
-                       ),
-                     ),
-                  ],
-                ),
+                icon: Icons.mark_email_read_outlined,
+                label: 'Mark as read',
+                color: AppTheme.secondaryGreen,
               ),
-            PopupMenuItem(
+            _buildNotificationMenuItem(
               value: 'delete',
-              child: Row(
-                children: [
-                  const Icon(Icons.delete, size: 20, color: Colors.red),
-                  const SizedBox(width: 8),
-                                     Text(
-                     'Delete',
-                     style: TextStyle(
-                       color: Theme.of(context).brightness == Brightness.dark
-                           ? null
-                           : AppTheme.darkAccentGreen,
-                       fontFamily: 'Orbitron',
-                     ),
-                   ),
-                ],
-              ),
+              icon: Icons.delete_outline,
+              label: 'Delete',
+              color: AppDialog.destructive,
             ),
           ],
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppTheme.backgroundGreen.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppTheme.secondaryGreen.withOpacity(0.4),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.more_vert,
+              color: AppTheme.lightBackground,
+              size: 20,
+            ),
+          ),
         ),
         onTap: () async {
           if (!notification.isRead) {

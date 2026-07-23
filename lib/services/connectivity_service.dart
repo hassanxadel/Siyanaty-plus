@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import '../shared/utils/app_logger.dart';
+import '../presentation/widgets/app_dialog.dart';
 
 /// Service to check and monitor internet connectivity
 class ConnectivityService {
@@ -64,54 +66,19 @@ class ConnectivityService {
 
   /// Show no internet dialog
   static void showNoInternetDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            Icon(
-              Icons.wifi_off,
-              color: Colors.orange[700],
-              size: 28,
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'No Internet',
-              style: TextStyle(
-                fontFamily: 'Orbitron',
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: const Text(
+    AppDialog.message(
+      context,
+      title: 'No Internet',
+      message:
           'This feature requires an internet connection. Please check your connection and try again.',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'OK',
-              style: TextStyle(
-                fontFamily: 'Orbitron',
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
+      icon: Icons.wifi_off,
+      isWarning: true,
     );
   }
 
   /// Show no internet snackbar (less intrusive)
   static void showNoInternetSnackbar(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: const Row(
           children: [

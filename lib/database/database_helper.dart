@@ -15,7 +15,7 @@ import 'voice_note_database_helper.dart';
 /// Handles car data storage with CRUD operations
 class DatabaseHelper {
   static const String _databaseName = 'syanaty.db';
-  static const int _databaseVersion = 15; // Add car_id to maintenance table for standalone maintenance
+  static const int _databaseVersion = 16; // Add last_applied_at to mileage_entries for correct recurring-trip catch-up
   
   static const String tableCars = 'cars';
   static const String tableReminders = 'reminders';
@@ -685,6 +685,36 @@ class DatabaseHelper {
           print('Maintenance table updated for standalone maintenance support');
         } catch (e) {
           print('Error updating maintenance table: $e');
+        }
+      }
+
+      if (oldVersion < 16) {
+        // Version 16: Add last_applied_at to mileage_entries so recurring
+        // trips are credited exactly once per elapsed period (no double
+        // counting, no missed days when the periodic task runs late).
+        try {
+          final tableInfo = await db.rawQuery(
+              'PRAGMA table_info(${MileageDatabaseHelper.tableName})');
+          final columnNames =
+              tableInfo.map((col) => col['name'] as String).toList();
+
+          if (!columnNames.contains('last_applied_at')) {
+            await db.execute(
+                'ALTER TABLE ${MileageDatabaseHelper.tableName} ADD COLUMN last_applied_at TEXT');
+
+            // Anchor existing recurring entries at "now" so the upgrade does
+            // NOT retroactively credit a surge of back-dated mileage; they
+            // begin accruing correctly from this point forward.
+            await db.update(
+              MileageDatabaseHelper.tableName,
+              {'last_applied_at': DateTime.now().toIso8601String()},
+              where: "trip_frequency IS NOT NULL AND trip_frequency != 'oneTime'",
+            );
+
+            print('Added last_applied_at column to mileage_entries table');
+          }
+        } catch (e) {
+          print('Error updating mileage_entries table: $e');
         }
       }
     } catch (e) {

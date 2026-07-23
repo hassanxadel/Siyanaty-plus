@@ -132,16 +132,12 @@ class AuthService {
       //  3: Update user profile
       await credential.user!.updateDisplayName(fullName);
 
-      //  4: Send email verification
-      try {
-        await credential.user!.sendEmailVerification();
-        AppLogger.info('Email verification sent to: $email');
-      } catch (e) {
-        AppLogger.warning('Failed to send email verification', error: e);
-        // Continue with registration even if verification email fails
-      }
+      // NOTE: no verification email is sent here. Identity is confirmed by
+      // the OTP code, which is issued when the OTP screen opens — sending a
+      // second "verify your email" link at signup confused users and arrived
+      // long before they reached the verification step.
 
-      //  5: Add to authorized users and create profile
+      //  4: Add to authorized users and create profile
       try {
         await _createUserProfile(
           uid: credential.user!.uid,
@@ -152,7 +148,7 @@ class AuthService {
           emergencyContactPhone: emergencyContactPhone,
         );
         AppLogger.info('Successful registration for: $email');
-        return AuthResult.success('Account created successfully! Please check your email to verify your account.', credential.user);
+        return AuthResult.success('Account created successfully!', credential.user);
       } catch (profileError) {
         // If profile creation fails, delete the Firebase Auth user
         AppLogger.error('Profile creation failed, cleaning up Firebase Auth user', error: profileError);
@@ -174,15 +170,7 @@ class AuthService {
         // The user is actually created, check if current user exists
         if (_auth.currentUser != null) {
           try {
-            // Send email verification even in recovery path
-            try {
-              await _auth.currentUser!.sendEmailVerification();
-              AppLogger.info('Email verification sent to: $email (recovery path)');
-            } catch (verifyError) {
-              AppLogger.warning('Failed to send email verification in recovery path', error: verifyError);
-              // Continue with profile creation even if verification email fails
-            }
-            
+            // No verification email here either — see note above.
             await _createUserProfile(
               uid: _auth.currentUser!.uid,
               email: email.trim().toLowerCase(),

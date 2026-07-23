@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/utils/firebase_debug.dart';
+import '../../widgets/app_dialog.dart';
 
 class FirebaseDebugScreen extends StatefulWidget {
   const FirebaseDebugScreen({super.key});
@@ -256,22 +258,14 @@ class _FirebaseDebugScreenState extends State<FirebaseDebugScreen> {
 
   Future<void> _deleteCurrentUser() async {
     // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Delete'),
-        content: const Text('Are you sure you want to delete the current Firebase Auth user? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Confirm Delete',
+      message:
+          'Are you sure you want to delete the current Firebase Auth user? This cannot be undone.',
+      icon: Icons.person_remove_outlined,
+      confirmLabel: 'Delete',
+      isDestructive: true,
     );
 
     if (confirmed != true) return;
@@ -293,7 +287,7 @@ class _FirebaseDebugScreenState extends State<FirebaseDebugScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,

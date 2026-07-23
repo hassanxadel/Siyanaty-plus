@@ -22,7 +22,9 @@ class OtpService {
     final otp = (100000 + random.nextInt(900000)).toString();
     _currentOtp = otp;
     _otpExpiryTime = DateTime.now().add(const Duration(minutes: 5));
-    AppLogger.info('OTP generated: $otp (expires in 5 minutes)');
+    // Never log the code itself — device logs are readable via adb logcat
+    // and by crash/analytics SDKs, which would defeat the second factor.
+    AppLogger.info('OTP generated (expires in 5 minutes)');
     return otp;
   }
 
@@ -43,8 +45,8 @@ class OtpService {
       final userName = user.displayName ?? 'User';
 
       // Send OTP via Firebase Email Service
-      AppLogger.info('Sending OTP $otp to $email via Firebase');
-      
+      AppLogger.info('Sending OTP to user email via Firebase');
+
       final emailSent = await FirebaseEmailService.sendOTPEmail(
         toEmail: email,
         code: otp,

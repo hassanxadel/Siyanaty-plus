@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/services/notification_service.dart';
-import '../../../services/local_notification_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../debug/firebase_debug_screen.dart';
@@ -15,6 +15,10 @@ import '../info/help_screen.dart';
 import '../info/privacy_screen.dart';
 import '../info/terms_screen.dart';
 import '../../../widgets/backup_button_widget.dart';
+import '../../../services/cloud_data_service.dart';
+import '../../../services/profile_image_service.dart';
+import '../../widgets/app_dialog.dart';
+import '../../widgets/profile_avatar.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -27,10 +31,15 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _remindersNotifications = true;
 
+  /// True while a cloud wipe is in flight, so the action can show progress.
+  bool _isDeletingCloudData = false;
+
   @override
   void initState() {
     super.initState();
     _loadNotificationPreference();
+    /// Load the saved profile picture for the profile section
+    ProfileImageService.instance.loadProfileImage();
   }
 
   Future<void> _loadNotificationPreference() async {
@@ -70,6 +79,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildNotificationsSection(),
                     const SizedBox(height: 24),
                     const BackupButtonWidget(),
+                    const SizedBox(height: 24),
+                    _buildCloudDataSection(),
                     const SizedBox(height: 24),
                     _buildAppAppearanceSection(),
                     const SizedBox(height: 24),
@@ -141,24 +152,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildProfileSection(dynamic currentUser, AuthProvider authProvider) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+      decoration: AppTheme.glowCardDecoration(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -178,25 +172,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           
           Row(
             children: [
-              // Profile Avatar
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(
-                    color: AppTheme.primaryGreen,
-                    width: 2,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.person,
-                  size: 30,
-                  color: AppTheme.primaryGreen,
-                ),
+              // Profile picture — shares ProfileImageService with the profile
+              // and home screens, so it stays in sync automatically.
+              ProfileAvatar(
+                name: authProvider.appUser?.fullName ??
+                    currentUser?.email?.split('@').first ??
+                    'User',
+                size: 60,
+                onTap: _editProfile,
               ),
-              
+
               const SizedBox(width: 16),
               
               Expanded(
@@ -285,34 +270,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
+                child: _buildSettingsActionButton(
+                  label: 'Change PIN',
+                  icon: Icons.lock_reset,
                   onPressed: _changePin,
-                  icon: const Icon(Icons.lock_reset, size: 16),
-                  label: const Text(
-                    'Change PIN',
-                    style: TextStyle(fontFamily: 'Orbitron'),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryGreen,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: ElevatedButton.icon(
+                child: _buildSettingsActionButton(
+                  label: 'Sign Out',
+                  icon: Icons.logout,
+                  accent: AppTheme.errorColor,
                   onPressed: _signOut,
-                  icon: const Icon(Icons.logout, size: 16),
-                  label: const Text(
-                    'Sign Out',
-                    style: TextStyle(fontFamily: 'Orbitron'),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.errorColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
                 ),
               ),
             ],
@@ -325,24 +295,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildNotificationsSection() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+      decoration: AppTheme.glowCardDecoration(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -370,88 +323,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
           
-          const SizedBox(height: 16),
-          
-          // Test Notification Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _sendTestNotification,
-              icon: const Icon(Icons.notifications_active, size: 18),
-              label: const Text(
-                'Send Test Notification',
-                style: TextStyle(fontFamily: 'Orbitron'),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _remindersNotifications 
-                    ? AppTheme.primaryGreen 
-                    : AppTheme.darkGray,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-          
-          if (!_remindersNotifications) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Enable notifications to send a test',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
-                fontFamily: 'Orbitron',
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
-  
-  Future<void> _sendTestNotification() async {
-    HapticFeedback.lightImpact();
-    
-    // Check if notifications are enabled
-    if (!_remindersNotifications) {
-      _showMessage('Please enable notifications first');
-      return;
-    }
-    
-    try {
-      // Send test notification
-      await LocalNotificationService.instance.sendTestNotification();
-      _showMessage('Test notification sent! Check your notification panel.');
-    } catch (e) {
-      _showMessage('Failed to send test notification: ${e.toString()}');
-    }
+
+
+  /// Cloud data management — currently the "delete everything from the cloud"
+  /// action. Kept visually distinct (red accent) because it is destructive.
+  Widget _buildCloudDataSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: AppTheme.glowCardDecoration(radius: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Cloud Data',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).brightness == Brightness.light
+                  ? AppTheme.primaryGreen
+                  : AppTheme.getThemeAwareTextColor(context),
+              fontFamily: 'Orbitron',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Remove your data from the cloud. Records on this device are kept.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
+              fontFamily: 'Orbitron',
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: _buildSettingsActionButton(
+              label: _isDeletingCloudData
+                  ? 'Deleting...'
+                  : 'Delete All Cloud Data',
+              icon: Icons.cloud_off,
+              accent: AppDialog.destructive,
+              onPressed: _isDeletingCloudData ? null : _deleteAllCloudData,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
+  Future<void> _deleteAllCloudData() async {
+    HapticFeedback.lightImpact();
+
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Delete All Cloud Data?',
+      message:
+          'This permanently removes every backup from the cloud — cars, reminders, '
+          'maintenance, mileage, licenses and scans.\n\n'
+          'Data on this device is NOT deleted. This cannot be undone.',
+      icon: Icons.cloud_off,
+      confirmLabel: 'Delete',
+      isDestructive: true,
+      barrierDismissible: false,
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeletingCloudData = true);
+    final result = await CloudDataService.instance.deleteAllCloudData();
+    if (!mounted) return;
+    setState(() => _isDeletingCloudData = false);
+
+    _showMessage(result.message);
+  }
 
   Widget _buildAboutSupportSection() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+      decoration: AppTheme.glowCardDecoration(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -703,7 +657,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     
     if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackbar.show(context, 
         const SnackBar(
           content: Text(
             'PIN changed successfully',
@@ -715,56 +669,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _signOut() {
-    HapticFeedback.lightImpact();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Sign Out',
-          style: TextStyle(
-            color: AppTheme.lightBackground,
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        content: const Text(
-          'Are you sure you want to sign out?',
-          style: TextStyle(
-            color: AppTheme.darkAccentGreen,
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(
-                color: AppTheme.darkAccentGreen,
-                fontFamily: 'Orbitron',
-              ),
+  /// Pill action button matching the app's glow language.
+  Widget _buildSettingsActionButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    Color? accent,
+  }) {
+    // A null callback renders the button dimmed and inert (used while a
+    // long-running action such as the cloud wipe is in flight).
+    final base = accent ?? AppTheme.secondaryGreen;
+    final color = onPressed == null ? base.withOpacity(0.45) : base;
+    return Container(
+      decoration: AppTheme.glowButtonDecoration(accent: color),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              final success = await authProvider.signOut();
-              if (success && mounted) {
-                _showMessage('Successfully signed out');
-              }
-            },
-            child: const Text(
-              'Sign Out',
-              style: TextStyle(
-                color: AppTheme.errorColor,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
+  }
+
+  Future<void> _signOut() async {
+    HapticFeedback.lightImpact();
+
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out of your account?',
+      icon: Icons.logout,
+      confirmLabel: 'Sign Out',
+      isDestructive: true,
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Captured before the await so we never touch an unmounted context.
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final navigator = Navigator.of(context);
+
+    final success = await authProvider.signOut();
+    if (!mounted) return;
+
+    if (!success) {
+      _showMessage('Could not sign out. Please try again.');
+      return;
+    }
+
+    // Settings was pushed on top of the auth wrapper, so signing out alone
+    // leaves the user staring at this screen. Unwinding to the first route
+    // reveals the wrapper, which now has no user and renders the sign-in
+    // screen.
+    navigator.popUntil((route) => route.isFirst);
   }
 
 
@@ -782,24 +763,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildAppAppearanceSection() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+      decoration: AppTheme.glowCardDecoration(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -915,58 +879,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _sendVerificationEmail() {
+  Future<void> _sendVerificationEmail() async {
     HapticFeedback.lightImpact();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Verify Email',
-          style: TextStyle(
-            color: AppTheme.lightBackground,
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        content: const Text(
+
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Verify Email',
+      message:
           'We\'ll send a verification email to your registered email address. Please check your inbox and click the verification link.',
-          style: TextStyle(
-            color: AppTheme.darkAccentGreen,
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(
-                color: AppTheme.darkAccentGreen,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              final success = await authProvider.sendEmailVerification();
-              if (success && mounted) {
-                _showMessage('Verification email sent! Check your inbox.');
-              } else if (mounted) {
-                _showMessage('Failed to send verification email. Please try again.');
-              }
-            },
-            child: const Text(
-              'Send Email',
-              style: TextStyle(
-                color: AppTheme.primaryGreen,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ),
-        ],
-      ),
+      icon: Icons.mark_email_unread_outlined,
+      confirmLabel: 'Send Email',
     );
+
+    if (confirmed != true || !mounted) return;
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final success = await authProvider.sendEmailVerification();
+    if (!mounted) return;
+
+    _showMessage(success
+        ? 'Verification email sent! Check your inbox.'
+        : 'Failed to send verification email. Please try again.');
   }
 
   void _refreshVerificationStatus() async {

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import '../../../shared/constants/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../../shared/utils/responsive_utils.dart';
+import '../../../services/security/authentication_manager.dart';
+import '../security/mfa_verification_screen.dart';
 
 /// Modern create account screen with animated entrance and form validation
 /// Handles user registration through Firebase Auth
@@ -910,7 +914,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
           HapticFeedback.mediumImpact();
           
           // Show success message with email verification notice
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackbar.show(context, 
             SnackBar(
               content: Row(
                 children: [
@@ -929,7 +933,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
                   SizedBox(height: ResponsiveUtils.spacing(context, 12)),
                   const Expanded(
                     child: Text(
-                      'Welcome! Please check your email to verify your account',
+                      'Account created! Verifying your identity next',
                       style: TextStyle(
                         fontFamily: 'Orbitron',
                         fontSize: 14,
@@ -948,18 +952,37 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
             ),
           );
 
-          // Auto-navigate to main app after brief delay
-          await Future.delayed(const Duration(milliseconds: 1500));
-          
+          // Firebase already signs the new user in, so there is no need to
+          // sign in again. Go straight to OTP verification — the code is
+          // requested by that screen as it opens, so the email arrives
+          // exactly when the user is looking at the code fields.
+          await Future.delayed(const Duration(milliseconds: 1200));
+
+          if (!mounted) return;
+
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            final deviceId = await AuthenticationManager().getCurrentDeviceId();
+            if (!mounted) return;
+
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => MfaVerificationScreen(
+                  userId: user.uid,
+                  deviceId: deviceId,
+                ),
+              ),
+            );
+          }
+
           if (mounted) {
-            // The AuthWrapper will automatically detect the authentication
-            // and navigate to the appropriate screen (PIN setup or home)
+            // SecurityWrapper takes it from here (PIN setup, then the app)
             Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
           }
         } else {
           // Show error message with icon
           HapticFeedback.heavyImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackbar.show(context, 
             SnackBar(
               content: Row(
                 children: [
@@ -1005,7 +1028,7 @@ class _ModernCreateAccountScreenState extends State<ModernCreateAccountScreen>
         });
         
         HapticFeedback.heavyImpact();
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackbar.show(context, 
           SnackBar(
             content: Row(
               children: [

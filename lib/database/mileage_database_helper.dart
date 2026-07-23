@@ -17,9 +17,22 @@ class MileageDatabaseHelper {
       car_id TEXT,
       trip_frequency TEXT DEFAULT 'oneTime',
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      last_applied_at TEXT
     )
   ''';
+
+  /// Record that a recurring entry's mileage has been credited up to [when].
+  /// Written directly (not via [updateEntry]) so it doesn't disturb
+  /// `updated_at` or rewrite the whole row from the background isolate.
+  static Future<int> markApplied(Database db, int id, DateTime when) async {
+    return await db.update(
+      tableName,
+      {'last_applied_at': when.toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
 
   // Insert a new mileage entry
   static Future<int> insertEntry(Database db, MileageEntry entry) async {

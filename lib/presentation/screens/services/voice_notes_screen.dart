@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_sound/flutter_sound.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../models/voice_note.dart';
 import '../../../services/voice_note_service.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 
 class VoiceNotesScreen extends StatefulWidget {
@@ -198,30 +200,56 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                       size: 28,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  const Text(
-                          'Voice Notes',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontFamily: 'Orbitron',
+                  // Expanded title between two equal-width controls keeps
+                  // "Voice Notes" optically centred on the screen.
+                  const Expanded(
+                    child: Text(
+                      'Voice Notes',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Orbitron',
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
                           ),
-                        ),
-                  const Spacer(),
+                        ],
+                      ),
+                    ),
+                  ),
                   PopupMenuButton<String>(
+                    color: AppTheme.backgroundGreen,
+                    elevation: 12,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      side: BorderSide(
+                        color: AppTheme.secondaryGreen.withOpacity(0.5),
+                        width: 1,
+                      ),
+                    ),
                     onSelected: _handleMenuAction,
                     itemBuilder: (context) => [
                       const PopupMenuItem(
                         value: 'cleanup_files',
                         child: Row(
                           children: [
-                            Icon(Icons.cleaning_services, size: 16),
-                            SizedBox(width: 8),
+                            Icon(
+                              Icons.cleaning_services,
+                              size: 16,
+                              color: AppTheme.secondaryGreen,
+                            ),
+                            SizedBox(width: 10),
                             Text(
                               'Cleanup Files',
-                              style: TextStyle(fontFamily: 'Orbitron'),
+                              style: TextStyle(
+                                fontFamily: 'Orbitron',
+                                fontSize: 13,
+                                color: AppTheme.lightBackground,
+                              ),
                             ),
                           ],
                         ),
@@ -230,11 +258,19 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                         value: 'export_metadata',
                         child: Row(
                           children: [
-                            Icon(Icons.file_download, size: 16),
-                            SizedBox(width: 8),
+                            Icon(
+                              Icons.file_download,
+                              size: 16,
+                              color: AppTheme.secondaryGreen,
+                            ),
+                            SizedBox(width: 10),
                             Text(
                               'Export Metadata',
-                              style: TextStyle(fontFamily: 'Orbitron'),
+                              style: TextStyle(
+                                fontFamily: 'Orbitron',
+                                fontSize: 13,
+                                color: AppTheme.lightBackground,
+                              ),
                             ),
                           ],
                         ),
@@ -281,13 +317,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,13 +453,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -556,13 +580,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         children: [
@@ -590,13 +608,15 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                       : [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
                 ),
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: (_isRecording ? Colors.red : AppTheme.primaryGreen).withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
+                border: Border.all(
+                  color: (_isRecording ? Colors.red : AppTheme.secondaryGreen)
+                      .withOpacity(0.6),
+                  width: 1.5,
+                ),
+                boxShadow: AppTheme.glowShadow(
+                  accent: _isRecording ? Colors.red : AppTheme.secondaryGreen,
+                  elevated: true,
+                ),
               ),
               child: Icon(
                 _isRecording ? Icons.stop : Icons.mic,
@@ -685,8 +705,8 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
               children: [
                 Expanded(
                   child:                   Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
@@ -694,6 +714,11 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                           AppTheme.backgroundGreen,
                         ],
                       ),
+                      border: Border.all(
+                        color: AppTheme.secondaryGreen.withOpacity(0.45),
+                        width: 1,
+                      ),
+                      boxShadow: AppTheme.glowShadow(),
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                     child: ElevatedButton.icon(
@@ -721,8 +746,8 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child:                   Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
@@ -730,6 +755,11 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
                           AppTheme.backgroundGreen,
                         ],
                       ),
+                      border: Border.all(
+                        color: AppTheme.secondaryGreen.withOpacity(0.45),
+                        width: 1,
+                      ),
+                      boxShadow: AppTheme.glowShadow(),
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                     child: ElevatedButton.icon(
@@ -774,13 +804,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           ],
         ),
         borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: TextField(
         controller: _searchController,
@@ -826,13 +850,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        boxShadow: AppTheme.glowShadow(),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -925,41 +943,54 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
               ),
               PopupMenuButton<String>(
                 onSelected: (value) => _handleNoteAction(value, note),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit, size: 16),
-                        SizedBox(width: 8),
-                        Text(
-                          'Edit',
-                          style: TextStyle(fontFamily: 'Orbitron'),
-                        ),
-                      ],
-                    ),
+                // Dark panel with a green rim so the menu reads as part of the
+                // app rather than a stock white Material sheet.
+                color: AppTheme.backgroundGreen,
+                elevation: 14,
+                offset: const Offset(0, 40),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  side: BorderSide(
+                    color: AppTheme.secondaryGreen.withOpacity(0.5),
+                    width: 1,
                   ),
-                  const PopupMenuItem(
+                ),
+                itemBuilder: (context) => [
+                  _buildNoteMenuItem(
+                    value: 'edit',
+                    icon: Icons.edit_outlined,
+                    label: 'Edit',
+                    color: AppTheme.secondaryGreen,
+                  ),
+                  _buildNoteMenuItem(
                     value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, size: 16, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text(
-                          'Delete',
-                          style: TextStyle(
-                            fontFamily: 'Orbitron',
-                            color: Colors.red,
-                          ),
-                        ),
-                      ],
-                    ),
+                    icon: Icons.delete_outline,
+                    label: 'Delete',
+                    color: AppDialog.destructive,
                   ),
                 ],
-                child: const Icon(
-                  Icons.more_vert,
-                  color: Colors.white,
-                  size: 20,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundGreen.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.4),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.more_vert,
+                    color: AppTheme.lightBackground,
+                    size: 20,
+                  ),
                 ),
               ),
             ],
@@ -1206,66 +1237,26 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
     }
   }
   
-  void _showSaveOrDiscardDialog() {
-    showDialog(
-      context: context,
+  Future<void> _showSaveOrDiscardDialog() async {
+    final save = await AppDialog.show(
+      context,
+      title: 'Recording Stopped',
+      message: 'Would you like to save this recording?',
+      icon: Icons.mic_none,
+      cancelLabel: 'Discard',
+      confirmLabel: 'Save',
+      // Discarding throws the recording away, so it gets the destructive tint.
+      cancelAccent: AppDialog.destructive,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Recording Stopped',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Text(
-          'Would you like to save this recording?',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            color: Colors.white70,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _discardRecording();
-            },
-            child: const Text(
-              'Discard',
-              style: TextStyle(
-                fontFamily: 'Orbitron',
-                color: Colors.red,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _saveRecording();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryGreen,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              'Save',
-              style: TextStyle(
-                fontFamily: 'Orbitron',
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
+
+    if (!mounted) return;
+
+    if (save == true) {
+      _saveRecording();
+    } else {
+      _discardRecording();
+    }
   }
   
   void _discardRecording() {
@@ -1308,111 +1299,88 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
       await _stopRecording();
     }
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        title: const Text(
-          'Save Voice Note',
-          style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _titleController,
-              style: const TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
-              decoration: InputDecoration(
-                hintText: 'Enter title',
-                hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'Orbitron'),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.1),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white, width: 2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _descriptionController,
-              style: const TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Description (optional)',
-                hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'Orbitron'),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.1),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white, width: 2),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-            child: TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _clearInputs();
-              },
-              child: const Text(
-                'Cancel',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-              ),
-            ),
+    _showVoiceNoteForm(
+      title: 'Save Voice Note',
+      subtitle: 'Give this recording a name so you can find it later',
+      icon: Icons.save_outlined,
+      confirmLabel: 'Save',
+      onConfirm: _saveVoiceNote,
+    );
+  }
+
+  /// Shared title/description form used for both saving a new recording and
+  /// editing an existing note. Built from the app-wide dialog kit so it stays
+  /// identical to every other pop-up card.
+  void _showVoiceNoteForm({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required String confirmLabel,
+    required VoidCallback onConfirm,
+  }) {
+    AppDialog.custom<void>(
+      context,
+      title: title,
+      message: subtitle,
+      icon: icon,
+      content: Column(
+        children: [
+          AppDialogField(
+            controller: _titleController,
+            label: 'Title',
+            hint: 'Enter title',
+            icon: Icons.title,
           ),
-          const SizedBox(width: 8),
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-            child: TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _saveVoiceNote();
-              },
-              child: const Text(
-                'Save',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-              ),
+          const SizedBox(height: 16),
+          AppDialogField(
+            controller: _descriptionController,
+            label: 'Description',
+            hint: 'Description (optional)',
+            icon: Icons.notes,
+            maxLines: 3,
+          ),
+        ],
+      ),
+      actionsBuilder: (dialogContext) => [
+        AppDialogAction(
+          label: 'Cancel',
+          onTap: () {
+            Navigator.pop(dialogContext);
+            _clearInputs();
+          },
+        ),
+        AppDialogAction(
+          label: confirmLabel,
+          filled: true,
+          onTap: () {
+            Navigator.pop(dialogContext);
+            onConfirm();
+          },
+        ),
+      ],
+    );
+  }
+
+  /// Styled entry for the per-note edit/delete menu.
+  PopupMenuItem<String> _buildNoteMenuItem({
+    required String value,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: color),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Orbitron',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
           ),
         ],
@@ -1529,115 +1497,12 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
     _titleController.text = note.title;
     _descriptionController.text = note.description ?? '';
     
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        title: const Text(
-          'Edit Voice Note',
-          style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _titleController,
-              style: const TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
-              decoration: InputDecoration(
-                hintText: 'Enter title',
-                hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'Orbitron'),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.1),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white, width: 2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _descriptionController,
-              style: const TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Description (optional)',
-                hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'Orbitron'),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.1),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white, width: 2),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-            child: TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _clearInputs();
-              },
-              child: const Text(
-                'Cancel',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-            child: TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _updateNote(note);
-              },
-              child: const Text(
-                'Update',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      ),
+    _showVoiceNoteForm(
+      title: 'Edit Voice Note',
+      subtitle: 'Update the name or description of this note',
+      icon: Icons.edit_outlined,
+      confirmLabel: 'Update',
+      onConfirm: () => _updateNote(note),
     );
   }
 
@@ -1664,67 +1529,20 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
     }
   }
 
-  void _confirmDeleteNote(VoiceNote note) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        title: const Text(
-          'Delete Voice Note',
-          style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        content: Text(
+  Future<void> _confirmDeleteNote(VoiceNote note) async {
+    final confirmed = await AppDialog.show(
+      context,
+      title: 'Delete Voice Note',
+      message:
           'Are you sure you want to delete "${note.title}"? This action cannot be undone.',
-          style: const TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        actions: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-            child: TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-            child: TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _deleteNote(note);
-              },
-              child: const Text(
-                'Delete',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      ),
+      icon: Icons.delete_outline,
+      confirmLabel: 'Delete',
+      isDestructive: true,
     );
+
+    if (confirmed == true && mounted) {
+      _deleteNote(note);
+    }
   }
 
   Future<void> _deleteNote(VoiceNote note) async {
@@ -1771,46 +1589,25 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
     try {
       final metadata = await _voiceNoteService.exportMetadataAsJson(userId: _userId);
       
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: AppTheme.backgroundGreen,
-          title: const Text(
-            'Export Metadata',
-            style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-          ),
-          content: SingleChildScrollView(
-            child: Text(
-              metadata,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: Colors.white,
-              ),
+      if (!mounted) return;
+
+      AppDialog.custom<void>(
+        context,
+        title: 'Export Metadata',
+        icon: Icons.file_download_outlined,
+        content: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: AppTheme.glowFieldDecoration(),
+          child: Text(
+            metadata,
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 11,
+              height: 1.5,
+              color: AppTheme.lightBackground.withOpacity(0.9),
             ),
           ),
-          actions: [
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppTheme.darkAccentGreen,
-                    AppTheme.backgroundGreen,
-                  ],
-                ),
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-              ),
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  'Close',
-                  style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-                ),
-              ),
-            ),
-          ],
         ),
       );
     } catch (e) {
@@ -1825,7 +1622,7 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackbar.show(context, 
       SnackBar(
         content: Text(
           message,
@@ -1837,41 +1634,12 @@ class _VoiceNotesScreenState extends State<VoiceNotesScreen> {
   }
 
   void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.backgroundGreen,
-        title: const Text(
-          'Error',
-          style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-        ),
-        actions: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-            child: TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'OK',
-                style: TextStyle(fontFamily: 'Orbitron', color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      ),
+    AppDialog.message(
+      context,
+      title: 'Error',
+      message: message,
+      icon: Icons.error_outline,
+      isError: true,
     );
   }
 }
