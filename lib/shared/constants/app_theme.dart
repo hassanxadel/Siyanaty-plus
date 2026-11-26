@@ -7,6 +7,9 @@ class AppTheme {
   static const Color darkAccentGreen = Color(0xFF1D5B37); // Dark Accent Green - Secondary buttons, icons, tiles  
   static const Color backgroundGreen = Color(0xFF062117); // Background/Shadow Green - Dark mode areas, cards
   static const Color lightBackground = Color(0xFFDBDEA6); // Light Background/Highlight - Light backgrounds, form fields
+  /// Semantic alias: what the product calls "the yellow color" for text,
+  /// titles and highlights. Points to [lightBackground] — never a new hex.
+  static const Color textYellow = lightBackground;
   static const Color secondaryGreen = Color(0xFF739958); // Secondary Green - Text highlights, progress indicators, badges
   
   // Legacy support colors (keeping for smooth transition)
@@ -609,6 +612,23 @@ class AppTheme {
     );
   }
 
+  /// THE shared "car card" surface: a dark-green gradient panel with a thin
+  /// app-yellow ([lightBackground]) border and the app glow. This is the ONE
+  /// source for every bordered card (the Home car hero, the Cars list card and
+  /// the All Actions cards) so their borders can never drift apart.
+  static BoxDecoration carCardDecoration({double radius = 20}) {
+    return BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [darkAccentGreen, backgroundGreen],
+      ),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: lightBackground, width: 1.2),
+      boxShadow: glowShadow(),
+    );
+  }
+
   /// Pill button surface. [filled] gives the accent-tinted "primary" look;
   /// otherwise the button reads as a quiet outline.
   static BoxDecoration glowButtonDecoration({
@@ -635,6 +655,23 @@ class AppTheme {
           offset: const Offset(0, 4),
         ),
       ],
+    );
+  }
+
+  /// THE standard app button surface — use this for EVERY button so they all
+  /// match exactly: dark-green vertical gradient, a yellow ([lightBackground])
+  /// frame, and the app's soft glow. Pair it with a white Orbitron label (and
+  /// an optional leading icon). Pass [radius] only to fit a tighter corner.
+  static BoxDecoration primaryButtonDecoration({double radius = 24}) {
+    return BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [backgroundGreen, darkAccentGreen],
+      ),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: lightBackground, width: 1.5),
+      boxShadow: glowShadow(),
     );
   }
 

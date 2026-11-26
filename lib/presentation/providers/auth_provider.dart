@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../shared/services/auth_service.dart';
@@ -11,9 +13,17 @@ class AuthProvider extends ChangeNotifier {
   // Core authentication data
   User? _firebaseUser;           // Firebase user object
   AppUser? _appUser;             // Custom app user profile
-  bool _isLoading = false;       // Loading state for UI
+  bool _isLoading = true;        // Starts true so the splash shows at cold start
   String? _errorMessage;         // Error messages for user
-  
+
+  // Initial-load gate: the splash (AuthWrapper) stays up until BOTH the first
+  // auth state has resolved AND the splash animation's minimum time has passed,
+  // then flips exactly once. A safety timeout prevents a stalled auth stream
+  // (failed init / no connectivity) from trapping the user on the splash.
+  bool _initialLoadDone = false;
+  bool _authResolved = false;
+  bool _minSplashElapsed = false;
+
   // Public getters for UI access
   User? get firebaseUser => _firebaseUser;
   AppUser? get appUser => _appUser;
@@ -24,6 +34,7 @@ class AuthProvider extends ChangeNotifier {
   // Initialize authentication listener when provider is created
   AuthProvider() {
     _initializeAuthState();
+    _startInitialGate();
   }
 
   // Listen for Firebase authentication changes and update app state
@@ -36,8 +47,37 @@ class AuthProvider extends ChangeNotifier {
         _firebaseUser = null;
         _appUser = null;
       }
+      _authResolved = true;
+      _maybeFinishInitialLoad();
       notifyListeners();
     });
+  }
+
+  // Keep the splash up for at least the animation's length, and never longer
+  // than the safety timeout even if the auth stream never emits.
+  void _startInitialGate() {
+    Future.delayed(const Duration(milliseconds: 2200), () {
+      _minSplashElapsed = true;
+      _maybeFinishInitialLoad();
+    });
+    Future.delayed(const Duration(seconds: 8), () {
+      if (!_initialLoadDone) {
+        _authResolved = true;
+        _minSplashElapsed = true;
+        _maybeFinishInitialLoad();
+      }
+    });
+  }
+
+  // Flip out of the initial loading state exactly once, when both the first
+  // auth state has resolved and the minimum splash time has elapsed.
+  void _maybeFinishInitialLoad() {
+    if (_initialLoadDone) return;
+    if (_authResolved && _minSplashElapsed) {
+      _initialLoadDone = true;
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   // Load user profile data from Firestore database
@@ -165,28 +205,47 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Login user with Google account
-  Future<bool> signInWithGoogle() async {
-    _setLoading(true);
-    _clearError();
+  /// Error text from the last social sign-in attempt, read by the Sign-In
+  /// screen for inline display. Separate from the global [errorMessage] so a
+  /// failed social sign-in does NOT swap in the full-screen auth error, and
+  /// these methods don't flip the global loading state (no splash flash) —
+  /// the Sign-In screen shows its own inline button spinner instead.
+  String? lastSocialError;
 
+  // Login user with Google account.
+  Future<bool> signInWithGoogle() async {
+    lastSocialError = null;
     try {
       final result = await AuthService.signInWithGoogle();
-      
       if (result.isSuccess) {
-        _clearError();
         AppLogger.info('Google Sign-In successful');
         return true;
-      } else {
-        _setError(result.message);
-        return false;
       }
+      lastSocialError = result.message;
+      return false;
     } catch (e) {
-      _setError('Error during Google sign-in');
+      lastSocialError = 'Error during Google sign-in';
       AppLogger.error('Google Sign-In error in provider', error: e);
       return false;
-    } finally {
-      _setLoading(false);
+    }
+  }
+
+  // Login user with Apple account (iOS/macOS). Routes through
+  // AuthService.signInWithApple → the shared post-sign-in path.
+  Future<bool> signInWithApple() async {
+    lastSocialError = null;
+    try {
+      final result = await AuthService.signInWithApple();
+      if (result.isSuccess) {
+        AppLogger.info('Apple Sign-In successful');
+        return true;
+      }
+      lastSocialError = result.message;
+      return false;
+    } catch (e) {
+      lastSocialError = 'Error during Apple sign-in';
+      AppLogger.error('Apple Sign-In error in provider', error: e);
+      return false;
     }
   }
 
@@ -197,8 +256,12 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final result = await AuthService.signOut();
-      
+
       if (result.isSuccess) {
+        // Clear the local PIN, tokens and all cached secure data so the next
+        // sign-in starts fresh and must create a new PIN. This is the single
+        // source of truth shared by the Settings and Profile sign-out paths.
+        await SecureStorageService().clearAllSecureData();
         _firebaseUser = null;
         _appUser = null;
         _clearError();

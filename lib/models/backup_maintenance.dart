@@ -1,4 +1,16 @@
 
+/// Safely parse a maintenance cost that may be a num, a numeric String
+/// (e.g. "1,200" or "EGP 300"), or null. Never throws; bad input → 0.
+double parseCost(dynamic value) {
+  if (value == null) return 0.0;
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    final cleaned = value.replaceAll(RegExp(r'[^0-9.\-]'), '').trim();
+    return double.tryParse(cleaned) ?? 0.0;
+  }
+  return 0.0;
+}
+
 enum MaintenanceType {
   mechanics,
   electrical,
@@ -75,11 +87,11 @@ class BackupMaintenance {
       carId: map['car_id']?.toInt(),
       title: map['title'] ?? '',
       description: map['description'] ?? '',
-      cost: (map['cost'] ?? 0.0).toDouble(),
+      cost: parseCost(map['cost']),
       maintenanceDate: DateTime.parse(map['maintenance_date'] ?? DateTime.now().toIso8601String()),
       type: MaintenanceType.values.firstWhere(
-        (e) => e.name == (map['type'] ?? 'mechanics'),
-        orElse: () => MaintenanceType.mechanics,
+        (e) => e.name == (map['type'] ?? 'others'),
+        orElse: () => MaintenanceType.others, // unknown → Others, never a real category
       ),
       mechanicName: map['mechanic_name'],
       invoiceNumber: map['invoice_number'],
@@ -143,11 +155,11 @@ class BackupMaintenance {
       carId: map['car_id']?.toInt(),
       title: map['title'] ?? '',
       description: map['description'] ?? '',
-      cost: (map['cost'] ?? 0.0).toDouble(),
+      cost: parseCost(map['cost']),
       maintenanceDate: DateTime.parse(map['maintenance_date'] ?? DateTime.now().toIso8601String()),
       type: MaintenanceType.values.firstWhere(
-        (e) => e.name == (map['type'] ?? 'mechanics'),
-        orElse: () => MaintenanceType.mechanics,
+        (e) => e.name == (map['type'] ?? 'others'),
+        orElse: () => MaintenanceType.others, // unknown → Others, never a real category
       ),
       mechanicName: map['mechanic_name'],
       invoiceNumber: map['invoice_number'],

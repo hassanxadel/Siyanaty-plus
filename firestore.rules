@@ -15,8 +15,8 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
-    // User profile. Contains PII and the trusted-device list that gates
-    // MFA, so it must never be readable or writable by another account.
+    // User profile. Contains PII, so it must never be readable or writable
+    // by another account.
     match /users/{userId} {
       allow read, write: if isOwner(userId);
 
@@ -31,20 +31,6 @@ service cloud.firestore {
     // Registration/authorization record, keyed by uid.
     match /authorized_users/{userId} {
       allow read, write: if isOwner(userId);
-    }
-
-    // MFA codes. Only the owner may touch their own code document.
-    // The document stores a hash of the code, never the code itself.
-    match /mfa_codes/{userId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    // Outbound mail queue consumed by the Firebase "Trigger Email"
-    // extension. Clients enqueue messages but must never read the queue
-    // (it contains other users' addresses and message bodies).
-    match /mail/{mailId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if false;
     }
 
     // Shared, read-only reference data maintained outside the app.

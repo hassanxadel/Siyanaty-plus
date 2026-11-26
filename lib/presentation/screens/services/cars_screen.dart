@@ -1,12 +1,16 @@
 import 'dart:io';
 import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/utils/responsive_utils.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 import '../../../services/car_service.dart';
+import '../../../services/car_health_service.dart';
 import '../../../services/reminder_service.dart';
+import '../../../models/car_health_score.dart';
 import '../../../models/backup_car.dart';
 import '../../../models/backup_reminder.dart';
 import 'package:image_picker/image_picker.dart';
@@ -22,10 +26,11 @@ class MyCarsScreen extends StatefulWidget {
 
 class _MyCarsScreenState extends State<MyCarsScreen> {
   final CarService _carService = CarService();
+  final CarHealthService _carHealthService = CarHealthService();
+  final Map<int, CarHealthScore> _carHealthScores = {};
   List<BackupCar> _cars = [];
   List<BackupCar> _filteredCars = [];
   bool _isLoading = true;
-  bool _isSearching = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -44,23 +49,39 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
   Future<void> _loadCars() async {
     try {
       final cars = await _carService.getAllCars();
+      if (!mounted) return;
       setState(() {
         _cars = cars;
-        _filteredCars = cars;
         _isLoading = false;
       });
       _applyFilters();
+      _loadHealthScores(cars);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      if (mounted) {
-        AppSnackbar.show(context, 
-          SnackBar(
-            content: Text('Failed to load cars: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      AppSnackbar.show(
+        context,
+        SnackBar(
+          content: Text('Failed to load cars: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// Loads each car's health score the same way the Home carousel does, so the
+  /// badge colours match. Scores fill in as they arrive.
+  Future<void> _loadHealthScores(List<BackupCar> cars) async {
+    for (final car in cars) {
+      if (car.id == null) continue;
+      try {
+        final score = await _carHealthService.calculateHealthScore(car);
+        if (!mounted) return;
+        setState(() => _carHealthScores[car.id!] = score);
+      } catch (_) {
+        // A single car's health failing shouldn't block the list.
       }
     }
   }
@@ -83,17 +104,6 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
     });
   }
 
-  void _toggleSearch() {
-    setState(() {
-      _isSearching = !_isSearching;
-      if (!_isSearching) {
-        _searchController.clear();
-        _searchQuery = '';
-        _applyFilters();
-      }
-    });
-  }
-
   void _onSearchChanged(String query) {
     setState(() {
       _searchQuery = query;
@@ -107,7 +117,7 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
       builder: (context) => CarDetailsDialog(
         car: car,
         onEdit: () => _showEditCarDialog(car),
-        onDelete: () => _deleteCar(car),
+        onDelete: () => _confirmAndDeleteCar(car),
       ),
     );
   }
@@ -127,58 +137,127 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
     );
   }
 
-  Future<void> _deleteCar(BackupCar car) async {
-    // Note: CarDetailsDialog already pops, so we don't need to pop again
-    
-    final confirmed = await AppDialog.show(
-      context,
-      title: 'Delete Car',
-      message:
-          'Are you sure you want to delete ${car.brand} ${car.model} ${car.year}? This action cannot be undone.',
-      icon: Icons.delete_outline,
-      confirmLabel: 'Delete',
-      isDestructive: true,
-    );
+  /// Shows the iOS confirmation, then deletes if the user agrees. Shared by the
+  /// swipe action and the car details dialog.
+  Future<void> _confirmAndDeleteCar(BackupCar car) async {
+    if (await _confirmDeleteDialog(car)) {
+      await _performDelete(car);
+    }
+  }
 
-    if (confirmed == true && mounted) {
-      try {
-        final result = await _carService.deleteCar(car.id!);
-        if (result.isSuccess) {
-          await _loadCars();
-          if (mounted) {
-    AppSnackbar.show(context, 
-      SnackBar(
-                content: Text(result.message),
-        backgroundColor: AppTheme.primaryGreen,
-              ),
-            );
-          }
-        } else {
-          if (mounted) {
-            AppSnackbar.show(context, 
-              SnackBar(
-                content: Text(result.message),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      } catch (e) {
+  Future<bool> _confirmDeleteDialog(BackupCar car) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('Delete ${car.brand} ${car.model}?'),
+        content: const Text(
+          '\nThis car, with its maintenance records and reminders, will be '
+          'affected. This can’t be undone.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  /// Swipe-to-delete: removes the card from the list synchronously (required by
+  /// [Dismissible]), deletes in the background, and restores on failure.
+  Future<void> _deleteSwiped(BackupCar car) async {
+    setState(() {
+      _cars.removeWhere((c) => c.id == car.id);
+      _filteredCars.removeWhere((c) => c.id == car.id);
+      if (car.id != null) _carHealthScores.remove(car.id);
+    });
+    try {
+      final result = await _carService.deleteCar(car.id!);
+      if (!mounted) return;
+      if (result.isSuccess) {
+        AppSnackbar.show(
+          context,
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: AppTheme.primaryGreen,
+          ),
+        );
+      } else {
+        await _loadCars(); // restore from the database
         if (mounted) {
-          AppSnackbar.show(context, 
+          AppSnackbar.show(
+            context,
             SnackBar(
-              content: Text('Error deleting car: $e'),
+              content: Text(result.message),
               backgroundColor: Colors.red,
             ),
           );
         }
       }
+    } catch (e) {
+      if (!mounted) return;
+      await _loadCars();
+      if (mounted) {
+        AppSnackbar.show(
+          context,
+          SnackBar(
+            content: Text('Error deleting car: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  Widget _buildHeaderWithBackground() {
+  Future<void> _performDelete(BackupCar car) async {
+    try {
+      final result = await _carService.deleteCar(car.id!);
+      if (!mounted) return;
+      if (result.isSuccess) {
+        await _loadCars();
+        if (mounted) {
+          AppSnackbar.show(
+            context,
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: AppTheme.primaryGreen,
+            ),
+          );
+        }
+      } else {
+        AppSnackbar.show(
+          context,
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AppSnackbar.show(
+          context,
+          SnackBar(
+            content: Text('Error deleting car: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildHeader() {
+    // Standard app page header — kept per the app-wide header rule. Uses a
+    // minHeight (not a fixed height) so large text grows instead of overflowing.
     return Container(
-      height: 220,
+      constraints: const BoxConstraints(minHeight: 200),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -195,108 +274,110 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
         ),
       ),
       child: SafeArea(
+        bottom: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
-                      Icons.arrow_back_ios,
-                      color: Colors.white,
-                      size: 28,
-                    ),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    tooltip: 'Back',
+                    icon: const Icon(CupertinoIcons.back,
+                        color: Colors.white, size: 28),
                   ),
                   const Expanded(
-                    child: Text(
-                      'My Cars',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontFamily: 'Orbitron',
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(_isSearching ? Icons.close : Icons.search),
-                    onPressed: _toggleSearch,
-                    color: Colors.white,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Manage your vehicle ',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white70,
-                        fontFamily: 'Orbitron',
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    // Add Car button in header
-                    Container(
-                      width: 180,
-                      height: 45,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            AppTheme.primaryGreen,
-                            AppTheme.darkAccentGreen,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'My Cars',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.lightBackground,
+                          fontFamily: 'Orbitron',
+                          shadows: [
+                            Shadow(
+                                color: Colors.black45,
+                                blurRadius: 8,
+                                offset: Offset(0, 3)),
                           ],
                         ),
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryGreen.withOpacity(0.4),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
                       ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _showAddCarSheet,
-                          borderRadius: BorderRadius.circular(28),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.add_circle_outline,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Add Car',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Orbitron',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                    ),
+                  ),
+                  // Balances the back button so the title stays centered; the
+                  // add action lives in the centered button below.
+                  const SizedBox(width: 48),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Manage your vehicles',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontFamily: 'Orbitron',
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Standard centered "Add <X>" button: width 170, under the
+              // subtitle. Reuse this design + place on every screen with an add
+              // action (see header-add-button memory).
+              _buildAddCarButton(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddCarButton() {
+    return Semantics(
+      button: true,
+      label: 'Add new car',
+      child: Container(
+        width: 170,
+        height: 45,
+        decoration: AppTheme.primaryButtonDecoration(),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _showAddCarSheet();
+            },
+            child: const Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_circle_outline,
+                        color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Add New Car',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Orbitron',
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -307,76 +388,311 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
   Widget build(BuildContext context) {
     return ScreenWithNavBar(
       child: Scaffold(
-        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        backgroundColor: AppTheme.backgroundGreen,
         body: Column(
-        children: [
-          // Header with gradient background
-          _buildHeaderWithBackground(),
-          if (_isSearching) _buildSearchBar(),
-          
-          // Content
-          Expanded(
-            child: _isLoading 
-              ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
-              : _filteredCars.isEmpty 
-                ? _buildEmptyState() 
-                : _buildCarsList(),
-          ),
-        ],
+          children: [
+            _buildHeader(),
+            if (!_isLoading && _cars.isNotEmpty) _buildSearchField(),
+            Expanded(
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                slivers: [
+                  CupertinoSliverRefreshControl(onRefresh: _loadCars),
+                  if (_isLoading)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: CupertinoActivityIndicator(color: Colors.white),
+                      ),
+                    )
+                  else if (_filteredCars.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _buildEmptyState(),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: _buildCarCard(_filteredCars[index], index),
+                          ),
+                          childCount: _filteredCars.length,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: CupertinoSearchTextField(
+        controller: _searchController,
+        onChanged: _onSearchChanged,
+        placeholder: 'Search by brand, model, plate…',
+        style: const TextStyle(
+          color: Colors.white,
+          fontFamily: 'Orbitron',
+          fontSize: 15,
+        ),
+        placeholderStyle: TextStyle(
+          color: Colors.white.withOpacity(0.5),
+          fontFamily: 'Orbitron',
+          fontSize: 15,
+        ),
+        backgroundColor: Colors.white.withOpacity(0.08),
+        prefixIcon:
+            Icon(CupertinoIcons.search, color: Colors.white.withOpacity(0.6)),
+        itemColor: Colors.white.withOpacity(0.6),
+      ),
     );
   }
 
   Widget _buildEmptyState() {
     final bool isSearching = _searchQuery.isNotEmpty;
-    return RefreshIndicator(
-      onRefresh: _loadCars,
-      color: AppTheme.primaryGreen,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: SizedBox(
-          height: 400, // Give enough height for pull-to-refresh
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 235,
-                  height: 130,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Icon(
-                    isSearching ? Icons.search_off : const IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                    size: 75,
-                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.3),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSearching ? CupertinoIcons.search : CupertinoIcons.car_detailed,
+              size: 72,
+              color: AppTheme.lightBackground.withOpacity(0.6),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              isSearching ? 'No cars found' : 'No cars yet',
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.lightBackground,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isSearching
+                  ? 'Try a different search term.'
+                  : 'Add your first car to start tracking\nmaintenance and services.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.4,
+                color: Colors.white.withOpacity(0.7),
+                fontFamily: 'Orbitron',
+              ),
+            ),
+            if (!isSearching) ...[
+              const SizedBox(height: 24),
+              Semantics(
+                button: true,
+                label: 'Add your first car',
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _showAddCarSheet();
+                    },
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      decoration: AppTheme.primaryButtonDecoration(),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 13),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(CupertinoIcons.add,
+                              size: 18, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text('Add your first car',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Orbitron',
+                                  fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  isSearching ? 'No cars found' : 'No cars added yet',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.getThemeAwareTextColor(context),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  isSearching 
-                      ? 'Try adjusting your search terms\nor clear the search to see all cars'
-                      : 'Add your first car to start tracking\nmaintenance and services',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                  ),
-                ),
-                  const SizedBox(height: 32),
-              ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCarCard(BackupCar car, int index) {
+    final score = car.id != null ? _carHealthScores[car.id] : null;
+    final status = score?.healthStatus ?? 'unknown';
+    final healthColor = Color(CarHealthScore.getHealthColor(status));
+    final healthLabel = CarHealthScore.getHealthStatusDisplay(status);
+    final plate = car.licensePlate.trim().isEmpty ? '—' : car.licensePlate;
+
+    void openDetails() {
+      HapticFeedback.lightImpact();
+      _navigateToCarDetails(car);
+    }
+
+    return Dismissible(
+      key: ValueKey(car.id ?? index),
+      // Swipe right → Edit (snaps back); swipe left → Delete (confirmed first).
+      background: _swipeBg(
+        align: Alignment.centerLeft,
+        color: AppTheme.infoBlue,
+        icon: CupertinoIcons.pencil,
+        label: 'Edit',
+      ),
+      secondaryBackground: _swipeBg(
+        align: Alignment.centerRight,
+        color: AppTheme.errorColor,
+        icon: CupertinoIcons.delete,
+        label: 'Delete',
+      ),
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.startToEnd) {
+          _showEditCarDialog(car);
+          return false;
+        }
+        return _confirmDeleteDialog(car);
+      },
+      onDismissed: (_) => _deleteSwiped(car),
+      child: _carCardBody(
+          car, plate, healthColor, healthLabel, score, openDetails),
+    );
+  }
+
+  Widget _swipeBg({
+    required Alignment align,
+    required Color color,
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      alignment: align,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 22),
+          const SizedBox(width: 8),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+
+  Widget _carCardBody(BackupCar car, String plate, Color healthColor,
+      String healthLabel, CarHealthScore? score, VoidCallback openDetails) {
+    return Container(
+      decoration: AppTheme.carCardDecoration(),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: openDetails,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final imgSize = (c.maxWidth * 0.26).clamp(72.0, 104.0);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _carImage(car, imgSize),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${car.brand} ${car.model}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        fontFamily: 'Orbitron',
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(CupertinoIcons.chevron_right,
+                                      size: 16,
+                                      color: AppTheme.lightBackground),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  '${car.year} · ${car.color}',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: Colors.white.withOpacity(0.7),
+                                    fontFamily: 'Orbitron',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(child: _spec('Plate', plate)),
+                                  Expanded(
+                                    child: _spec(
+                                        'Mileage', '${car.mileage} km'),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              _healthBadge(score, healthColor, healthLabel),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                        height: 1, color: Colors.white.withOpacity(0.08)),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _carLink('Service reminders', CupertinoIcons.bell,
+                          () => _showCarReminders(car)),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -384,277 +700,113 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _searchController,
-        onChanged: _onSearchChanged,
-        decoration: InputDecoration(
-          hintText: 'Search cars by brand, model, year...',
-          hintStyle: TextStyle(
-            color: Colors.grey[500],
-            fontFamily: 'Orbitron',
-          ),
-          prefixIcon: const Icon(Icons.search, color: AppTheme.primaryGreen),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _searchController.clear();
-                    _onSearchChanged('');
-                  },
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        ),
-        style: const TextStyle(fontFamily: 'Orbitron'),
+  Widget _carImage(BackupCar car, double size) {
+    final hasImage = car.imagePath != null &&
+        car.imagePath!.isNotEmpty &&
+        File(car.imagePath!).existsSync();
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: hasImage
+            ? Image.file(File(car.imagePath!), fit: BoxFit.cover)
+            : Container(
+                color: Colors.white.withOpacity(0.06),
+                child: Icon(CupertinoIcons.car_detailed,
+                    size: size * 0.42, color: Colors.white.withOpacity(0.5)),
+              ),
       ),
     );
   }
 
-  Widget _buildCarsList() {
-    return RefreshIndicator(
-      onRefresh: _loadCars,
-      color: AppTheme.primaryGreen,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(20),
-        itemCount: _filteredCars.length,
-        itemBuilder: (context, index) {
-          final car = _filteredCars[index];
-          return _buildCarCard(car, index);
-        },
-      ),
+  /// Small yellow label over a white value; the value scales down so long
+  /// numbers never overflow on a narrow card.
+  Widget _spec(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 11,
+                color: AppTheme.lightBackground,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Orbitron')),
+        const SizedBox(height: 2),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(value,
+              maxLines: 1,
+              style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Orbitron')),
+        ),
+      ],
     );
   }
 
-  Widget _buildCarCard(BackupCar car, int index) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+  /// Health dot + label in the health colour — the sanctioned exception to the
+  /// "no green text" rule, matching the Home carousel badge.
+  Widget _healthBadge(CarHealthScore? score, Color color, String label) {
+    return Row(
+      children: [
+        Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            score != null
+                ? '$label · ${score.overallScore.round()}'
+                : 'Health —',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+                fontFamily: 'Orbitron'),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  /// Clean yellow text button with an icon — no pill background.
+  Widget _carLink(String label, IconData icon, VoidCallback onTap) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 15, color: AppTheme.lightBackground),
+                const SizedBox(width: 5),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.lightBackground,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Orbitron')),
+              ],
+            ),
+          ),
+        ),
       ),
-      child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 120,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryGreen.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: car.imagePath != null && car.imagePath!.isNotEmpty
-                          ? Image.file(
-                              File(car.imagePath!),
-                              width: 80,
-                              height: 70,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                       padding: const EdgeInsets.all(8),
-                                  child: const Icon(
-                                    IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                                    color: AppTheme.primaryGreen,
-                                    size: 40,
-                                  ),
-                                );
-                              },
-                            )
-                          : Container(
-                              padding: const EdgeInsets.all(8),
-                       child: const Icon(
-                         IconData(0xe800, fontFamily: 'MyFlutterApp'),
-                         color: AppTheme.primaryGreen,
-                         size: 40,
-                              ),
-                       ),
-                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${car.brand} ${car.model} ${car.year}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontFamily: 'Orbitron',
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${car.mileage} km',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white70,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryGreen.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: AppTheme.primaryGreen.withOpacity(0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            car.licensePlate,
-                            style: const TextStyle(
-                              color: AppTheme.primaryGreen,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              // Car details
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildDetailItem('Color', car.color),
-                  ),
-                  Expanded(
-                    child: _buildDetailItem('Fuel', car.fuelType),
-                  ),
-                  Expanded(
-                    child: _buildDetailItem('Engine', car.engineCC),
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // Action buttons with gradient backgrounds
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryGreen.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton.icon(
-                        onPressed: () => _navigateToCarDetails(car),
-                        label: const Text('View', style: TextStyle(fontFamily: 'Orbitron', fontSize: 14, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryGreen.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton.icon(
-                        onPressed: () => _showCarReminders(car),
-                        label: const Text(
-                          'Service',
-                          style: TextStyle(fontSize: 14, fontFamily: 'Orbitron', fontWeight: FontWeight.w600),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
     );
   }
 
@@ -1055,35 +1207,6 @@ class _MyCarsScreenState extends State<MyCarsScreen> {
       ),
     );
   }
-
-  Widget _buildDetailItem(String label, String value) {
-    return Column(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-            fontSize: 12,
-              color: Colors.white70,
-            fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
-
 
   void _showAddCarSheet() {
     showModalBottomSheet(
@@ -1579,7 +1702,8 @@ class _EditCarFormState extends State<EditCarForm> {
                         onChanged: (v) {
                           setState(() { turbo = v; });
                         },
-                        activeColor: AppTheme.primaryGreen,
+                        activeColor: AppTheme.backgroundGreen,
+                        activeTrackColor: AppTheme.lightBackground,
                       ),
                     ],
                   ),
@@ -1992,7 +2116,8 @@ class _AddCarFormState extends State<AddCarForm> {
                             onChanged: (v) {
                               setState(() { turbo = v; });
                             },
-                            activeColor: AppTheme.primaryGreen,
+                            activeColor: AppTheme.backgroundGreen,
+                            activeTrackColor: AppTheme.lightBackground,
                           ),
                         ],
                       ),

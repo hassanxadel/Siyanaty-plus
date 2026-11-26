@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:crypto/crypto.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../utils/app_logger.dart';
 import '../../domain/entities/app_user.dart';
 
@@ -132,10 +137,8 @@ class AuthService {
       //  3: Update user profile
       await credential.user!.updateDisplayName(fullName);
 
-      // NOTE: no verification email is sent here. Identity is confirmed by
-      // the OTP code, which is issued when the OTP screen opens — sending a
-      // second "verify your email" link at signup confused users and arrived
-      // long before they reached the verification step.
+      // NOTE: no verification email is sent here. After registration the user
+      // goes straight to PIN setup (SecurityWrapper); there is no OTP step.
 
       //  4: Add to authorized users and create profile
       try {
@@ -279,6 +282,118 @@ class AuthService {
       }
       
       return AuthResult.failure('Google Sign-In failed. Please try again.');
+    }
+  }
+
+  /// Cryptographically secure raw nonce, per Apple's guidance.
+  static String _generateNonce([int length = 32]) {
+    const charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(
+        length, (_) => charset[random.nextInt(charset.length)]).join();
+  }
+
+  static String _sha256ofString(String input) =>
+      sha256.convert(utf8.encode(input)).toString();
+
+  /// **SIGN IN WITH APPLE** (iOS/macOS). Passes a SHA-256–hashed nonce to
+  /// Apple and the raw nonce to Firebase, then reuses the SAME post-sign-in
+  /// path as Google (profile creation + authorization check).
+  static Future<AuthResult> signInWithApple() async {
+    try {
+      AppLogger.info('Starting Apple Sign-In process');
+
+      final rawNonce = _generateNonce();
+      final hashedNonce = _sha256ofString(rawNonce);
+
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashedNonce,
+      );
+
+      final oauthCredential = OAuthProvider('apple.com').credential(
+        idToken: appleCredential.identityToken,
+        rawNonce: rawNonce,
+        accessToken: appleCredential.authorizationCode,
+      );
+
+      final userCredential = await _auth.signInWithCredential(oauthCredential);
+      final user = userCredential.user;
+      if (user == null) {
+        return AuthResult.failure('Apple Sign-In failed');
+      }
+
+      // Apple returns the name only on the FIRST sign-in — persist it then,
+      // and never overwrite an existing name with null on later sign-ins.
+      if ((user.displayName == null || user.displayName!.isEmpty)) {
+        final fullName = [appleCredential.givenName, appleCredential.familyName]
+            .where((s) => s != null && s.isNotEmpty)
+            .join(' ')
+            .trim();
+        if (fullName.isNotEmpty) {
+          await user.updateDisplayName(fullName);
+          await user.reload();
+        }
+      }
+
+      // Shared post-sign-in path (handles private-relay emails like anyone's).
+      await ensureUserProfileExists(_auth.currentUser ?? user);
+
+      final isAuthorized = await _checkUserAuthorization(user.uid);
+      if (!isAuthorized) {
+        await signOut();
+        AppLogger.warning(
+            'Unauthorized Apple Sign-In attempt by: ${user.email}');
+        return AuthResult.failure(
+            'Access denied. You are not authorized to use this app.');
+      }
+
+      await _updateUserActivity(user.uid);
+      AppLogger.info('Successful Apple Sign-In for: ${user.email}');
+      return AuthResult.success('Welcome!', _auth.currentUser ?? user);
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        AppLogger.info('Apple Sign-In cancelled by user');
+        return AuthResult.failure('Sign-in cancelled');
+      }
+      AppLogger.error('Apple authorization error', error: e);
+      return AuthResult.failure('Apple Sign-In failed. Please try again.');
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'account-exists-with-different-credential') {
+        return AuthResult.failure(
+            'This email is already registered with a different sign-in method. '
+            'Please sign in with that method instead.');
+      }
+      AppLogger.error('Apple Firebase auth error', error: e);
+      return AuthResult.failure(_getAuthErrorMessage(e));
+    } catch (e) {
+      // Same benign Pigeon cast quirk the Google path guards against.
+      if (e.toString().contains('PigeonUserDetails') ||
+          e.toString().contains('type cast')) {
+        if (_auth.currentUser != null) {
+          try {
+            await ensureUserProfileExists(_auth.currentUser!);
+            final isAuthorized =
+                await _checkUserAuthorization(_auth.currentUser!.uid);
+            if (!isAuthorized) {
+              await signOut();
+              return AuthResult.failure(
+                  'Access denied. You are not authorized to use this app.');
+            }
+            await _updateUserActivity(_auth.currentUser!.uid);
+            return AuthResult.success('Welcome!', _auth.currentUser);
+          } catch (_) {
+            return AuthResult.failure(
+                'Authentication succeeded but setup failed. Please try again.');
+          }
+        }
+      }
+      AppLogger.error('Error during Apple Sign-In', error: e);
+      return AuthResult.failure('Apple Sign-In failed. Please try again.');
     }
   }
 

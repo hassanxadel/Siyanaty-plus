@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import '../../../shared/constants/app_theme.dart';
 import '../../../shared/utils/responsive_utils.dart';
 import '../../providers/auth_provider.dart';
 import '../actions/all_actions_screen.dart';
+import '../../actions/app_action.dart';
 import '../services/cars_screen.dart';
 import '../services/vin_lookup_screen.dart';
 import '../services/ocr_scanner_screen.dart';
@@ -30,10 +32,13 @@ import '../../../services/maintenance_service.dart';
 import '../../../services/notification_database_service.dart';
 import '../../../models/backup_reminder.dart';
 import '../../../models/backup_maintenance.dart';
-import '../../../services/security/local_unlock_service.dart';
+import '../../widgets/license_pin_sheet.dart';
+import '../../widgets/reminder_done_button.dart';
+import '../../../shared/utils/reminder_urgency.dart';
 import '../../../services/profile_image_service.dart';
 import '../../../shared/utils/string_extensions.dart';
 import '../../widgets/profile_avatar.dart';
+import '../../widgets/car_assistant_sheet.dart';
 
 /// Main dashboard screen that serves as the home page
 /// Displays user welcome, quick actions, and vehicle overview
@@ -50,6 +55,9 @@ class _HomeDashboardState extends State<HomeDashboard>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   /// Controller for managing entrance animations (fade and slide)
   late AnimationController _animationController;
+  /// Slow controller driving the Reminders card's "live" glow. One controller,
+  /// disposed in [dispose]; paused when reduce-motion is on.
+  late final AnimationController _glowController;
   /// Fade animation for smooth screen entrance
   late Animation<double> _fadeAnimation;
   /// Slide animation for content movement
@@ -58,6 +66,8 @@ class _HomeDashboardState extends State<HomeDashboard>
   final PageController _carPageController = PageController();
   /// Index of currently selected vehicle
   int _currentCarIndex = 0;
+  /// Inline "Ask Siyanaty AI" input; opens the full chat sheet on send.
+  final TextEditingController _aiInput = TextEditingController();
   /// Car service for fetching real car data
   final CarService _carService = CarService();
   /// Car health service for calculating health scores
@@ -68,8 +78,6 @@ class _HomeDashboardState extends State<HomeDashboard>
   final MaintenanceService _maintenanceService = MaintenanceService();
   /// Notification database service for checking notification count
   final NotificationDatabaseService _notificationService = NotificationDatabaseService.instance;
-  /// Local unlock service for PIN verification
-  final LocalUnlockService _localUnlockService = LocalUnlockService();
   /// Count of unread notifications for badge
   int _notificationCount = 0;
   /// List of user's cars (max 5 for swipe)
@@ -86,6 +94,11 @@ class _HomeDashboardState extends State<HomeDashboard>
   List<MaintenanceWithInfo> _latestMaintenance = [];
   /// Loading state for maintenance
   bool _maintenanceLoading = true;
+  /// Total paid across ALL maintenance records (the real total, not just the
+  /// three shown), from the same source as the Maintenance screen.
+  double _totalMaintenanceCost = 0.0;
+  /// Reminder ids being completed right now — blocks double taps.
+  final Set<int> _completingReminderIds = {};
 
   /// Initialize animation controllers and start entrance animations
   @override
@@ -117,6 +130,12 @@ class _HomeDashboardState extends State<HomeDashboard>
 
     /// Start the entrance animations
     _animationController.forward();
+
+    /// Slow pulse for the Reminders "live" border glow.
+    _glowController = AnimationController(
+      duration: const Duration(milliseconds: 2600),
+      vsync: this,
+    )..repeat(reverse: true);
     /// Load user's cars
     _loadUserCars();
     /// Load upcoming reminders
@@ -148,7 +167,9 @@ class _HomeDashboardState extends State<HomeDashboard>
     /// Remove observer
     WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
+    _glowController.dispose();
     _carPageController.dispose();
+    _aiInput.dispose();
     super.dispose();
   }
 
@@ -201,9 +222,10 @@ class _HomeDashboardState extends State<HomeDashboard>
       if (mounted) {
         setState(() {
           // Filter upcoming reminders and take max 3
+          // Keep ALL upcoming reminders; the section filters to the selected
+          // car and caps the display, so swiping updates the list correctly.
           _upcomingReminders = reminders
               .where((r) => r.reminder.status == ReminderStatus.upcoming)
-              .take(3)
               .toList();
           _remindersLoading = false;
         });
@@ -221,10 +243,12 @@ class _HomeDashboardState extends State<HomeDashboard>
   Future<void> _loadLatestMaintenance() async {
     try {
       final maintenance = await _maintenanceService.getAllMaintenanceWithInfo();
+      final total = await _maintenanceService.getTotalMaintenanceCost();
       if (mounted) {
         setState(() {
           // Take latest 3 maintenance records
           _latestMaintenance = maintenance.take(3).toList();
+          _totalMaintenanceCost = total;
           _maintenanceLoading = false;
         });
       }
@@ -240,10 +264,11 @@ class _HomeDashboardState extends State<HomeDashboard>
   /// Load notification count for badge
   Future<void> _loadNotificationCount() async {
     try {
-      final notifications = await _notificationService.getAllNotifications();
+      // Badge reflects UNREAD notifications, in sync with the Notifications screen.
+      final count = await _notificationService.getUnreadCount();
       if (mounted) {
         setState(() {
-          _notificationCount = notifications.length;
+          _notificationCount = count;
         });
       }
     } catch (e) {
@@ -291,52 +316,44 @@ class _HomeDashboardState extends State<HomeDashboard>
   /// Build the main dashboard layout with animations and content
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: SlideTransition(
-          position: _slideAnimation,
-          child: RefreshIndicator(
-            onRefresh: _refreshHomeData,
-            color: AppTheme.primaryGreen,
-            child: SingleChildScrollView(
-            child: Column(
-              children: [
-                /// Header section with gradient background and user welcome
-                _buildHeaderWithBackground(),
-
-                // Main content
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(height: 24),
-
-                      // App features container (like "pay your bills")
-                      _buildAppFeaturesSection(),
-                      const SizedBox(height: 24),
-
-                      // Car container with swipe functionality
-                      _buildCarSection(),
-                      const SizedBox(height: 24),
-
-                      // Actions section (3x2 grid)
-                      _buildActionsSection(),
-                      const SizedBox(height: 24),
-
-                      // Upcoming reminders
-                      _buildUpcomingRemindersSection(),
-                      const SizedBox(height: 24),
-
-                      // Latest maintenance
-                      _buildLatestMaintenanceSection(),
-                      const SizedBox(height: 24),
-
-                      // Service recommendations (keep as is)
-                      _buildServiceRecommendations(),
-                      const SizedBox(height: 32),
-                    ],
+    final mq = MediaQuery.of(context);
+    // Respect user text scaling, but cap it so large accessibility text can
+    // never overflow a card on a small screen.
+    return MediaQuery(
+      data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: 1.3)),
+      child: Scaffold(
+        backgroundColor: AppTheme.backgroundGreen,
+        body: FadeTransition(
+          opacity: _fadeAnimation,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              slivers: [
+                // Pull-to-refresh reloads cars, reminders and maintenance.
+                CupertinoSliverRefreshControl(onRefresh: _refreshHomeData),
+                // Top bar + greeting (unchanged).
+                SliverToBoxAdapter(child: _buildHeaderWithBackground()),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    // One horizontal margin for EVERY section → aligned edges.
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildCarHero(), // the one and only car section
+                        const SizedBox(height: 16),
+                        _buildUpcomingRemindersSection(), // most important
+                        const SizedBox(height: 16),
+                        _buildActionsSection(),
+                        const SizedBox(height: 16),
+                        _buildLatestMaintenanceSection(),
+                        const SizedBox(height: 16),
+                        _buildServiceRecommendations(),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -344,14 +361,14 @@ class _HomeDashboardState extends State<HomeDashboard>
           ),
         ),
       ),
-    ),
     );
   }
 
   // Header with gradient background design inspired by the money transfer app
   Widget _buildHeaderWithBackground() {
     return Container(
-      height: 260,
+      // No fixed height — the header hugs its content so there's no dead green
+      // space below the greeting card.
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -395,7 +412,7 @@ class _HomeDashboardState extends State<HomeDashboard>
                       _buildCircularIcon(
                         Icons.notifications_outlined,
                             () => _showNotifications(),
-                        hasNotificationBadge: _notificationCount > 0,
+                        badgeCount: _notificationCount,
                         color: AppTheme.lightBackground,
                       ),
                       const SizedBox(width: 8),
@@ -412,8 +429,8 @@ class _HomeDashboardState extends State<HomeDashboard>
 
                             const SizedBox(height: 20),
               
-              // Floating greeting section
-              Flexible(child: _buildFloatingGreeting()),
+              // Floating greeting section (plain child: the column now shrink-wraps).
+              _buildFloatingGreeting(),
             ],
           ),
         ),
@@ -421,7 +438,7 @@ class _HomeDashboardState extends State<HomeDashboard>
     );
   }
 
-  Widget _buildCircularIcon(IconData icon, VoidCallback onTap, {bool hasNotificationBadge = false, Color? color}) {
+  Widget _buildCircularIcon(IconData icon, VoidCallback onTap, {int badgeCount = 0, Color? color}) {
     final iconColor = color ?? AppTheme.getThemeAwareIconColor(context);
 
     // The decoration lives on an outer Container, NOT on an Ink: Ink paints
@@ -477,19 +494,33 @@ class _HomeDashboardState extends State<HomeDashboard>
                   size: 22,
                 ),
               ),
-              if (hasNotificationBadge)
+              // Unread-count badge: a number, not a dot; hidden entirely at 0.
+              if (badgeCount > 0)
                 Positioned(
-                  top: 8,
-                  right: 8,
+                  top: 3,
+                  right: 3,
                   child: Container(
-                    width: 11,
-                    height: 11,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE74C3C),
-                      shape: BoxShape.circle,
+                      color: AppTheme.errorColor,
+                      borderRadius: BorderRadius.circular(9),
                       border: Border.all(
                         color: AppTheme.backgroundGreen,
                         width: 1.5,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          height: 1,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Orbitron',
+                        ),
                       ),
                     ),
                   ),
@@ -570,181 +601,393 @@ class _HomeDashboardState extends State<HomeDashboard>
   }
 
  
-  Widget _buildAppFeaturesSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-          BoxShadow(
-            color: AppTheme.secondaryGreen.withOpacity(0.3),
-            blurRadius: 18,
-          ),        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 110,
-            height: 60,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.getThemeAwareIconColor(context).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
+  static const Color _accent = AppTheme.primaryGreen;
 
-            ),
-            child: Icon(
-              const IconData(0xe800, fontFamily: 'MyFlutterApp'),
-              color: Theme.of(context).brightness == Brightness.dark 
-                  ? Colors.white 
-                  : Colors.black,
-              size: 32,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Manage Your Vehicle',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.getThemeAwareTextColor(context),
-                    fontFamily: 'Orbitron',
+  /// The one reusable section component. Every titled section uses this, which
+  /// is what makes the page consistent: one surface, one padding, one header
+  /// style, and a plain-text `label ›` action (no pill background).
+  Widget _sectionCard({
+    required String title,
+    String? actionLabel,
+    VoidCallback? onAction,
+    Widget? titleBadge,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: AppTheme.glowCardDecoration(radius: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.lightBackground, // "the yellow color"
+                          fontFamily: 'Orbitron',
+                        ),
+                      ),
+                    ),
+                    if (titleBadge != null) ...[
+                      const SizedBox(width: 8),
+                      titleBadge,
+                    ],
+                  ],
+                ),
+              ),
+              if (actionLabel != null && onAction != null)
+                Semantics(
+                  button: true,
+                  label: actionLabel,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        onAction();
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        // 11+11+~22 text ≈ 44pt tap target.
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 11, horizontal: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              actionLabel,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: AppTheme.lightBackground,
+                                fontFamily: 'Orbitron',
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(CupertinoIcons.chevron_right,
+                                size: 15, color: AppTheme.lightBackground),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                  const SizedBox(height: 4),
-                Text(
-                  'Track maintenance, fuel, and more',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
+          const SizedBox(height: 12),
+          child,
         ],
       ),
     );
   }
 
-  // Car section with swipe functionality
-  Widget _buildCarSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  // --- Car hero (replaces "Manage your vehicle") -----------------------------
+
+  /// Dark panel with a thin `lightBackground` (yellow) border — the car card
+  /// look, now from the one shared source so the Cars list and the All Actions
+  /// cards stay identical to it.
+  BoxDecoration _heroDecoration() => AppTheme.carCardDecoration();
+
+  Widget _buildCarHero() {
+    if (_carsLoading) {
+      return Container(
+        height: 136,
+        decoration: _heroDecoration(),
+        child: const Center(
+            child: CupertinoActivityIndicator(color: Colors.white)),
+      );
+    }
+    if (_userCars.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: _heroDecoration(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'My Cars',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.getThemeAwareTextColor(context),
-                fontFamily: 'Orbitron',
-              ),
-            ),
-            GestureDetector(
-              onTap: () => _navigateToCarsList(),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      AppTheme.backgroundGreen,
-                      AppTheme.darkAccentGreen,
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppTheme.secondaryGreen.withOpacity(0.6),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.secondaryGreen.withOpacity(0.3),
-                      blurRadius: 18,
+            Icon(CupertinoIcons.car_detailed,
+                size: 40, color: Colors.white.withOpacity(0.5)),
+            const SizedBox(height: 10),
+            const Text('No cars yet',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontFamily: 'Orbitron')),
+            const SizedBox(height: 14),
+            // Standard app button: gradient fill + yellow frame + glow.
+            Semantics(
+              button: true,
+              label: 'Add your first car',
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _navigateToCarsList();
+                  },
+                  borderRadius: BorderRadius.circular(24),
+                  child: Container(
+                    decoration: AppTheme.primaryButtonDecoration(),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 22, vertical: 12),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_circle_outline,
+                            size: 18, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('Add your first car',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Orbitron',
+                                fontWeight: FontWeight.w600)),
+                      ],
                     ),
-                  ],
-                ),
-                child: const Text(
-                  'Manage',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.lightBackground,
-                    fontFamily: 'Orbitron',
-                    letterSpacing: 0.5,
                   ),
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+      );
+    }
+    // Carousel height derived from available width and clamped — never a magic
+    // number that can overflow a small screen.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Floor raised to 136 so the three single-line rows (~108px) always
+        // clear the width-derived height (fixes the 0.213px bottom overflow).
+        final cardH = (constraints.maxWidth * 0.34).clamp(136.0, 160.0);
+        return Column(
+          children: [
+            SizedBox(
+              height: cardH,
+              child: PageView.builder(
+                controller: _carPageController,
+                onPageChanged: (i) {
+                  HapticFeedback.selectionClick();
+                  setState(() => _currentCarIndex = i);
+                },
+                itemCount: _userCars.length,
+                itemBuilder: (context, i) => _buildHeroCard(_userCars[i]),
+              ),
+            ),
+            if (_userCars.length > 1) ...[
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_userCars.length, (i) {
+                  final active = _currentCarIndex == i;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: active ? 18 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color:
+                          active ? AppTheme.lightBackground : Colors.white.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
 
-        // Car card with swipe functionality
-        SizedBox(
-          height: 250, // Increased height to accommodate content
-          child: PageView.builder(
-            controller: _carPageController,
-            onPageChanged: (index) {
-              setState(() {
-                _currentCarIndex = index;
-              });
-            },
-            itemCount: _userCars.isEmpty ? 1 : _userCars.length,
-            itemBuilder: (context, index) {
-              return _buildCarCard(index);
-            },
+  Widget _heroLink(String label, VoidCallback onTap) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.lightBackground,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Orbitron')),
+                const SizedBox(width: 2),
+                const Icon(CupertinoIcons.chevron_right,
+                    size: 14, color: AppTheme.lightBackground),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
 
-        const SizedBox(height: 6),
+  Widget _buildHeroCard(BackupCar car) {
+    final score = car.id != null ? _carHealthScores[car.id] : null;
+    final status = score?.healthStatus ?? 'unknown';
+    final healthColor = Color(CarHealthScore.getHealthColor(status));
+    final healthLabel = CarHealthScore.getHealthStatusDisplay(status);
+    final hasImage = car.imagePath != null &&
+        car.imagePath!.isNotEmpty &&
+        File(car.imagePath!).existsSync();
 
-        // Page indicator dots
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(_userCars.isEmpty ? 1 : _userCars.length, (index) {
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              width: _currentCarIndex == index ? 12 : 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: _currentCarIndex == index
-                    ? AppTheme.getThemeAwareIconColor(context)
-                    : AppTheme.getThemeAwareTextColor(context).withOpacity(0.3),
-                borderRadius: BorderRadius.circular(4),
+    void openDetails() {
+      HapticFeedback.lightImpact();
+      _showCarDetailsDialog(car);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Container(
+        decoration: _heroDecoration(),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            // Image (tap → details); square, sized to the card height.
+            GestureDetector(
+              onTap: openDetails,
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: hasImage
+                      ? Image.file(File(car.imagePath!), fit: BoxFit.cover)
+                      : Container(
+                          color: Colors.white.withOpacity(0.06),
+                          child: Icon(CupertinoIcons.car_detailed,
+                              size: 32, color: Colors.white.withOpacity(0.5)),
+                        ),
+                ),
               ),
-            );
-          }),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name (left) + View all at the top-right of the card.
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: openDetails,
+                          child: Text(
+                            '${car.brand} ${car.model}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                fontFamily: 'Orbitron'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _heroLink('View all', _navigateToCarsList),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  GestureDetector(
+                    onTap: openDetails,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${car.year} · ${_formatMileage(car.mileage)} km',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white.withOpacity(0.75),
+                            fontFamily: 'Orbitron'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // Health (left) + License on the SAME row, under View all.
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                            color: healthColor, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          score != null
+                              ? '$healthLabel · ${score.overallScore.round()}'
+                              : 'Health —',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: healthColor,
+                              fontFamily: 'Orbitron'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _heroLink('License', _navigateToLicense),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
 
-        const SizedBox(height: 0),
+  /// `84,250` style grouping.
+  String _formatMileage(num mileage) =>
+      NumberFormat('#,###').format(mileage.round());
 
-        // Circular action buttons moved inside car card
-        const SizedBox(height: 2),
-      ],
+  /// `EGP 12,500` — consistent currency + thousands separators.
+  String _formatCost(num cost) =>
+      'EGP ${NumberFormat('#,##0').format(cost.round())}';
+
+  Widget _rowDivider() => Divider(
+      height: 1, thickness: 1, color: Colors.white.withOpacity(0.08));
+
+  Widget _emptyRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(icon, size: 40, color: Colors.white.withOpacity(0.4)),
+            const SizedBox(height: 8),
+            Text(text,
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontFamily: 'Orbitron')),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1149,343 +1392,315 @@ class _HomeDashboardState extends State<HomeDashboard>
     );
   }
 
+  // Reminders — the most important section. Filtered to the shown car, with a
+  // tasteful animated yellow glow border (the one "live" effect on the page).
   Widget _buildUpcomingRemindersSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    // Pause the controller under reduce-motion; resume otherwise.
+    if (reduceMotion) {
+      if (_glowController.isAnimating) _glowController.stop();
+    } else if (!_glowController.isAnimating) {
+      _glowController.repeat(reverse: true);
+    }
+
+    final selectedCarId =
+        (_userCars.isNotEmpty && _currentCarIndex < _userCars.length)
+            ? _userCars[_currentCarIndex].id
+            : null;
+    final list = selectedCarId == null
+        ? _upcomingReminders
+        : _upcomingReminders
+            .where((r) => r.reminder.carId == selectedCarId)
+            .toList();
+    final shown = list.take(3).toList();
+
+    final content = Padding(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-          BoxShadow(
-            color: AppTheme.secondaryGreen.withOpacity(0.3),
-            blurRadius: 18,
-          ),        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Upcoming Reminders',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SmartRemindersScreen(),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: context.r(10), vertical: context.r(6)),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        AppTheme.backgroundGreen,
-                        AppTheme.darkAccentGreen,
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(20)),
-                    border: Border.all(
-                      color: AppTheme.secondaryGreen.withOpacity(0.6),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.secondaryGreen.withOpacity(0.3),
-                        blurRadius: context.r(18),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'View All',
-                        style: context.responsiveTextStyle(
-                          fontSize: 10,
-                          color: Colors.white,
-                          fontFamily: 'Orbitron',
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(width: context.r(4)),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: context.responsiveIconSize(10),
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                    ],
+              const Expanded(
+                child: Text(
+                  'Reminders',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.lightBackground,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
               ),
+              _heroLink('View all', _navigateToReminders),
             ],
           ),
           const SizedBox(height: 12),
           if (_remindersLoading)
-            const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
-          else if (_upcomingReminders.isEmpty)
-            Center(
+            const Padding(
+                padding: EdgeInsets.all(8),
+                child: CupertinoActivityIndicator(color: Colors.white))
+          else if (shown.isEmpty)
+            _emptyRow(CupertinoIcons.bell, 'No upcoming reminders')
+          else
+            // AnimatedSize collapses smoothly when a reminder is completed.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              alignment: Alignment.topCenter,
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.notifications_none,
-                    size: 48,
-                    color: Colors.white.withOpacity(0.5),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'No upcoming reminders',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
+                  for (var i = 0; i < shown.length; i++) ...[
+                    _buildReminderItem(shown[i]),
+                    if (i != shown.length - 1) _rowDivider(),
+                  ],
                 ],
               ),
-            )
-          else
-            Column(
-              children: _upcomingReminders.take(3).map((reminderWithCar) {
-                return _buildReminderItem(reminderWithCar);
-              }).toList(),
             ),
         ],
       ),
+    );
+
+    // RepaintBoundary isolates the per-frame glow repaint from the rest of the
+    // page; the content is passed as a non-rebuilding `child`.
+    return RepaintBoundary(
+      child: reduceMotion
+          ? _remindersGlow(content, 1.0) // static highlight
+          : AnimatedBuilder(
+              animation: _glowController,
+              child: content,
+              builder: (context, child) => _remindersGlow(
+                  child!, Curves.easeInOut.transform(_glowController.value)),
+            ),
+    );
+  }
+
+  Widget _remindersGlow(Widget child, double t) {
+    const c = AppTheme.lightBackground;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppTheme.darkAccentGreen, AppTheme.backgroundGreen],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.withOpacity(0.35 + 0.55 * t), width: 1.3),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+            spreadRadius: -3,
+          ),
+          BoxShadow(
+            color: c.withOpacity(0.10 + 0.22 * t),
+            blurRadius: 18 + 14 * t,
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 
   Widget _buildReminderItem(ReminderWithCarInfo reminderWithCar) {
     final reminder = reminderWithCar.reminder;
-    final daysUntil = reminder.targetDate?.difference(DateTime.now()).inDays ?? 0;
-    
-    return Container(
-      margin: EdgeInsets.only(bottom: context.r(8)),
-      padding: EdgeInsets.all(context.r(12)),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.backgroundGreen,
-            AppTheme.primaryGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
+    final days = reminder.targetDate?.difference(DateTime.now()).inDays ?? 0;
+    final color = daysLeftColor(days);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+          // Bell ~+17% larger, aligned with the title.
+          Icon(CupertinoIcons.bell_fill, size: 21, color: color),
+          const SizedBox(width: 14),
+          // Tapping the body (title/car) opens the reminder's detail card.
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _showReminderDetailsDialog(reminderWithCar),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    reminder.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        fontFamily: 'Orbitron'),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    reminderWithCar.carDisplayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withOpacity(0.6),
+                        fontFamily: 'Orbitron'),
+                  ),
+                ],
               ),
-              borderRadius: BorderRadius.circular(8),
             ),
+          ),
+          const SizedBox(width: 10),
+          // Reminder · days · Done — days sits between the body and the button.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _showReminderDetailsDialog(reminderWithCar),
             child: Text(
-              reminder.type.icon,
-              style: const TextStyle(fontSize: 20),
+              daysLeftText(days),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  fontFamily: 'Orbitron'),
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  reminder.title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  reminderWithCar.carDisplayName,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: daysUntil <= 3 ? Colors.red : Colors.orange,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              daysUntil == 0 ? 'Today' : '$daysUntil days',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontFamily: 'Orbitron',
-              ),
-            ),
-          ),
+          _doneButton(reminderWithCar),
         ],
       ),
     );
   }
 
-  Widget _buildLatestMaintenanceSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+  /// Capsule Done button — the shared [ReminderDoneButton], so Home and the
+  /// Reminders screen can never drift. Completion logic stays here.
+  Widget _doneButton(ReminderWithCarInfo rc) {
+    final id = rc.reminder.id;
+    final busy = id != null && _completingReminderIds.contains(id);
+    return ReminderDoneButton(
+      busy: busy,
+      semanticLabel: 'Mark ${rc.reminder.title} as done',
+      onPressed: busy ? null : () => _completeReminder(rc),
+    );
+  }
+
+  /// Completes a reminder by reusing the Reminders screen's exact service call,
+  /// so recurring behavior stays identical. Optimistically removes the row and
+  /// offers Undo.
+  Future<void> _completeReminder(ReminderWithCarInfo rc) async {
+    final id = rc.reminder.id;
+    if (id == null || _completingReminderIds.contains(id)) return;
+    HapticFeedback.lightImpact();
+    setState(() => _completingReminderIds.add(id));
+
+    final result = await _reminderService.markReminderCompleted(id);
+    if (!mounted) return;
+
+    if (!result.isSuccess) {
+      setState(() => _completingReminderIds.remove(id));
+      _showHomeSnack(result.message);
+      return;
+    }
+    setState(() {
+      _completingReminderIds.remove(id);
+      _upcomingReminders.removeWhere((e) => e.reminder.id == id);
+    });
+    // Completing a reminder changes overdue state → refresh health and counts.
+    _loadUserCars();
+    _loadNotificationCount();
+    _showUndoSnack(rc.reminder);
+  }
+
+  void _showUndoSnack(BackupReminder reminder) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppTheme.darkAccentGreen,
+          duration: const Duration(seconds: 4),
+          content: const Text('Reminder completed',
+              style: TextStyle(fontFamily: 'Orbitron', color: Colors.white)),
+          action: SnackBarAction(
+            label: 'Undo',
+            textColor: AppTheme.lightBackground,
+            onPressed: () => _undoComplete(reminder),
           ),
-          BoxShadow(
-            color: AppTheme.secondaryGreen.withOpacity(0.3),
-            blurRadius: 18,
-          ),        ],
+        ),
+      );
+  }
+
+  Future<void> _undoComplete(BackupReminder reminder) async {
+    final id = reminder.id;
+    if (id == null) return;
+    final result = await _reminderService.markReminderUncompleted(id);
+    if (!mounted) return;
+    if (result.isSuccess) {
+      await _loadUpcomingReminders();
+      _loadUserCars();
+      _loadNotificationCount();
+    } else {
+      _showHomeSnack(result.message);
+    }
+  }
+
+  void _showHomeSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content:
+            Text(message, style: const TextStyle(fontFamily: 'Orbitron')),
+        backgroundColor: AppTheme.darkAccentGreen,
       ),
+    );
+  }
+
+  Widget _buildLatestMaintenanceSection() {
+    return _sectionCard(
+      title: 'Latest Maintenance',
+      actionLabel: 'View all',
+      onAction: _navigateToMaintenance,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Latest Maintenance',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const MaintenanceRecordsScreen(),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: context.r(10), vertical: context.r(6)),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        AppTheme.backgroundGreen,
-                        AppTheme.darkAccentGreen,
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    borderRadius: BorderRadius.circular(context.responsiveBorderRadius(20)),
-                    border: Border.all(
-                      color: AppTheme.secondaryGreen.withOpacity(0.6),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.secondaryGreen.withOpacity(0.3),
-                        blurRadius: context.r(18),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'View All',
-                        style: context.responsiveTextStyle(
-                          fontSize: 10,
-                          color: Colors.white,
-                          fontFamily: 'Orbitron',
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(width: context.r(4)),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: context.responsiveIconSize(12),
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          // Total paid across ALL records (live from getTotalMaintenanceCost).
+          Text(
+            'Total spent on maintenance',
+            style: TextStyle(
+                fontSize: 11,
+                color: Colors.white.withOpacity(0.6),
+                fontFamily: 'Orbitron'),
           ),
-          const SizedBox(height: 12),
-          if (_maintenanceLoading)
-            const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
-          else if (_latestMaintenance.isEmpty)
-            Center(
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.build_circle_outlined,
-                    size: 48,
-                    color: Colors.white.withOpacity(0.5),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'No maintenance records',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Column(
-              children: _latestMaintenance.take(3).map((maintenanceWithInfo) {
-                return _buildMaintenanceItem(maintenanceWithInfo);
-              }).toList(),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _formatCost(_totalMaintenanceCost),
+              style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.lightBackground,
+                  fontFamily: 'Orbitron'),
             ),
+          ),
+          const SizedBox(height: 10),
+          _rowDivider(),
+          const SizedBox(height: 4),
+          if (_maintenanceLoading)
+            const Padding(
+                padding: EdgeInsets.all(8),
+                child: CupertinoActivityIndicator(color: Colors.white))
+          else if (_latestMaintenance.isEmpty)
+            _emptyRow(CupertinoIcons.wrench, 'No maintenance records')
+          else
+            for (var i = 0; i < _latestMaintenance.length && i < 3; i++) ...[
+              _buildMaintenanceItem(_latestMaintenance[i]),
+              if (i != _latestMaintenance.length - 1 && i < 2) _rowDivider(),
+            ],
         ],
       ),
     );
@@ -1493,82 +1708,54 @@ class _HomeDashboardState extends State<HomeDashboard>
 
   Widget _buildMaintenanceItem(MaintenanceWithInfo maintenanceWithInfo) {
     final maintenance = maintenanceWithInfo.maintenance;
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.backgroundGreen,
-            AppTheme.primaryGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
+    // Whole row taps through to the maintenance detail card.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showMaintenanceDetailsDialog(maintenanceWithInfo),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.build,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
+          const Icon(CupertinoIcons.wrench_fill, size: 18, color: _accent),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  maintenance.type.name,
+                  maintenance.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    fontFamily: 'Orbitron',
-                  ),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      fontFamily: 'Orbitron'),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
-                  maintenanceWithInfo.carDisplayName,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                    fontFamily: 'Orbitron',
-                  ),
+                  '${maintenanceWithInfo.carDisplayName} · ${DateFormat('dd MMM yyyy').format(maintenance.maintenanceDate)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.6),
+                      fontFamily: 'Orbitron'),
                 ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              'EGP ${maintenance.cost.toStringAsFixed(0)}',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontFamily: 'Orbitron',
-              ),
-            ),
+          const SizedBox(width: 10),
+          Text(
+            _formatCost(maintenance.cost),
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.lightBackground, // colored, formatted price
+                fontFamily: 'Orbitron'),
           ),
         ],
+        ),
       ),
     );
   }
@@ -1617,179 +1804,85 @@ class _HomeDashboardState extends State<HomeDashboard>
     );
   }
 
-  // Actions section (3x2 grid)
+  // Actions — colored tinted badges, in a grid whose column count adapts to
+  // the width (via maxCrossAxisExtent) with a fixed tile height (no overflow).
+  // The tiles come from the shared [homeActions] registry so they can never
+  // drift from the All Actions screen.
   Widget _buildActionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Actions',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.getThemeAwareTextColor(context),
-                fontFamily: 'Orbitron',
-              ),
-            ),
-            InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AllActionsScreen(),
-                  ),
-                );
-              },
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      AppTheme.backgroundGreen,
-                      AppTheme.darkAccentGreen,
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppTheme.secondaryGreen.withOpacity(0.6),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.secondaryGreen.withOpacity(0.3),
-                      blurRadius: 18,
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'View All',
-                      style: TextStyle(
-                        color: AppTheme.getThemeAwareTextColor(context),
-                        fontFamily: 'Orbitron',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 12,
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.9),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+    final actions = homeActions;
+    return _sectionCard(
+      title: 'Actions',
+      actionLabel: 'View all',
+      onAction: _navigateToAllActions,
+      child: GridView.builder(
+        padding: EdgeInsets.zero,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 118,
+          mainAxisExtent: 94, // fixed height → never overflows on narrow screens
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
         ),
-        const SizedBox(height: 8), // keep same as My Cars
-
-        GridView.builder(
-          padding: EdgeInsets.zero, // prevent GridView from adding default padding
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            childAspectRatio: 0.85,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: actions.length,
-          itemBuilder: (context, index) {
-            final action = actions[index];
-            return _buildActionCard(
-              action['label'] as String,
-              action['icon'] as IconData,
-              action['color'] as Color,
-            );
-          },
-        ),
-      ],
+        itemCount: actions.length,
+        itemBuilder: (context, index) {
+          final action = actions[index];
+          return _buildActionCard(action.title, action.icon, action.iconColor);
+        },
+      ),
     );
   }
 
-  final actions = [
-    {'label': 'VIN Lookup', 'icon': Icons.search, 'color': const Color(0xFFF59E0B)}, // Amber/Orange
-    {'label': 'OCR Scanner', 'icon': Icons.document_scanner, 'color': const Color(0xFF06B6D4)}, // Cyan
-    {'label': 'Car Health', 'icon': Icons.health_and_safety, 'color': const Color(0xFF8E44AD)}, // Purple
-    {'label': 'Voice Notes', 'icon': Icons.mic, 'color': const Color(0xFFE74C3C)}, // Red
-    {'label': 'Mileage Track', 'icon': Icons.track_changes, 'color': const Color(0xFF10B981)}, // Emerald
-    {'label': 'Maintenance', 'icon': Icons.home_repair_service_rounded, 'color': const Color(0xFF3B82F6)}, // Blue
-  ];
-
   Widget _buildActionCard(String label, IconData icon, Color color) {
-    return InkWell(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        _handleAction(label);
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.darkAccentGreen,
-              AppTheme.backgroundGreen,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            _handleAction(label);
+          },
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
             ),
-            BoxShadow(
-              color: AppTheme.secondaryGreen.withOpacity(0.3),
-              blurRadius: 18,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 24,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                  fontFamily: 'Orbitron',
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 21),
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+                const SizedBox(height: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -2036,127 +2129,237 @@ class _HomeDashboardState extends State<HomeDashboard>
     );
   }
 
-  // Service Recommendations (keeping as is)
+  // "Ask Siyanaty AI" — an inline, iMessage-style entry to the car assistant,
+  // scoped to the car shown in the carousel. Replaces the old static
+  // recommendation list; the chat itself reuses the shared CarAssistantSheet +
+  // MockCarAssistantService (still UI only).
   Widget _buildServiceRecommendations() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Service Recommendations',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.getThemeAwareTextColor(context),
-            fontFamily: 'Orbitron',
-          ),
-        ),
-        const SizedBox(height: 16),
+    final car = (_userCars.isNotEmpty && _currentCarIndex < _userCars.length)
+        ? _userCars[_currentCarIndex]
+        : null;
+    final carLabel =
+        car != null ? '${car.brand} ${car.model} ${car.year}' : 'your car';
 
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.darkAccentGreen,
-                AppTheme.backgroundGreen,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 5),
+    return _sectionCard(
+      title: 'Ask Siyanaty AI',
+      titleBadge: _aiBadge(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          // Welcome bubble from the assistant, naming the selected car.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              constraints: BoxConstraints(
+                  maxWidth: MediaQuery.sizeOf(context).width * 0.75),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.darkAccentGreen,
+                borderRadius: BorderRadius.circular(16),
               ),
-              BoxShadow(
-                color: AppTheme.secondaryGreen.withOpacity(0.3),
-                blurRadius: 18,
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(
-                    Icons.lightbulb_outline,
+              child: Text(
+                'Hi 👋 Ask me anything about your $carLabel — oil changes, '
+                'tires, brakes or warning lights.',
+                style: const TextStyle(
                     color: Colors.white,
-                    size: 24,
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'AI Insights',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              _buildRecommendationItem(
-                'Your brake pads may need inspection in ~3 weeks.',
-                'Based on your driving patterns and current mileage.',
-              ),
-              const SizedBox(height: 12),
-              _buildRecommendationItem(
-                'Consider scheduling an oil change before 10,500 km.',
-                'You\'re approaching the recommended oil change interval.',
-              ),
-
-              const SizedBox(height: 16),
-
-              TextButton(
-                onPressed: () => _navigateToServices(),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.zero,
-                ),
-                child: const Text(
-                  'Find Nearby Service Centers →',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
                     fontFamily: 'Orbitron',
+                    fontSize: 12.5,
+                    height: 1.4),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Suggestion chips (horizontal scroll) open the full chat prefilled.
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: kAssistantSuggestions.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, i) =>
+                  _suggestionChip(kAssistantSuggestions[i], car),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildAiInputBar(car),
+          const SizedBox(height: 10),
+          _rowDivider(),
+          // Keep a quiet path to real workshops (the chat's real-world CTA).
+          Semantics(
+            button: true,
+            label: 'Find nearby service centers',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  _navigateToServices();
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 11),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Find Nearby Service Centers',
+                          style: TextStyle(
+                              fontSize: 14,
+                              color: AppTheme.lightBackground,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Orbitron')),
+                      SizedBox(width: 2),
+                      Icon(CupertinoIcons.chevron_right,
+                          size: 15, color: AppTheme.lightBackground),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Sparkles glyph + a small "Beta" capsule shown next to the AI section
+  /// title, so the section reads unmistakably as the AI assistant.
+  Widget _aiBadge() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(CupertinoIcons.sparkles,
+            size: 16, color: AppTheme.lightBackground),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppTheme.lightBackground,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Text(
+            'Beta',
+            style: TextStyle(
+              color: AppTheme.backgroundGreen,
+              fontFamily: 'Orbitron',
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildRecommendationItem(String title, String subtitle) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  /// iMessage-style input pill + send button. Both open the full chat sheet
+  /// (reused, UI only) with the typed question sent; send is disabled while
+  /// the field is empty.
+  Widget _buildAiInputBar(BackupCar? car) {
+    return Row(
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-            fontFamily: 'Orbitron',
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(22),
+              border:
+                  Border.all(color: AppTheme.lightBackground.withOpacity(0.35)),
+            ),
+            child: TextField(
+              controller: _aiInput,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _sendAiFromBar(car),
+              style: const TextStyle(
+                  color: Colors.white, fontFamily: 'Orbitron', fontSize: 13),
+              cursorColor: AppTheme.lightBackground,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Ask about your car…',
+                hintStyle: TextStyle(
+                    color: Colors.white.withOpacity(0.45),
+                    fontFamily: 'Orbitron',
+                    fontSize: 13),
+                border: InputBorder.none,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
           ),
         ),
-          const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.white70,
-            fontFamily: 'Orbitron',
-          ),
+        const SizedBox(width: 8),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _aiInput,
+          builder: (context, value, _) {
+            final enabled = value.text.trim().isNotEmpty;
+            return Semantics(
+              button: true,
+              enabled: enabled,
+              label: 'Send message',
+              child: Opacity(
+                opacity: enabled ? 1 : 0.4,
+                child: Material(
+                  color: AppTheme.lightBackground,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: enabled ? () => _sendAiFromBar(car) : null,
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(CupertinoIcons.arrow_up,
+                          color: AppTheme.backgroundGreen, size: 20),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
+  }
+
+  void _sendAiFromBar(BackupCar? car) {
+    final text = _aiInput.text.trim();
+    if (text.isEmpty) return;
+    _aiInput.clear();
+    _openAssistant(car, initial: text);
+  }
+
+  Widget _suggestionChip(String label, BackupCar? car) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _openAssistant(car, initial: label),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(18),
+              border:
+                  Border.all(color: AppTheme.lightBackground.withOpacity(0.4)),
+            ),
+            child: Text(label,
+                style: const TextStyle(
+                    color: AppTheme.lightBackground,
+                    fontFamily: 'Orbitron',
+                    fontSize: 12)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openAssistant(BackupCar? car, {String? initial}) {
+    HapticFeedback.selectionClick();
+    showCarAssistantSheet(context, car: car, initialQuestion: initial);
   }
 
   // Navigation Methods
@@ -2304,417 +2507,55 @@ class _HomeDashboardState extends State<HomeDashboard>
     _showPinVerificationForLicense();
   }
 
-  /// Show PIN verification dialog before accessing License screen
+  /// Gate the License screen behind the app PIN using the shared iOS sheet.
+  /// The sheet verifies through the shared LocalUnlockService, so cancelling
+  /// or swiping it down never opens the License — only an explicit success does.
   Future<void> _showPinVerificationForLicense() async {
-    String pin = '';
-    String? errorMessage;
-    bool isLoading = false;
-    int remainingAttempts = 5;
+    final car = (_userCars.isNotEmpty && _currentCarIndex < _userCars.length)
+        ? _userCars[_currentCarIndex]
+        : null;
+    final carLabel =
+        car != null ? '${car.brand} ${car.model} ${car.year}' : '';
 
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                // Matches AppDialogPanel so this card belongs to the same
-                // family as every other pop-up in the app.
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppTheme.backgroundGreen,
-                      AppTheme.darkAccentGreen,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: AppTheme.secondaryGreen.withOpacity(0.6),
-                    width: 1,
-                  ),
-                  boxShadow: AppTheme.glowShadow(elevated: true),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header with lock icon
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            AppTheme.primaryGreen,
-                            AppTheme.darkAccentGreen,
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryGreen.withOpacity(0.4),
-                            blurRadius: 12,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.lock_outline,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Enter PIN',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Orbitron',
-                        color: AppTheme.getThemeAwareTextColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Verify your PIN to access License',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+    final result = await showLicensePinSheet(context, carLabel: carLabel);
+    if (!mounted) return;
 
-                    // PIN dots display
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(6, (index) {
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 8),
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: index < pin.length
-                                ? AppTheme.primaryGreen
-                                : Colors.transparent,
-                            border: Border.all(
-                              color: index < pin.length
-                                  ? AppTheme.primaryGreen
-                                  : AppTheme.getThemeAwareTextColor(context).withOpacity(0.3),
-                              width: 2,
-                            ),
-                            boxShadow: index < pin.length
-                                ? [
-                                    BoxShadow(
-                                      color: AppTheme.primaryGreen.withOpacity(0.5),
-                                      blurRadius: 8,
-                                      spreadRadius: 1,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Error message
-                    if (errorMessage != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          errorMessage!,
-                          style: const TextStyle(
-                            color: Colors.red,
-                            fontSize: 12,
-                            fontFamily: 'Orbitron',
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    const SizedBox(height: 20),
-
-                    // Keypad
-                    _buildPinKeypad(
-                      pin: pin,
-                      isLoading: isLoading,
-                      onDigitPressed: (digit) async {
-                        if (isLoading || pin.length >= 6) return;
-                        
-                        HapticFeedback.lightImpact();
-                        setDialogState(() {
-                          pin += digit;
-                          errorMessage = null;
-                        });
-
-                        // Auto-verify at 6 digits
-                        if (pin.length == 6) {
-                          setDialogState(() => isLoading = true);
-                          
-                          final authResult = await _localUnlockService.authenticateWithPin(pin);
-                          
-                          if (authResult == PinAuthResult.success) {
-                            Navigator.of(dialogContext).pop(true);
-                          } else if (authResult == PinAuthResult.lockedOut) {
-                            setDialogState(() {
-                              errorMessage = 'Too many failed attempts. Please try again later.';
-                              pin = '';
-                              isLoading = false;
-                            });
-                          } else {
-                            remainingAttempts = await _localUnlockService.getRemainingAttempts();
-                            setDialogState(() {
-                              errorMessage = 'Incorrect PIN. $remainingAttempts attempts remaining.';
-                              pin = '';
-                              isLoading = false;
-                            });
-                          }
-                        }
-                      },
-                      onBackspacePressed: () {
-                        if (isLoading || pin.isEmpty) return;
-                        HapticFeedback.lightImpact();
-                        setDialogState(() {
-                          pin = pin.substring(0, pin.length - 1);
-                          errorMessage = null;
-                        });
-                      },
-                      onVerifyPressed: () async {
-                        if (isLoading || pin.length < 4) return;
-                        
-                        HapticFeedback.mediumImpact();
-                        setDialogState(() => isLoading = true);
-                        
-                        final authResult = await _localUnlockService.authenticateWithPin(pin);
-                        
-                        if (authResult == PinAuthResult.success) {
-                          Navigator.of(dialogContext).pop(true);
-                        } else if (authResult == PinAuthResult.lockedOut) {
-                          setDialogState(() {
-                            errorMessage = 'Too many failed attempts. Please try again later.';
-                            pin = '';
-                            isLoading = false;
-                          });
-                        } else {
-                          remainingAttempts = await _localUnlockService.getRemainingAttempts();
-                          setDialogState(() {
-                            errorMessage = 'Incorrect PIN. $remainingAttempts attempts remaining.';
-                            pin = '';
-                            isLoading = false;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Verify button (for 4-5 digit PINs)
-                    if (pin.length >= 4 && pin.length < 6)
-                      Container(
-                        width: double.infinity,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppTheme.primaryGreen,
-                              AppTheme.darkAccentGreen,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primaryGreen.withOpacity(0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: isLoading ? null : () async {
-                              HapticFeedback.mediumImpact();
-                              setDialogState(() => isLoading = true);
-                              
-                              final authResult = await _localUnlockService.authenticateWithPin(pin);
-                              
-                              if (authResult == PinAuthResult.success) {
-                                Navigator.of(dialogContext).pop(true);
-                              } else if (authResult == PinAuthResult.lockedOut) {
-                                setDialogState(() {
-                                  errorMessage = 'Too many failed attempts. Please try again later.';
-                                  pin = '';
-                                  isLoading = false;
-                                });
-                              } else {
-                                remainingAttempts = await _localUnlockService.getRemainingAttempts();
-                                setDialogState(() {
-                                  errorMessage = 'Incorrect PIN. $remainingAttempts attempts remaining.';
-                                  pin = '';
-                                  isLoading = false;
-                                });
-                              }
-                            },
-                            borderRadius: BorderRadius.circular(12),
-                            child: Center(
-                              child: isLoading
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Verify PIN',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                        fontFamily: 'Orbitron',
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-
-                    // Cancel button
-                    TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(false),
-                      child: Text(
-                        'Cancel',
-                        style: TextStyle(
-                          color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                          fontFamily: 'Orbitron',
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    // Navigate to License screen if PIN verified successfully
-    if (result == true && mounted) {
+    if (result == LicensePinResult.success) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const LicenseScreen()),
       );
+    } else if (result == LicensePinResult.forgotPin) {
+      _handleLicenseForgotPin();
     }
   }
 
-  /// Build the PIN keypad widget
-  Widget _buildPinKeypad({
-    required String pin,
-    required bool isLoading,
-    required Function(String) onDigitPressed,
-    required VoidCallback onBackspacePressed,
-    required VoidCallback onVerifyPressed,
-  }) {
-    return Column(
-      children: [
-        _buildKeypadRow(['1', '2', '3'], onDigitPressed, isLoading),
-        const SizedBox(height: 12),
-        _buildKeypadRow(['4', '5', '6'], onDigitPressed, isLoading),
-        const SizedBox(height: 12),
-        _buildKeypadRow(['7', '8', '9'], onDigitPressed, isLoading),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            // Empty space
-            const SizedBox(width: 70, height: 70),
-            // Zero button
-            _buildKeypadButton('0', onDigitPressed, isLoading),
-            // Backspace button
-            SizedBox(
-              width: 70,
-              height: 70,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: isLoading ? null : onBackspacePressed,
-                  borderRadius: BorderRadius.circular(35),
-                  child: Center(
-                    child: Icon(
-                      Icons.backspace_outlined,
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                      size: 24,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  /// Build a row of keypad buttons
-  Widget _buildKeypadRow(List<String> digits, Function(String) onPressed, bool isLoading) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: digits.map((digit) => _buildKeypadButton(digit, onPressed, isLoading)).toList(),
-    );
-  }
-
-  /// Build a single keypad button
-  Widget _buildKeypadButton(String digit, Function(String) onPressed, bool isLoading) {
-    return Container(
-      width: 70,
-      height: 70,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(35),
-        border: Border.all(
-          color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.1),
-          width: 1,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: isLoading ? null : () => onPressed(digit),
-          borderRadius: BorderRadius.circular(35),
-          splashColor: AppTheme.primaryGreen.withOpacity(0.3),
-          highlightColor: AppTheme.primaryGreen.withOpacity(0.1),
-          child: Center(
-            child: Text(
-              digit,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.getThemeAwareTextColor(context),
-                fontFamily: 'Orbitron',
-              ),
-            ),
+  /// Forgot-PIN from the License gate mirrors the unlock screen: sign out so a
+  /// fresh sign-in sets a new PIN. Signing out flips auth state, and the root
+  /// AuthWrapper routes back to login.
+  Future<void> _handleLicenseForgotPin() async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Forgot PIN?'),
+        content: const Text(
+            'You will be signed out. Sign in again to set a new PIN.'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
           ),
-        ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Sign Out'),
+          ),
+        ],
       ),
     );
+    if (confirmed != true || !mounted) return;
+    await Provider.of<AuthProvider>(context, listen: false).signOut();
+    if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
   void _navigateToMileageTrack() {
@@ -2958,6 +2799,286 @@ class _HomeDashboardState extends State<HomeDashboard>
           ),
         ),
       ),
+    );
+  }
+
+  /// Shared pop-up shell — same family as [_showCarDetailsDialog] (gradient
+  /// panel, icon badge header, close button, boxed detail rows, action button).
+  /// Used by the reminder and maintenance detail cards so they look identical
+  /// to the car card's pop-up.
+  void _showDetailsDialog({
+    required IconData headerIcon,
+    required Color headerColor,
+    required String title,
+    String? badge,
+    required List<Widget> rows,
+    required String actionLabel,
+    required VoidCallback onAction,
+  }) {
+    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+        child: SingleChildScrollView(
+          child: Container(
+            padding: EdgeInsets.all(dialogContext.r(20)),
+            constraints: BoxConstraints(
+              maxWidth: dialogContext.r(480),
+              maxHeight: dialogContext.screenHeight * 0.95,
+            ),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [AppTheme.backgroundGreen, AppTheme.darkAccentGreen],
+              ),
+              borderRadius:
+                  BorderRadius.circular(dialogContext.responsiveBorderRadius(24)),
+              border: Border.all(
+                color: AppTheme.secondaryGreen.withOpacity(0.6),
+                width: 1,
+              ),
+              boxShadow: AppTheme.glowShadow(elevated: true),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header: icon badge + title (+ optional badge) + close.
+                Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: dialogContext.r(50),
+                            height: dialogContext.r(50),
+                            decoration: BoxDecoration(
+                              color: headerColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(
+                                  dialogContext.responsiveBorderRadius(16)),
+                            ),
+                            child: Icon(headerIcon,
+                                color: headerColor,
+                                size: dialogContext.responsiveIconSize(24)),
+                          ),
+                          SizedBox(width: dialogContext.r(12)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  style: dialogContext.responsiveTextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Orbitron',
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (badge != null && badge.isNotEmpty) ...[
+                                  SizedBox(height: dialogContext.r(4)),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: dialogContext.r(8),
+                                      vertical: dialogContext.r(4),
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          AppTheme.backgroundGreen,
+                                          AppTheme.darkAccentGreen,
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(
+                                          dialogContext
+                                              .responsiveBorderRadius(20)),
+                                      border: Border.all(
+                                        color: AppTheme.secondaryGreen
+                                            .withOpacity(0.6),
+                                        width: 1,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppTheme.secondaryGreen
+                                              .withOpacity(0.3),
+                                          blurRadius: 12,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      badge,
+                                      style: dialogContext.responsiveTextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.lightBackground,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: 'Orbitron',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            AppTheme.backgroundGreen,
+                            AppTheme.darkAccentGreen,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(
+                            dialogContext.responsiveBorderRadius(16)),
+                        border: Border.all(
+                          color: AppTheme.secondaryGreen.withOpacity(0.5),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.secondaryGreen.withOpacity(0.25),
+                            blurRadius: 12,
+                          ),
+                        ],
+                      ),
+                      child: IconButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: Icon(
+                          Icons.close,
+                          color: AppTheme.secondaryGreen,
+                          size: dialogContext.responsiveIconSize(20),
+                        ),
+                        padding: EdgeInsets.all(dialogContext.r(8)),
+                        constraints: BoxConstraints(
+                          minWidth: dialogContext.r(32),
+                          minHeight: dialogContext.r(32),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: dialogContext.r(20)),
+                // Detail rows inside the same boxed panel the car card uses.
+                Container(
+                  padding: EdgeInsets.all(dialogContext.r(14)),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        AppTheme.backgroundGreen,
+                        AppTheme.darkAccentGreen,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(
+                        dialogContext.responsiveBorderRadius(20)),
+                    border: Border.all(
+                      color: AppTheme.secondaryGreen.withOpacity(0.35),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.secondaryGreen.withOpacity(0.2),
+                        blurRadius: 16,
+                      ),
+                    ],
+                  ),
+                  child: Column(children: rows),
+                ),
+                SizedBox(height: dialogContext.r(20)),
+                SizedBox(
+                  width: double.infinity,
+                  child: _buildModernActionButton(
+                    icon: Icons.arrow_forward_rounded,
+                    label: actionLabel,
+                    color: AppTheme.primaryGreen,
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                      onAction();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Reminder detail card — opened by tapping a reminder row.
+  void _showReminderDetailsDialog(ReminderWithCarInfo rc) {
+    final r = rc.reminder;
+    final days = r.targetDate?.difference(DateTime.now()).inDays ?? 0;
+    _showDetailsDialog(
+      headerIcon: _getReminderIcon(r.type),
+      headerColor: _getReminderColor(r.type),
+      title: r.title,
+      badge: r.type.displayName,
+      rows: [
+        _buildModernDetailRow(
+            'Car', rc.carDisplayName, Icons.directions_car, Colors.blue),
+        if (r.targetDate != null)
+          _buildModernDetailRow('Due date', _formatCarDate(r.targetDate),
+              Icons.event, Colors.orange),
+        _buildModernDetailRow(
+            'Time left', daysLeftText(days), Icons.timelapse, daysLeftColor(days)),
+        if (r.targetMileage != null)
+          _buildModernDetailRow('Target mileage',
+              '${_formatMileage(r.targetMileage!)} km', Icons.speed, Colors.cyan),
+        _buildModernDetailRow(
+            'Priority', r.priority.displayName, Icons.flag, Colors.purple),
+        if (r.description.isNotEmpty)
+          _buildModernDetailRow(
+              'Notes', r.description, Icons.notes, Colors.green),
+      ],
+      actionLabel: 'Open in Reminders',
+      onAction: _navigateToReminders,
+    );
+  }
+
+  /// Maintenance detail card — opened by tapping a maintenance row.
+  void _showMaintenanceDetailsDialog(MaintenanceWithInfo mi) {
+    final m = mi.maintenance;
+    _showDetailsDialog(
+      headerIcon: _getMaintenanceIcon(m.type),
+      headerColor: _getMaintenanceColor(m.type),
+      title: m.title,
+      badge: m.type.displayName,
+      rows: [
+        _buildModernDetailRow(
+            'Car', mi.carDisplayName, Icons.directions_car, Colors.blue),
+        _buildModernDetailRow('Cost', _formatCost(m.cost), Icons.payments,
+            AppTheme.primaryGreen),
+        _buildModernDetailRow(
+            'Date',
+            DateFormat('dd MMM yyyy').format(m.maintenanceDate),
+            Icons.calendar_today,
+            Colors.orange),
+        if (m.mechanicName != null && m.mechanicName!.isNotEmpty)
+          _buildModernDetailRow(
+              'Mechanic', m.mechanicName!, Icons.person, Colors.purple),
+        if (m.invoiceNumber != null && m.invoiceNumber!.isNotEmpty)
+          _buildModernDetailRow(
+              'Invoice', m.invoiceNumber!, Icons.receipt_long, Colors.cyan),
+        if (m.description.isNotEmpty)
+          _buildModernDetailRow(
+              'Notes', m.description, Icons.notes, Colors.green),
+      ],
+      actionLabel: 'Open in Maintenance',
+      onAction: _navigateToMaintenance,
     );
   }
 

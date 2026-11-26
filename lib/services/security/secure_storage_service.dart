@@ -26,7 +26,6 @@ class SecureStorageService {
   static const String _pinHashKey = 'pin_hash';
   static const String _pinSaltKey = 'pin_salt';
   static const String _biometricEnabledKey = 'biometric_enabled';
-  static const String _mfaSecretKey = 'mfa_secret';
   static const String _trustedDeviceKey = 'trusted_device';
   static const String _lastUnlockTimeKey = 'last_unlock_time';
   static const String _failedAttemptsKey = 'failed_attempts';
@@ -238,19 +237,6 @@ class SecureStorageService {
   Future<bool> isBiometricEnabled() async {
     final value = await _storage.read(key: _biometricEnabledKey);
     return value == 'true';
-  }
-
-  // MFA Secret (for TOTP)
-  Future<void> storeMfaSecret(String secret) async {
-    await _storage.write(key: _mfaSecretKey, value: secret);
-  }
-
-  Future<String?> getMfaSecret() async {
-    return await _storage.read(key: _mfaSecretKey);
-  }
-
-  Future<void> clearMfaSecret() async {
-    await _storage.delete(key: _mfaSecretKey);
   }
 
   // Trusted Device Status

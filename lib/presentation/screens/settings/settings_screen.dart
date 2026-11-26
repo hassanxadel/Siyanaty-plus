@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,7 +7,6 @@ import '../../../shared/constants/app_theme.dart';
 import '../../../shared/services/notification_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
-import '../debug/firebase_debug_screen.dart';
 import '../profile/profile_screen.dart';
 import '../security/pin_setup_screen.dart';
 import '../info/about_screen.dart';
@@ -34,16 +33,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// True while a cloud wipe is in flight, so the action can show progress.
   bool _isDeletingCloudData = false;
 
+  // Settings palette: NO green accents on this page. Labels/headers use the
+  // app's yellow (costHighlight), values are white, destructive is red. The
+  // dark surfaces/rims stay (app identity) but rims are tinted yellow.
+  static const Color _label = AppTheme.costHighlight; // yellow
+  static const Color _value = Colors.white;
+  static const Color _destructive = AppTheme.errorColor; // red
+
   @override
   void initState() {
     super.initState();
     _loadNotificationPreference();
+
     /// Load the saved profile picture for the profile section
     ProfileImageService.instance.loadProfileImage();
   }
 
   Future<void> _loadNotificationPreference() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _remindersNotifications = prefs.getBool('reminders_notifications') ?? true;
     });
@@ -62,42 +70,149 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ScreenWithNavBar(
       currentIndex: 4, // Settings is index 4 in nav bar
       child: Scaffold(
+        backgroundColor: AppTheme.backgroundGreen,
         body: Column(
-        children: [
-          _buildHeaderWithBackground(),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refreshSettingsData,
-              color: AppTheme.primaryGreen,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildProfileSection(currentUser, authProvider),
-                    const SizedBox(height: 24),
-                    _buildNotificationsSection(),
-                    const SizedBox(height: 24),
-                    const BackupButtonWidget(),
-                    const SizedBox(height: 24),
-                    _buildCloudDataSection(),
-                    const SizedBox(height: 24),
-                    _buildAppAppearanceSection(),
-                    const SizedBox(height: 24),
-                    _buildAboutSupportSection(),
-                    const SizedBox(height: 32),
-                  ],
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refreshSettingsData,
+                color: AppTheme.costHighlight,
+                backgroundColor: AppTheme.backgroundGreen,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildProfileCard(currentUser, authProvider),
+                      _sectionHeader('Account'),
+                      _insetGroup([
+                        _navRow(
+                          badge: AppTheme.infoBlue,
+                          icon: CupertinoIcons.lock_rotation,
+                          label: 'Change PIN',
+                          onTap: _changePin,
+                        ),
+                      ]),
+                      _sectionHeader('Preferences'),
+                      _insetGroup([
+                        Consumer<ThemeProvider>(
+                          builder: (context, themeProvider, child) {
+                            return _switchRow(
+                              badge: AppTheme.costHighlight,
+                              icon: CupertinoIcons.moon_fill,
+                              label: 'Dark Mode',
+                              subtitle: 'Switch between light and dark theme',
+                              value: themeProvider.isDarkMode,
+                              onChanged: (_) => themeProvider.toggleTheme(),
+                            );
+                          },
+                        ),
+                      ]),
+                      _sectionHeader('Notifications'),
+                      _insetGroup([
+                        _switchRow(
+                          badge: AppTheme.infoBlue,
+                          icon: CupertinoIcons.bell_fill,
+                          label: 'Reminders',
+                          subtitle: 'Get notified when reminders become overdue',
+                          value: _remindersNotifications,
+                          onChanged: (value) async {
+                            setState(() => _remindersNotifications = value);
+                            await _saveNotificationPreference(value);
+                          },
+                        ),
+                      ]),
+                      _sectionHeader('Data & Backup'),
+                      const BackupButtonWidget(),
+                      const SizedBox(height: 12),
+                      _insetGroup([
+                        _navRow(
+                          badge: _destructive,
+                          icon: CupertinoIcons.cloud_fill,
+                          label: _isDeletingCloudData
+                              ? 'Deleting…'
+                              : 'Delete All Cloud Data',
+                          destructive: true,
+                          trailing: _isDeletingCloudData
+                              ? const CupertinoActivityIndicator(
+                                  color: _destructive)
+                              : null,
+                          onTap:
+                              _isDeletingCloudData ? null : _deleteAllCloudData,
+                        ),
+                      ]),
+                      _sectionFooter(
+                          'Removes your data from the cloud. Records on this device are kept.'),
+                      _sectionHeader('Support & About'),
+                      _insetGroup([
+                        _navRow(
+                          badge: AppTheme.infoBlue,
+                          icon: CupertinoIcons.question_circle_fill,
+                          label: 'Help & FAQ',
+                          onTap: () => _push(const HelpScreen()),
+                        ),
+                        _navRow(
+                          badge: AppTheme.costHighlight,
+                          icon: CupertinoIcons.info_circle_fill,
+                          label: 'About Siyanaty+',
+                          onTap: () => _push(const AboutScreen()),
+                        ),
+                        _navRow(
+                          badge: AppTheme.infoBlue,
+                          icon: CupertinoIcons.lock_shield_fill,
+                          label: 'Privacy Policy',
+                          onTap: () => _push(const PrivacyScreen()),
+                        ),
+                        _navRow(
+                          badge: AppTheme.costHighlight,
+                          icon: CupertinoIcons.doc_text_fill,
+                          label: 'Terms of Service',
+                          onTap: () => _push(const TermsScreen()),
+                        ),
+                        _navRow(
+                          badge: AppTheme.infoBlue,
+                          icon: CupertinoIcons.chat_bubble_2_fill,
+                          label: 'Contact Support',
+                          onTap: _contactSupport,
+                        ),
+                        _navRow(
+                          badge: AppTheme.costHighlight,
+                          icon: CupertinoIcons.star_fill,
+                          label: 'Rate Our App',
+                          onTap: _rateApp,
+                        ),
+                      ]),
+                      const SizedBox(height: 24),
+                      _insetGroup([
+                        _navRow(
+                          badge: _destructive,
+                          icon: CupertinoIcons.square_arrow_right,
+                          label: 'Sign Out',
+                          destructive: true,
+                          showChevron: false,
+                          onTap: _signOut,
+                        ),
+                      ]),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 
-  Widget _buildHeaderWithBackground() {
+  // ---------------------------------------------------------------------------
+  // Header & profile
+  // ---------------------------------------------------------------------------
+
+  Widget _buildHeader() {
     return Container(
       width: double.infinity,
       height: 200,
@@ -149,231 +264,274 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildProfileSection(dynamic currentUser, AuthProvider authProvider) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: AppTheme.glowCardDecoration(radius: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Profile & Account',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.primaryGreen
-                  : AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          Row(
-            children: [
-              // Profile picture — shares ProfileImageService with the profile
-              // and home screens, so it stays in sync automatically.
-              ProfileAvatar(
-                name: authProvider.appUser?.fullName ??
-                    currentUser?.email?.split('@').first ??
-                    'User',
-                size: 60,
-                onTap: _editProfile,
-              ),
+  Widget _buildProfileCard(dynamic currentUser, AuthProvider authProvider) {
+    final name = authProvider.appUser?.fullName ??
+        currentUser?.email?.split('@').first ??
+        'User';
+    final email = currentUser?.email ?? 'No email';
 
-              const SizedBox(width: 16),
-              
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      authProvider.appUser?.fullName ?? currentUser?.email?.split('@').first ?? 'User',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.getThemeAwareTextColor(context),
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      currentUser?.email ?? 'No email',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    /*Text(
-                          'Account verified: ${currentUser?.emailVerified == true ? "Yes" : "No"}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: currentUser?.emailVerified == true 
-                                ? AppTheme.getThemeAwareTextColor(context).withOpacity(0.8)
-                                : const Color.fromARGB(255, 255, 46, 46),
-                            fontFamily: 'Orbitron',
-                          ),
+    return Semantics(
+      button: true,
+      label: 'Open profile for $name',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _editProfile,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration:
+                AppTheme.glowCardDecoration(radius: 16, accent: _label),
+            child: Row(
+              children: [
+                ProfileAvatar(name: name, size: 56, onTap: _editProfile),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _value,
+                          fontFamily: 'Orbitron',
                         ),
-                    Row(
-                      children: [
-                        if (currentUser?.emailVerified != true) ...[
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: _sendVerificationEmail,
-                            child: Text(
-                              'Verify Now',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppTheme.primaryGreen,
-                                fontFamily: 'Orbitron',
-                                decoration: TextDecoration.underline,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: _refreshVerificationStatus,
-                            child: Text(
-                              'Refresh',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppTheme.primaryGreen,
-                                fontFamily: 'Orbitron',
-                                decoration: TextDecoration.underline,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),*/
-                  ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        email,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: _value.withOpacity(0.7),
+                          fontFamily: 'Orbitron',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              
-              IconButton(
-                onPressed: _editProfile,
-                icon: const Icon(Icons.edit),
-                color: AppTheme.getThemeAwareTextColor(context),
-              ),
-            ],
+                const SizedBox(width: 8),
+                const Icon(CupertinoIcons.chevron_forward,
+                    color: Colors.white54, size: 18),
+              ],
+            ),
           ),
-          
-          const SizedBox(height: 20),
-          
-          // Action Buttons
-          Row(
-            children: [
-              Expanded(
-                child: _buildSettingsActionButton(
-                  label: 'Change PIN',
-                  icon: Icons.lock_reset,
-                  onPressed: _changePin,
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // iOS inset-grouped building blocks
+  // ---------------------------------------------------------------------------
+
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
+      child: Text(
+        title.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 12,
+          letterSpacing: 1.2,
+          fontWeight: FontWeight.bold,
+          color: _label,
+          fontFamily: 'Orbitron',
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionFooter(String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          height: 1.4,
+          color: _value.withOpacity(0.55),
+          fontFamily: 'Orbitron',
+        ),
+      ),
+    );
+  }
+
+  /// A rounded inset card holding [rows], with hairline separators between
+  /// them (indented past the icon badge, iOS-style).
+  Widget _insetGroup(List<Widget> rows) {
+    final children = <Widget>[];
+    for (var i = 0; i < rows.length; i++) {
+      children.add(rows[i]);
+      if (i != rows.length - 1) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 58),
+            child: Divider(
+                height: 1, thickness: 1, color: Colors.white.withOpacity(0.08)),
+          ),
+        );
+      }
+    }
+    return Container(
+      decoration: AppTheme.glowCardDecoration(radius: 16, accent: _label),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+
+  Widget _iconBadge(IconData icon, Color color) {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.22),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.5), width: 1),
+      ),
+      child: Icon(icon, color: color, size: 17),
+    );
+  }
+
+  Widget _navRow({
+    required Color badge,
+    required IconData icon,
+    required String label,
+    String? value,
+    VoidCallback? onTap,
+    bool destructive = false,
+    bool showChevron = true,
+    Widget? trailing,
+  }) {
+    final labelColor = destructive ? _destructive : _label;
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap == null
+              ? null
+              : () {
+                  HapticFeedback.selectionClick();
+                  onTap();
+                },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            child: Row(
+              children: [
+                _iconBadge(icon, badge),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: labelColor,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildSettingsActionButton(
-                  label: 'Sign Out',
-                  icon: Icons.logout,
-                  accent: AppTheme.errorColor,
-                  onPressed: _signOut,
+                if (value != null)
+                  Flexible(
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: _value,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 8),
+                  trailing,
+                ] else if (showChevron && !destructive) ...[
+                  const SizedBox(width: 8),
+                  const Icon(CupertinoIcons.chevron_forward,
+                      color: Colors.white38, size: 16),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _switchRow({
+    required Color badge,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          _iconBadge(icon, badge),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: _label,
+                    fontFamily: 'Orbitron',
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1.3,
+                    color: _value.withOpacity(0.7),
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Semantics(
+            label: label,
+            toggled: value,
+            child: CupertinoSwitch(
+              value: value,
+              activeColor: AppTheme.costHighlight, // yellow track, never green
+              onChanged: (v) {
+                HapticFeedback.lightImpact();
+                onChanged(v);
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildNotificationsSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: AppTheme.glowCardDecoration(radius: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Notifications',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.primaryGreen
-                  : AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          const SizedBox(height: 16),
-          
-          _buildSwitchTile(
-            'Reminders Notifications',
-            'Get notified when reminders become overdue',
-            _remindersNotifications,
-            (value) async {
-              setState(() => _remindersNotifications = value);
-              // Save preference to shared preferences
-              await _saveNotificationPreference(value);
-            },
-          ),
-          
-        ],
-      ),
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // Actions (behaviour unchanged)
+  // ---------------------------------------------------------------------------
 
-
-  /// Cloud data management — currently the "delete everything from the cloud"
-  /// action. Kept visually distinct (red accent) because it is destructive.
-  Widget _buildCloudDataSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: AppTheme.glowCardDecoration(radius: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Cloud Data',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.primaryGreen
-                  : AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Remove your data from the cloud. Records on this device are kept.',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.4,
-              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: _buildSettingsActionButton(
-              label: _isDeletingCloudData
-                  ? 'Deleting...'
-                  : 'Delete All Cloud Data',
-              icon: Icons.cloud_off,
-              accent: AppDialog.destructive,
-              onPressed: _isDeletingCloudData ? null : _deleteAllCloudData,
-            ),
-          ),
-        ],
-      ),
-    );
+  void _push(Widget screen) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 
   Future<void> _deleteAllCloudData() async {
@@ -402,321 +560,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _showMessage(result.message);
   }
 
-  Widget _buildAboutSupportSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: AppTheme.glowCardDecoration(radius: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'About & Support',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.primaryGreen
-                  : AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-            ),
-          ),
-            const SizedBox(height: 16),
-          
-          _buildActionTile(
-            'Help & FAQ',
-            'Get answers to common questions',
-            Icons.help_outline,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const HelpScreen()),
-            ),
-          ),
-          
-          _buildActionTile(
-            'About Siyana+',
-            'Learn about our app and mission',
-            Icons.info_outline,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AboutScreen()),
-            ),
-          ),
-          
-          _buildActionTile(
-            'Privacy Policy',
-            'How we protect your data',
-            Icons.privacy_tip_outlined,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const PrivacyScreen()),
-            ),
-          ),
-          
-          _buildActionTile(
-            'Terms of Service',
-            'Our terms and conditions',
-            Icons.description_outlined,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const TermsScreen()),
-            ),
-          ),
-          
-          _buildActionTile(
-            'Contact Support',
-            'Get help from our team',
-            Icons.support_agent,
-            _contactSupport,
-          ),
-          
-          _buildActionTile(
-            'Rate Our App',
-            'Leave a review on the app store',
-            Icons.star_outline,
-            _rateApp,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDebugSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.errorColor.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Debug Tools',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.primaryGreen
-                  : AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Development tools for debugging Firebase issues',
-            style: TextStyle(
-              fontSize: 12,
-              color: AppTheme.darkAccentGreen,
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          const SizedBox(height: 16),
-          
-          _buildActionTile(
-            'Firebase Debug Tools',
-            'Debug authentication and profile issues',
-            Icons.bug_report,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const FirebaseDebugScreen()),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSwitchTile(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? AppTheme.lightBackground
-                        : Colors.black,
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? AppTheme.lightBackground.withOpacity(0.8)
-                        : Colors.black54,
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: AppTheme.primaryGreen,
-            inactiveThumbColor: AppTheme.darkGray,
-            inactiveTrackColor: AppTheme.darkGray.withOpacity(0.3),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionTile(String title, String subtitle, IconData icon, VoidCallback onTap, {bool isDestructive = false}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: (isDestructive ? AppTheme.errorColor : AppTheme.primaryGreen).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                color: isDestructive ? AppTheme.errorColor : AppTheme.primaryGreen,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDestructive
-                          ? AppTheme.errorColor
-                          : AppTheme.getThemeAwareTextColor(context),
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.arrow_forward_ios,
-              color: AppTheme.darkAccentGreen,
-              size: 16,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Action Methods
   void _editProfile() {
     HapticFeedback.lightImpact();
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ProfileScreen()),
-    );
+    _push(const ProfileScreen());
   }
 
   void _changePin() async {
     HapticFeedback.lightImpact();
-    
-    // Import the PIN setup screen
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => const PinSetupScreen(isChangingPin: true),
       ),
     );
-    
+
     if (result == true && mounted) {
-      AppSnackbar.show(context, 
-        const SnackBar(
-          content: Text(
-            'PIN changed successfully',
-            style: TextStyle(fontFamily: 'Orbitron'),
-          ),
-          backgroundColor: AppTheme.primaryGreen,
-        ),
-      );
+      _showMessage('PIN changed successfully');
     }
   }
 
-  /// Pill action button matching the app's glow language.
-  Widget _buildSettingsActionButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback? onPressed,
-    Color? accent,
-  }) {
-    // A null callback renders the button dimmed and inert (used while a
-    // long-running action such as the cloud wipe is in flight).
-    final base = accent ?? AppTheme.secondaryGreen;
-    final color = onPressed == null ? base.withOpacity(0.45) : base;
-    return Container(
-      decoration: AppTheme.glowButtonDecoration(accent: color),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onPressed,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 16, color: color),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: color,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _signOut() async {
-    HapticFeedback.lightImpact();
+    HapticFeedback.mediumImpact();
 
     final confirmed = await AppDialog.show(
       context,
@@ -748,8 +613,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     navigator.popUntil((route) => route.isFirst);
   }
 
-
-
   void _contactSupport() {
     HapticFeedback.lightImpact();
     _showMessage('Opening support chat...');
@@ -760,158 +623,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _showMessage('Opening app store...');
   }
 
-  Widget _buildAppAppearanceSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: AppTheme.glowCardDecoration(radius: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'App Appearance',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.primaryGreen
-                  : AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-            ),
-          ),
-            const SizedBox(height: 16),
-          Consumer<ThemeProvider>(
-            builder: (context, themeProvider, child) {
-              return _buildSwitchTile(
-                'Dark Mode',
-                'Toggle between light and dark theme',
-                themeProvider.isDarkMode,
-                (value) {
-                  themeProvider.toggleTheme();
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOldAppAppearanceSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'App Appearance',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.primaryGreen
-                  : AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-            ),
-          ),
-            const SizedBox(height: 16),
-          
-          // Dark Mode Toggle
-          ListTile(
-            leading: const Icon(
-              Icons.dark_mode,
-              color: AppTheme.primaryGreen,
-            ),
-            title: Text(
-              'Dark Mode',
-              style: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppTheme.lightBackground
-                    : Colors.black,
-                fontFamily: 'Orbitron',
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            subtitle: Text(
-              'Change app theme from dark green to white',
-              style: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppTheme.lightBackground.withOpacity(0.8)
-                    : Colors.black54,
-                fontFamily: 'Orbitron',
-                fontSize: 12,
-              ),
-            ),
-            trailing: Consumer<ThemeProvider>(
-              builder: (context, themeProvider, child) {
-                return Switch.adaptive(
-                  value: themeProvider.isDarkMode,
-                  onChanged: (value) {
-                    HapticFeedback.lightImpact();
-                    themeProvider.toggleTheme();
-                  },
-                  activeColor: Colors.white,
-                  activeTrackColor: AppTheme.primaryGreen,
-                  inactiveThumbColor: AppTheme.darkGray,
-                  inactiveTrackColor: AppTheme.darkGray.withOpacity(0.3),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-
   void _showMessage(String message) {
     NotificationService.instance.showInfoNotification(
       context,
       message: message,
     );
-  }
-
-  Future<void> _sendVerificationEmail() async {
-    HapticFeedback.lightImpact();
-
-    final confirmed = await AppDialog.show(
-      context,
-      title: 'Verify Email',
-      message:
-          'We\'ll send a verification email to your registered email address. Please check your inbox and click the verification link.',
-      icon: Icons.mark_email_unread_outlined,
-      confirmLabel: 'Send Email',
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final success = await authProvider.sendEmailVerification();
-    if (!mounted) return;
-
-    _showMessage(success
-        ? 'Verification email sent! Check your inbox.'
-        : 'Failed to send verification email. Please try again.');
-  }
-
-  void _refreshVerificationStatus() async {
-    HapticFeedback.lightImpact();
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final success = await authProvider.reloadUser();
-    if (success && mounted) {
-      setState(() {}); // Refresh the UI
-      _showMessage('Verification status refreshed!');
-    } else if (mounted) {
-      _showMessage('Failed to refresh verification status. Please try again.');
-    }
   }
 
   /// Refreshes all data on the settings screen
