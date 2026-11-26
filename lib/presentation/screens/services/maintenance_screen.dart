@@ -1,41 +1,85 @@
 import 'package:flutter/material.dart';
-import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../models/backup_maintenance.dart';
-import '../../../services/maintenance_service.dart';
 import '../../../models/backup_reminder.dart';
+import '../../../models/backup_car.dart';
+import '../../../services/maintenance_service.dart';
+import '../../../services/car_service.dart';
 
-/// Screen for displaying and managing vehicle maintenance records
-/// Shows maintenance history, costs, and allows filtering by service type
+/// Single source of truth for category presentation. Every maintenance type
+/// maps to exactly one monochrome icon here; [MaintenanceType.displayName]
+/// supplies the label. Unknown values already default to `mechanics` in
+/// [BackupMaintenance.fromMap], so nothing is ever left uncategorised.
+extension MaintenanceTypeUi on MaintenanceType {
+  IconData get icon {
+    switch (this) {
+      case MaintenanceType.mechanics:
+        return CupertinoIcons.wrench_fill;
+      case MaintenanceType.electrical:
+        return CupertinoIcons.bolt_fill;
+      case MaintenanceType.suspension:
+        return CupertinoIcons.car_detailed;
+      case MaintenanceType.others:
+        return CupertinoIcons.ellipsis_circle_fill;
+    }
+  }
+}
+
+enum _MaintSort {
+  recentlyDone,
+  nameAZ,
+  cost;
+
+  String get label {
+    switch (this) {
+      case _MaintSort.recentlyDone:
+        return 'Recently Done';
+      case _MaintSort.nameAZ:
+        return 'Name A–Z';
+      case _MaintSort.cost:
+        return 'Cost';
+    }
+  }
+}
+
+/// Screen for displaying and managing vehicle maintenance records.
 class MaintenanceRecordsScreen extends StatefulWidget {
   const MaintenanceRecordsScreen({super.key});
 
   @override
-  State<MaintenanceRecordsScreen> createState() => _MaintenanceRecordsScreenState();
+  State<MaintenanceRecordsScreen> createState() =>
+      _MaintenanceRecordsScreenState();
 }
 
 class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
   final MaintenanceService _maintenanceService = MaintenanceService();
-  
-  List<MaintenanceWithInfo> _allMaintenance = [];
-  List<MaintenanceWithInfo> _filteredMaintenance = [];
-  
-  int _selectedIndex = 0; // 0: All, 1: Mechanics, 2: Electrical, 3: Suspension
-  bool _isLoading = true;
-  bool _isSearching = false;
+  final CarService _carService = CarService();
+  final TextEditingController _searchController = TextEditingController();
+
+  static const _accent = AppTheme.primaryGreen; // the single accent color
+
+  List<MaintenanceWithInfo> _all = [];
+  List<MaintenanceWithInfo> _filtered = [];
+  MaintenanceType? _selectedType; // null = All
+  _MaintSort _sort = _MaintSort.recentlyDone;
   String _searchQuery = '';
   double _totalCost = 0.0;
-  
-  
-  final TextEditingController _searchController = TextEditingController();
+  int _carCount = 0;
+  bool _isLoading = true;
+
+  static const _prefFilter = 'maint_filter_type';
+  static const _prefSort = 'maint_sort';
 
   @override
   void initState() {
     super.initState();
-    _loadMaintenance();
+    _restorePrefsThenLoad();
   }
 
   @override
@@ -44,112 +88,128 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
     super.dispose();
   }
 
+  Future<void> _restorePrefsThenLoad() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final f = prefs.getString(_prefFilter);
+      final s = prefs.getString(_prefSort);
+      _selectedType = (f == null || f == 'all')
+          ? null
+          : MaintenanceType.values
+              .where((t) => t.name == f)
+              .cast<MaintenanceType?>()
+              .firstWhere((t) => true, orElse: () => null);
+      if (s != null) {
+        _sort = _MaintSort.values.firstWhere((e) => e.name == s,
+            orElse: () => _MaintSort.recentlyDone);
+      }
+    } catch (_) {
+      // Prefs are a convenience; ignore failures and use defaults.
+    }
+    await _loadMaintenance();
+  }
+
+  Future<void> _savePrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefFilter, _selectedType?.name ?? 'all');
+      await prefs.setString(_prefSort, _sort.name);
+    } catch (_) {}
+  }
+
   Future<void> _loadMaintenance() async {
     if (!mounted) return;
-    
     setState(() => _isLoading = true);
-    
     try {
-      final maintenanceList = await _maintenanceService.getAllMaintenanceWithInfo();
+      final list = await _maintenanceService.getAllMaintenanceWithInfo();
       final totalCost = await _maintenanceService.getTotalMaintenanceCost();
-      
-      if (mounted) {
-        setState(() {
-          _allMaintenance = maintenanceList;
-          _totalCost = totalCost;
-          _isLoading = false;
-        });
-        _applyFilters();
-      }
+      final cars = await _carService.getAllCars();
+      if (!mounted) return;
+      setState(() {
+        _all = list;
+        _totalCost = totalCost;
+        _carCount = cars.length;
+        _isLoading = false;
+      });
+      _applyFilters();
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        AppSnackbar.show(context, 
-          SnackBar(content: Text('Error loading maintenance: $e')),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _toast('Error loading maintenance records');
     }
   }
+
+  int _countOf(MaintenanceType? type) => type == null
+      ? _all.length
+      : _all.where((m) => m.maintenance.type == type).length;
 
   void _applyFilters() {
-    List<MaintenanceWithInfo> filtered = _allMaintenance;
-    
-    // Apply type filter
-    if (_selectedIndex > 0) {
-      final type = MaintenanceType.values[_selectedIndex - 1];
-      filtered = filtered.where((m) => m.maintenance.type == type).toList();
+    var list = _all;
+    if (_selectedType != null) {
+      list = list.where((m) => m.maintenance.type == _selectedType).toList();
     }
-    
-    // Apply search filter
     if (_searchQuery.isNotEmpty) {
-      filtered = filtered.where((m) {
-        final query = _searchQuery.toLowerCase();
-        return m.maintenance.title.toLowerCase().contains(query) ||
-               m.maintenance.description.toLowerCase().contains(query) ||
-               m.maintenance.mechanicName?.toLowerCase().contains(query) == true ||
-               m.reminderDisplayName.toLowerCase().contains(query) ||
-               m.carDisplayName.toLowerCase().contains(query);
+      final q = _searchQuery.toLowerCase();
+      list = list.where((m) {
+        return m.maintenance.title.toLowerCase().contains(q) ||
+            m.maintenance.description.toLowerCase().contains(q) ||
+            (m.maintenance.mechanicName?.toLowerCase().contains(q) ?? false) ||
+            m.reminderDisplayName.toLowerCase().contains(q) ||
+            m.carDisplayName.toLowerCase().contains(q);
       }).toList();
     }
-    
-    setState(() => _filteredMaintenance = filtered);
+    list = _sorted(list);
+    setState(() => _filtered = list);
   }
 
-  void _toggleSearch() {
-    setState(() {
-      _isSearching = !_isSearching;
-      if (!_isSearching) {
-        _searchQuery = '';
-        _searchController.clear();
-        _applyFilters();
-      }
-    });
+  List<MaintenanceWithInfo> _sorted(List<MaintenanceWithInfo> list) {
+    final out = List<MaintenanceWithInfo>.from(list);
+    switch (_sort) {
+      case _MaintSort.recentlyDone:
+        out.sort((a, b) =>
+            b.maintenance.maintenanceDate.compareTo(a.maintenance.maintenanceDate));
+        break;
+      case _MaintSort.nameAZ:
+        out.sort((a, b) => a.maintenance.title
+            .toLowerCase()
+            .compareTo(b.maintenance.title.toLowerCase()));
+        break;
+      case _MaintSort.cost:
+        out.sort((a, b) => b.maintenance.cost.compareTo(a.maintenance.cost));
+        break;
+    }
+    return out;
   }
 
-  void _onSearchChanged(String value) {
-    setState(() => _searchQuery = value);
-    _applyFilters();
-  }
-
-  List<MaintenanceWithInfo> get _mechanicsMaintenance => 
-      _allMaintenance.where((m) => m.maintenance.type == MaintenanceType.mechanics).toList();
-  
-  List<MaintenanceWithInfo> get _electricalMaintenance => 
-      _allMaintenance.where((m) => m.maintenance.type == MaintenanceType.electrical).toList();
-  
-  List<MaintenanceWithInfo> get _suspensionMaintenance => 
-      _allMaintenance.where((m) => m.maintenance.type == MaintenanceType.suspension).toList();
-  
-  List<MaintenanceWithInfo> get _othersMaintenance => 
-      _allMaintenance.where((m) => m.maintenance.type == MaintenanceType.others).toList();
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     return ScreenWithNavBar(
       child: Scaffold(
-        backgroundColor: AppTheme.getThemeAwareBackground(context),
+        backgroundColor: AppTheme.backgroundGreen,
         body: Column(
-        children: [
-          _buildHeaderWithBackground(),
-          _buildTotalSpentSection(),
-          if (_isSearching) _buildSearchBar(),
-          
-          Expanded(
-            child: _isLoading 
-                ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
-                : _filteredMaintenance.isEmpty 
-                    ? _buildEmptyState() 
-                    : _buildMaintenanceList(),
-          ),
-        ],
+          children: [
+            _buildHeader(),
+            _buildFilterChips(),
+            _buildSearchField(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CupertinoActivityIndicator(color: Colors.white))
+                  : _filtered.isEmpty
+                      ? _buildEmptyState()
+                      : _buildList(),
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 
-  Widget _buildHeaderWithBackground() {
+  Widget _buildHeader() {
     return Container(
-      height: 320,
+      height: 170,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -167,522 +227,268 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Header row with title and search
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 28),
+                    tooltip: 'Back',
+                    icon: const Icon(CupertinoIcons.back,
+                        color: Colors.white, size: 28),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const Expanded(
                     child: Text(
-                      'Maintenance Records',
+                      'Maintenance',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         fontFamily: 'Orbitron',
                       ),
-                      textAlign: TextAlign.center,
                     ),
                   ),
                   IconButton(
-                    icon: Icon(_isSearching ? Icons.close : Icons.search, color: Colors.white, size: 24),
-                    onPressed: _toggleSearch,
+                    tooltip: 'Sort',
+                    icon: const Icon(CupertinoIcons.arrow_up_arrow_down,
+                        color: Colors.white, size: 22),
+                    onPressed: _showSortSheet,
+                  ),
+                  IconButton(
+                    tooltip: 'Add maintenance record',
+                    icon: const Icon(CupertinoIcons.add,
+                        color: Colors.white, size: 26),
+                    onPressed: () => _showAddForm(initialType: _selectedType),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text(
-                  'Track your vehicle maintenance history and costs',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                    fontFamily: 'Orbitron',
-                  ),
-                  textAlign: TextAlign.center,
+              const SizedBox(height: 4),
+              // Total cost summary (the only status the data supports).
+              Text(
+                'Total spent  ·  EGP ${_totalCost.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.white70,
+                  fontFamily: 'Orbitron',
                 ),
               ),
-              const SizedBox(height: 16),
-              // Add Maintenance button in header
-              Center(
-                child: Container(
-                  width: 200,
-                  height: 45,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              AppTheme.backgroundGreen,
-              AppTheme.darkAccentGreen,
             ],
           ),
-                  borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: AppTheme.secondaryGreen.withOpacity(0.6),
-            width: 1,
-          ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primaryGreen.withOpacity(0.4),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChips() {
+    final items = <MapEntry<MaintenanceType?, String>>[
+      const MapEntry(null, 'All'),
+      ...MaintenanceType.values.map((t) => MapEntry(t, t.displayName)),
+    ];
+    return Container(
+      height: 46,
+      margin: const EdgeInsets.only(top: 12),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        physics: const BouncingScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final type = items[i].key;
+          final label = items[i].value;
+          final selected = _selectedType == type;
+          return _FilterChip(
+            label: label,
+            count: _countOf(type),
+            icon: type?.icon ?? CupertinoIcons.square_grid_2x2,
+            selected: selected,
+            accent: _accent,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _selectedType = type);
+              _applyFilters();
+              _savePrefs();
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: CupertinoSearchTextField(
+        controller: _searchController,
+        placeholder: 'Search maintenance',
+        style: const TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
+        placeholderStyle: TextStyle(
+            color: Colors.white.withOpacity(0.5), fontFamily: 'Orbitron'),
+        backgroundColor: AppTheme.darkAccentGreen.withOpacity(0.5),
+        itemColor: Colors.white70,
+        onChanged: (v) {
+          setState(() => _searchQuery = v);
+          _applyFilters();
+        },
+      ),
+    );
+  }
+
+  Widget _buildList() {
+    return RefreshIndicator(
+      onRefresh: _loadMaintenance,
+      color: _accent,
+      backgroundColor: AppTheme.darkAccentGreen,
+      child: _selectedType == null && _searchQuery.isEmpty
+          ? _buildGroupedList()
+          : _buildFlatList(_filtered),
+    );
+  }
+
+  /// "All" with no search → iOS grouped sections by category (empty hidden).
+  Widget _buildGroupedList() {
+    final sections = <Widget>[];
+    for (final type in MaintenanceType.values) {
+      final items =
+          _sorted(_all.where((m) => m.maintenance.type == type).toList());
+      if (items.isEmpty) continue;
+      sections.add(_sectionHeader('${type.displayName} · ${items.length}'));
+      sections.addAll(items.map(_buildRow));
+    }
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: sections,
+    );
+  }
+
+  Widget _buildFlatList(List<MaintenanceWithInfo> items) {
+    return ListView.builder(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      itemCount: items.length,
+      itemBuilder: (context, i) => _buildRow(items[i]),
+    );
+  }
+
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 14, 6, 8),
+      child: Text(
+        title.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 12,
+          letterSpacing: 1.1,
+          fontWeight: FontWeight.bold,
+          color: _accent,
+          fontFamily: 'Orbitron',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRow(MaintenanceWithInfo info) {
+    final m = info.maintenance;
+    return Dismissible(
+      key: ValueKey('maint_${m.id}'),
+      direction: DismissDirection.horizontal,
+      // Swipe right → Edit (never actually dismisses); swipe left → Delete.
+      background: _swipeBg(
+          align: Alignment.centerLeft,
+          icon: CupertinoIcons.pencil,
+          label: 'Edit',
+          color: _accent),
+      secondaryBackground: _swipeBg(
+          align: Alignment.centerRight,
+          icon: CupertinoIcons.trash,
+          label: 'Delete',
+          color: AppDialog.destructive),
+      confirmDismiss: (dir) async {
+        if (dir == DismissDirection.startToEnd) {
+          _showEditForm(m);
+          return false;
+        }
+        return _confirmDelete(m);
+      },
+      onDismissed: (_) => _deleteRecord(m),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: AppTheme.glowCardDecoration(radius: 16, accent: _accent),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _showDetails(info),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  // Monochrome category badge (neutral fill, no per-type color).
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Colors.white.withOpacity(0.12), width: 1),
                     ),
-                  ],
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _showAddMaintenanceSheet,
-                    borderRadius: BorderRadius.circular(28),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Icon(m.type.icon,
+                        color: AppTheme.lightBackground, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.build_circle_outlined,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        SizedBox(width: 8),
                         Text(
-                          'Add Maintenance',
-                          style: TextStyle(
+                          m.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                             color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Orbitron',
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _rowSubtitle(info),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.6),
                             fontFamily: 'Orbitron',
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              // Statistics cards
-              Row(
-                children: [
-                  _buildClickableStatCard('All', _allMaintenance.length, Colors.blue, 0),
-                  const SizedBox(width: 2),
-                  _buildClickableStatCard('Mech', _mechanicsMaintenance.length, Colors.orange, 1),
-                  const SizedBox(width: 2),
-                  _buildClickableStatCard('Elec', _electricalMaintenance.length, Colors.red, 2),
-                  const SizedBox(width: 2),
-                  _buildClickableStatCard('Susp', _suspensionMaintenance.length, Colors.purple, 3),
-                  const SizedBox(width: 2),
-                  _buildClickableStatCard('Others', _othersMaintenance.length, Colors.green, 4),
-                ],
-              ),
-              const SizedBox(height: 14),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTotalSpentSection() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-          BoxShadow(
-            color: AppTheme.secondaryGreen.withOpacity(0.3),
-            blurRadius: 18,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryGreen.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.account_balance_wallet,
-              color: AppTheme.primaryGreen,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Total Maintenance Cost',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                  fontSize: 12,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'EGP ${_totalCost.toStringAsFixed(2)}',
-                style: TextStyle(
-                  color: AppTheme.getThemeAwareTextColor(context),
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildClickableStatCard(String title, int count, Color color, int index) {
-    final isSelected = _selectedIndex == index;
-    
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _selectedIndex = index);
-          _applyFilters();
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isSelected 
-                ? Colors.white.withOpacity(0.2)
-                : Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: isSelected 
-                ? Border.all(color: Colors.white, width: 2)
-                : null,
-          ),
-          child: Column(
-            children: [
-              Text(
-                count.toString(),
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected ? Colors.white : color,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected ? Colors.white : Colors.white70,
-                  fontFamily: 'Orbitron',
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-          BoxShadow(
-            color: AppTheme.secondaryGreen.withOpacity(0.3),
-            blurRadius: 18,
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _searchController,
-        onChanged: _onSearchChanged,
-        decoration: const InputDecoration(
-          hintText: 'Search maintenance records...',
-          border: InputBorder.none,
-          prefixIcon: Icon(Icons.search),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMaintenanceList() {
-    return RefreshIndicator(
-      onRefresh: _loadMaintenance,
-      color: AppTheme.primaryGreen,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _filteredMaintenance.length,
-        itemBuilder: (context, index) {
-          return _buildMaintenanceCard(_filteredMaintenance[index]);
-        },
-      ),
-    );
-  }
-
-  Widget _buildMaintenanceCard(MaintenanceWithInfo maintenanceWithInfo) {
-    final maintenance = maintenanceWithInfo.maintenance;
-    final typeColor = _getTypeColor(maintenance.type);
-    
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.darkAccentGreen,
-              AppTheme.backgroundGreen,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          BoxShadow(
-            color: AppTheme.secondaryGreen.withOpacity(0.3),
-            blurRadius: 18,
-          ),
-          ],
-        ),
-        child: InkWell(
-          onTap: () => _showMaintenanceDetails(maintenanceWithInfo),
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header with icon and title
-                Row(
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: typeColor.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        _getMaintenanceIcon(maintenance.type),
-                        color: typeColor,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            maintenance.title,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          // Car info
-                          Row(
-                            children: [
-                              Icon(Icons.directions_car, size: 14, color: Colors.grey[400]),
-                              const SizedBox(width: 4),
-                              Text(
-                                maintenanceWithInfo.carDisplayName,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[400],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                
-                // Type and date row
-                Row(
-                  children: [
-                    Text(
-                      maintenance.type.displayName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[400],
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[400],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                
-                // Description
-                Text(
-                  maintenance.description.isNotEmpty 
-                    ? maintenance.description 
-                    : 'No description provided',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 12),
-                
-                // Cost and action button row
-                Row(
-                  children: [
-                    // Cost is amber so money reads differently from the green
-                    // used for status and health elsewhere in the app.
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppTheme.costHighlight.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppTheme.costHighlight.withOpacity(0.5),
-                          width: 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.costHighlight.withOpacity(0.25),
-                            blurRadius: 12,
-                          ),
-                        ],
-                      ),
-                      child: Text(
-                        'EGP ${maintenance.cost.toStringAsFixed(2)}',
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'EGP ${m.cost.toStringAsFixed(0)}',
                         style: const TextStyle(
-                          color: AppTheme.costHighlight,
-                          fontWeight: FontWeight.bold,
                           fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
                           fontFamily: 'Orbitron',
                         ),
                       ),
-                    ),
-                    const Spacer(),
-                    // Matches the home screen's "View All" pill.
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            AppTheme.backgroundGreen,
-                            AppTheme.darkAccentGreen,
-                          ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppTheme.secondaryGreen.withOpacity(0.6),
-                          width: 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.secondaryGreen.withOpacity(0.3),
-                            blurRadius: 18,
-                            spreadRadius: -2,
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                            spreadRadius: -2,
-                          ),
-                        ],
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () => _showMaintenanceDetails(maintenanceWithInfo),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 9,
-                            ),
-                            child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'View Details',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  fontFamily: 'Orbitron',
-                                  color: AppTheme.lightBackground,
-                                  letterSpacing: 0.3,
-                                ),
-                              ),
-                              SizedBox(width: 6),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                size: 11,
-                                color: AppTheme.secondaryGreen,
-                              ),
-                            ],
-                          ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(height: 4),
+                      Icon(CupertinoIcons.chevron_forward,
+                          size: 14, color: Colors.white.withOpacity(0.4)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -690,233 +496,310 @@ class _MaintenanceRecordsScreenState extends State<MaintenanceRecordsScreen> {
     );
   }
 
-  Widget _buildMaintenanceDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+  String _rowSubtitle(MaintenanceWithInfo info) {
+    final date = DateFormat('MMM dd, yyyy').format(info.maintenance.maintenanceDate);
+    // Show the car only when the user has more than one.
+    if (_carCount > 1 && info.carDisplayName.trim().isNotEmpty) {
+      return '${info.carDisplayName}  ·  $date';
+    }
+    return date;
+  }
+
+  Widget _swipeBg({
+    required Alignment align,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      alignment: align,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
+          Icon(icon, color: Colors.white, size: 20),
+          const SizedBox(width: 6),
+          Text(label,
               style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Color(0xFFA5D6A7), // Muted light green
-                fontSize: 14,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Color(0xFFC8E6C9), // Light green text
-                fontSize: 14,
-              ),
-            ),
-          ),
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13)),
         ],
       ),
     );
-  }
-
-  IconData _getMaintenanceIcon(MaintenanceType type) {
-    switch (type) {
-      case MaintenanceType.mechanics:
-        return Icons.build_circle;
-      case MaintenanceType.electrical:
-        return Icons.electrical_services;
-      case MaintenanceType.suspension:
-        return Icons.car_repair;
-      case MaintenanceType.others:
-        return Icons.miscellaneous_services;
-    }
   }
 
   Widget _buildEmptyState() {
-    final bool isSearching = _searchQuery.isNotEmpty;
-    final String message = isSearching 
-        ? 'No maintenance records found'
-        : _selectedIndex > 0 
-            ? 'No ${MaintenanceType.values[_selectedIndex - 1].displayName.toLowerCase()} maintenance records'
+    final filteredLabel = _selectedType?.displayName.toLowerCase();
+    final msg = _searchQuery.isNotEmpty
+        ? 'No records match your search'
+        : _selectedType != null
+            ? 'No $filteredLabel records yet'
             : 'No maintenance records yet';
-    
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            isSearching ? Icons.search_off : Icons.build_circle_outlined,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
+    return ListView(
+      // ListView so pull-to-refresh still works on the empty state.
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        const SizedBox(height: 80),
+        Icon(CupertinoIcons.wrench,
+            size: 64, color: Colors.white.withOpacity(0.4)),
+        const SizedBox(height: 16),
+        Text(msg,
             textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 16,
+                color: Colors.white.withOpacity(0.7),
+                fontFamily: 'Orbitron')),
+        const SizedBox(height: 20),
+        Center(
+          child: CupertinoButton(
+            color: _accent,
+            borderRadius: BorderRadius.circular(14),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            onPressed: () => _showAddForm(initialType: _selectedType),
+            child: const Text('Add Record',
+                style: TextStyle(
+                    fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
           ),
-          if (!isSearching) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Start tracking your vehicle maintenance',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-          ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Color _getTypeColor(MaintenanceType type) {
-    switch (type) {
-      case MaintenanceType.mechanics:
-        return Colors.orange;
-      case MaintenanceType.electrical:
-        return Colors.red;
-      case MaintenanceType.suspension:
-        return Colors.purple;
-      case MaintenanceType.others:
-        return Colors.green;
-    }
-  }
+  // ---------------------------------------------------------------------------
+  // Sort / details / delete / forms
+  // ---------------------------------------------------------------------------
 
-  void _showAddMaintenanceSheet() {
-    showModalBottomSheet(
+  void _showSortSheet() {
+    showCupertinoModalPopup<void>(
       context: context,
-      isScrollControlled: true,
-      isDismissible: true,
-      enableDrag: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => AddMaintenanceForm(
-          onMaintenanceAdded: () {
-            _loadMaintenance();
-          },
-          scrollController: scrollController,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('Sort by'),
+        actions: _MaintSort.values.map((s) {
+          final active = s == _sort;
+          return CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              HapticFeedback.selectionClick();
+              setState(() => _sort = s);
+              _applyFilters();
+              _savePrefs();
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(s.label),
+                if (active) ...[
+                  const SizedBox(width: 8),
+                  const Icon(CupertinoIcons.checkmark_alt, size: 18),
+                ],
+              ],
+            ),
+          );
+        }).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
         ),
       ),
     );
   }
 
-  void _showMaintenanceDetails(MaintenanceWithInfo maintenanceWithInfo) {
+  void _showDetails(MaintenanceWithInfo info) {
     showDialog(
       context: context,
-      builder: (context) => MaintenanceDetailsDialog(
-        maintenanceWithInfo: maintenanceWithInfo,
+      builder: (_) => MaintenanceDetailsDialog(
+        maintenanceWithInfo: info,
         onEdit: () {
           Navigator.pop(context);
-          _showEditMaintenanceSheet(maintenanceWithInfo.maintenance);
+          _showEditForm(info.maintenance);
         },
-        onDelete: () {
+        onDelete: () async {
           Navigator.pop(context);
-          _deleteMaintenanceRecord(maintenanceWithInfo.maintenance);
+          if (await _confirmDelete(info.maintenance)) {
+            _deleteRecord(info.maintenance);
+          }
         },
       ),
     );
   }
 
-  void _showEditMaintenanceSheet(BackupMaintenance maintenance) async {
-    final updated = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => EditMaintenanceForm(
-        maintenance: maintenance,
-        onMaintenanceUpdated: () {},
-      ),
-    );
-    if (!mounted) return;
-    if (updated == true) {
-      await _loadMaintenance();
-      AppSnackbar.show(context, 
-        const SnackBar(content: Text('Maintenance updated successfully')),
-      );
-    }
-  }
-
-  Future<void> _deleteMaintenanceRecord(BackupMaintenance maintenance) async {
-    final confirmed = await AppDialog.show(
+  Future<bool> _confirmDelete(BackupMaintenance m) async {
+    final ok = await AppDialog.show(
       context,
       title: 'Delete Maintenance Record',
       message:
-          'Are you sure you want to delete "${maintenance.title}"? This action cannot be undone.',
+          'Are you sure you want to delete "${m.title}"? This action cannot be undone.',
       icon: Icons.delete_outline,
       confirmLabel: 'Delete',
       isDestructive: true,
     );
+    return ok == true;
+  }
 
-    if (confirmed != true) return;
-
-    final result = await _maintenanceService.deleteMaintenance(maintenance.id!);
+  Future<void> _deleteRecord(BackupMaintenance m) async {
+    HapticFeedback.mediumImpact();
+    final result = await _maintenanceService.deleteMaintenance(m.id!);
     if (!mounted) return;
+    _toast(result.message);
+    if (result.success) _loadMaintenance();
+  }
 
-    AppSnackbar.show(context,
-      SnackBar(
-        content: Text(result.message),
-        backgroundColor: result.success ? Colors.green : Colors.red,
-      ),
+  Future<void> _showAddForm({MaintenanceType? initialType}) async {
+    HapticFeedback.lightImpact();
+    final added = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddMaintenanceForm(initialType: initialType),
     );
-    if (result.success) {
+    if (added == true && mounted) {
+      _toast('Maintenance record added');
       _loadMaintenance();
     }
   }
+
+  Future<void> _showEditForm(BackupMaintenance m) async {
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => EditMaintenanceForm(maintenance: m),
+    );
+    if (updated == true && mounted) {
+      _toast('Maintenance record updated');
+      _loadMaintenance();
+    }
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontFamily: 'Orbitron')),
+        backgroundColor: AppTheme.darkAccentGreen,
+      ),
+    );
+  }
 }
 
-// Add Maintenance Form
-class AddMaintenanceForm extends StatefulWidget {
-  final VoidCallback onMaintenanceAdded;
-  final ScrollController? scrollController;
+/// Capsule filter chip: selected = filled accent, unselected = neutral.
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final IconData icon;
+  final bool selected;
+  final Color accent;
+  final VoidCallback onTap;
 
-  const AddMaintenanceForm({
-    super.key,
-    required this.onMaintenanceAdded,
-    this.scrollController,
+  const _FilterChip({
+    required this.label,
+    required this.count,
+    required this.icon,
+    required this.selected,
+    required this.accent,
+    required this.onTap,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected ? Colors.white : AppTheme.lightBackground;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label, $count records',
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? accent : Colors.white.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: selected ? accent : Colors.white.withOpacity(0.15),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: fg),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: TextStyle(
+                      color: fg,
+                      fontFamily: 'Orbitron',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$count',
+                    style: TextStyle(
+                        color: fg,
+                        fontFamily: 'Orbitron',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Add Maintenance form (iOS modal sheet) with conditional Car field.
+// =============================================================================
+class AddMaintenanceForm extends StatefulWidget {
+  final MaintenanceType? initialType;
+  const AddMaintenanceForm({super.key, this.initialType});
 
   @override
   State<AddMaintenanceForm> createState() => _AddMaintenanceFormState();
 }
 
 class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
-  final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _costController = TextEditingController();
   final _mechanicController = TextEditingController();
   final _invoiceController = TextEditingController();
-  
+
   final MaintenanceService _maintenanceService = MaintenanceService();
-  
+  final CarService _carService = CarService();
+
   DateTime _selectedDate = DateTime.now();
-  MaintenanceType _selectedType = MaintenanceType.mechanics;
+  late MaintenanceType _selectedType;
   BackupReminder? _selectedReminder;
-  List<BackupReminder> _availableReminders = [];
-  bool _isLoading = false;
+  BackupCar? _selectedCar;
+  List<BackupReminder> _reminders = [];
+  List<BackupCar> _cars = [];
+  bool _loadingLinks = true;
+  bool _saving = false;
+  bool _showCarError = false;
 
   @override
   void initState() {
     super.initState();
-    _loadReminders();
+    _selectedType = widget.initialType ?? MaintenanceType.mechanics;
+    _loadLinks();
+    _titleController.addListener(_refresh);
+    _costController.addListener(_refresh);
   }
 
   @override
@@ -929,1067 +812,677 @@ class _AddMaintenanceFormState extends State<AddMaintenanceForm> {
     super.dispose();
   }
 
-  Future<void> _loadReminders() async {
+  void _refresh() => setState(() {});
+
+  Future<void> _loadLinks() async {
     final reminders = await _maintenanceService.getAvailableReminders();
+    final cars = await _carService.getAllCars();
+    if (!mounted) return;
     setState(() {
-      _availableReminders = reminders;
-      // Start with "Without a Reminder" (null) as default
-      _selectedReminder = null;
+      // Only active (not completed) reminders can anchor a new record.
+      _reminders = reminders.where((r) => !r.isCompleted).toList();
+      _cars = cars;
+      _selectedReminder = null; // default: standalone
+      // Single car → preselect so the user still sees it but needn't pick.
+      _selectedCar = cars.length == 1 ? cars.first : null;
+      _loadingLinks = false;
     });
+  }
+
+  bool get _costValid {
+    final c = double.tryParse(_costController.text.trim());
+    return c != null && c >= 0;
+  }
+
+  bool get _isValid {
+    if (_titleController.text.trim().isEmpty) return false;
+    if (!_costValid) return false;
+    // Must resolve to a car: either a reminder (carries its car) or a picked car.
+    if (_selectedReminder == null && _selectedCar == null) return false;
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        bottom: media.viewInsets.bottom + 16,
-        top: 8,
+    return Container(
+      margin: EdgeInsets.only(top: media.padding.top + 40),
+      decoration: const BoxDecoration(
+        color: AppTheme.backgroundGreen,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: SingleChildScrollView(
-        controller: widget.scrollController,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-            Center(
-              child: Container(
-                width: 48,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(3),
-                ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _navBar(
+            title: 'Add Record',
+            onSave: _isValid && !_saving ? _save : null,
+            saving: _saving,
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                  16, 8, 16, media.viewInsets.bottom + 24),
+              child: _loadingLinks
+                  ? const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: CupertinoActivityIndicator(color: Colors.white))
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _groupLabel('DETAILS'),
+                        _group([
+                          _textRow(
+                              label: 'Title', controller: _titleController),
+                          _divider(),
+                          _pickerRow(
+                            label: 'Category',
+                            value: _selectedType.displayName,
+                            icon: _selectedType.icon,
+                            onTap: _pickType,
+                          ),
+                        ]),
+                        _groupLabel('LINK'),
+                        _group([
+                          _pickerRow(
+                            label: 'Reminder',
+                            value: _selectedReminder?.title ??
+                                'Without a reminder',
+                            icon: CupertinoIcons.bell,
+                            onTap: _pickReminder,
+                          ),
+                          // Conditional Car field: only when no reminder.
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeInOutCubic,
+                            child: _selectedReminder != null
+                                ? const SizedBox(width: double.infinity)
+                                : Column(
+                                    children: [
+                                      _divider(),
+                                      _carField(),
+                                    ],
+                                  ),
+                          ),
+                        ]),
+                        if (_selectedReminder == null && _showCarError)
+                          _footnoteError('Please choose a car for this record.'),
+                        _groupLabel('SERVICE'),
+                        _group([
+                          _dateRow(),
+                          _divider(),
+                          _textRow(
+                            label: 'Cost (EGP)',
+                            controller: _costController,
+                            keyboard: const TextInputType.numberWithOptions(
+                                decimal: true),
+                          ),
+                          _divider(),
+                          _textRow(
+                              label: 'Workshop',
+                              controller: _mechanicController,
+                              optional: true),
+                          _divider(),
+                          _textRow(
+                              label: 'Invoice #',
+                              controller: _invoiceController,
+                              optional: true),
+                        ]),
+                        _groupLabel('NOTES'),
+                        _group([
+                          _textRow(
+                            label: 'Description',
+                            controller: _descriptionController,
+                            optional: true,
+                            maxLines: 3,
+                          ),
+                        ]),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _carField() {
+    if (_cars.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'No cars yet. Add a car first to log standalone maintenance.',
+                style: TextStyle(
+                    color: Colors.white70,
+                    fontFamily: 'Orbitron',
+                    fontSize: 12),
               ),
             ),
-            const SizedBox(height: 10),
-            const Text('Add Maintenance Record', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 6),
-            Text('* Required fields', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-            const SizedBox(height: 16),
-            // Reminder selection
-            _buildReminderDropdown(),
-            const SizedBox(height: 16),
-            
-            // Title and Type row
-            Row(
-              children: [
-                Expanded(child: _field(label: 'Title*', controller: _titleController)),
-                const SizedBox(width: 10),
-                Expanded(child: _buildTypeDropdown()),
-              ],
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Add Car',
+                  style: TextStyle(
+                      color: AppTheme.primaryGreen,
+                      fontFamily: 'Orbitron',
+                      fontSize: 13)),
             ),
-            const SizedBox(height: 16),
-            
-            // Description
-            _field(
-              label: 'Description (optional)', 
-              controller: _descriptionController,
-              maxLines: 3,
-            ),
-            const SizedBox(height: 16),
-            
-            // Cost and Date row
-            Row(
-              children: [
-                Expanded(child: _field(
-                  label: 'Cost (EGP)*', 
-                  controller: _costController,
-                  keyboard: const TextInputType.numberWithOptions(decimal: true),
-                  customValidator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'This field is required';
-                    }
-                    final cost = double.tryParse(value.trim());
-                    if (cost == null) {
-                      return 'Please enter a valid number';
-                    }
-                    if (cost < 0) {
-                      return 'Cost cannot be negative';
-                    }
-                    return null;
-                  },
-                )),
-                const SizedBox(width: 10),
-                Expanded(child: _buildDatePicker()),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // Optional fields row
-            Row(
-              children: [
-                Expanded(child: _field(
-                  label: 'Mechanic/Service Center (optional)', 
-                  controller: _mechanicController,
-                )),
-                const SizedBox(width: 10),
-                Expanded(child: _field(
-                  label: 'Invoice Number (optional)', 
-                  controller: _invoiceController,
-                )),
-              ],
-            ),
-            const SizedBox(height: 20),
-            
-            // Save button with gradient
-            SizedBox(
-              width: double.infinity,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppTheme.darkAccentGreen,
-                      AppTheme.backgroundGreen,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppTheme.secondaryGreen.withOpacity(0.6),
-                    width: 1,
-                  ),
-                  boxShadow: AppTheme.glowShadow(elevated: true),
-                ),
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _saveMaintenance,
-                  style: ElevatedButton.styleFrom(
-                     backgroundColor: Colors.transparent,
-                     shadowColor: Colors.transparent,
-                     foregroundColor: Colors.white,
-                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  ),
-                  child: _isLoading 
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Text('Save Maintenance', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
           ],
         ),
+      );
+    }
+    return _pickerRow(
+      label: 'Car',
+      value: _selectedCar == null ? 'Select a car' : _carLabel(_selectedCar!),
+      icon: CupertinoIcons.car_detailed,
+      onTap: _pickCar,
+      muted: _selectedCar == null,
+    );
+  }
+
+  String _carLabel(BackupCar c) {
+    final plate = c.licensePlate.trim();
+    final base = '${c.brand} ${c.model} (${c.year})';
+    final showPlate = plate.isNotEmpty &&
+        plate != 'Not specified' &&
+        !plate.startsWith('VIN-');
+    return showPlate ? '$base · $plate' : base;
+  }
+
+  Future<void> _pickType() async {
+    final picked = await _showPicker<MaintenanceType>(
+      title: 'Category',
+      options: MaintenanceType.values,
+      selected: _selectedType,
+      labelOf: (t) => t.displayName,
+      iconOf: (t) => t.icon,
+    );
+    if (picked != null) setState(() => _selectedType = picked.value);
+  }
+
+  Future<void> _pickReminder() async {
+    // null sentinel option = "Without a reminder".
+    final options = <BackupReminder?>[null, ..._reminders];
+    final picked = await _showPicker<BackupReminder?>(
+      title: 'Related Reminder',
+      options: options,
+      selected: _selectedReminder,
+      labelOf: (r) => r?.title ?? 'Without a reminder',
+      subtitleOf: (r) =>
+          r == null ? 'Standalone maintenance' : r.description,
+      iconOf: (r) => r == null ? CupertinoIcons.nosign : CupertinoIcons.bell,
+      allowNull: true,
+    );
+    // Distinguish "picked null" from "dismissed": _showPicker returns a
+    // wrapper only on an actual tap.
+    if (picked == null) return; // dismissed
+    setState(() {
+      final reminder = picked.value;
+      _selectedReminder = reminder;
+      if (reminder != null) {
+        // Reminder carries its own car; discard any manual pick.
+        _selectedCar = null;
+      } else {
+        // Switching to standalone: start empty (single-car preselect aside).
+        _selectedCar = _cars.length == 1 ? _cars.first : null;
+      }
+      _showCarError = false;
+    });
+  }
+
+  Future<void> _pickCar() async {
+    if (_cars.isEmpty) return;
+    final picked = await _showPicker<BackupCar>(
+      title: 'Select Car',
+      options: _cars,
+      selected: _selectedCar,
+      labelOf: _carLabel,
+      iconOf: (_) => CupertinoIcons.car_detailed,
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedCar = picked.value;
+        _showCarError = false;
+      });
+    }
+  }
+
+  Future<void> _pickDate() async {
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 300,
+        color: AppTheme.darkAccentGreen,
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: CupertinoButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Done',
+                    style: TextStyle(color: AppTheme.primaryGreen)),
+              ),
+            ),
+            Expanded(
+              child: CupertinoTheme(
+                data: const CupertinoThemeData(brightness: Brightness.dark),
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: _selectedDate,
+                  maximumDate: DateTime.now(),
+                  onDateTimeChanged: (d) => setState(() => _selectedDate = d),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Future<void> _saveMaintenance() async {
-    // Validate form fields
-    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
-      return; // Form validation will show red borders
-    }
-    
-    // Validate reminder selection
-    if (_selectedReminder == null) {
-      setState(() {
-        // Show error for reminder selection
-      });
-      AppSnackbar.show(context, 
-        const SnackBar(
-          content: Text('Please select a reminder'),
-          backgroundColor: Colors.red,
-        ),
-      );
+  Future<void> _save() async {
+    if (!_isValid) {
+      setState(() => _showCarError =
+          _selectedReminder == null && _selectedCar == null);
       return;
     }
-    
-    if (_selectedReminder!.id == null) {
-      AppSnackbar.show(context, 
-        const SnackBar(
-          content: Text('Invalid reminder selected. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Date is always set (initialized to DateTime.now()), but validate anyway
-    // This check is kept for safety but should never trigger
-
-    setState(() {
-      _isLoading = true;
-      _dateError = null; // Clear any date errors
-    });
-
+    setState(() => _saving = true);
+    HapticFeedback.lightImpact();
     try {
       final result = await _maintenanceService.addMaintenance(
-        reminderId: _selectedReminder!.id!,
+        reminderId: _selectedReminder?.id,
+        carId: _selectedReminder == null ? _selectedCar?.id : null,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         cost: double.parse(_costController.text.trim()),
         maintenanceDate: _selectedDate,
         type: _selectedType,
-        mechanicName: _mechanicController.text.trim().isEmpty ? null : _mechanicController.text.trim(),
-        invoiceNumber: _invoiceController.text.trim().isEmpty ? null : _invoiceController.text.trim(),
+        mechanicName: _mechanicController.text.trim().isEmpty
+            ? null
+            : _mechanicController.text.trim(),
+        invoiceNumber: _invoiceController.text.trim().isEmpty
+            ? null
+            : _invoiceController.text.trim(),
       );
-
-      if (mounted) {
-        Navigator.pop(context);
-        AppSnackbar.show(context, 
-          SnackBar(
-            content: Text(result.message),
-            backgroundColor: result.success ? Colors.green : Colors.red,
-          ),
-        );
-        if (result.success) {
-          widget.onMaintenanceAdded();
-        }
+      if (!mounted) return;
+      if (result.success) {
+        Navigator.pop(context, true);
+      } else {
+        setState(() => _saving = false);
+        _formError(result.message);
       }
     } catch (e) {
-      if (mounted) {
-        AppSnackbar.show(context, 
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (!mounted) return;
+      setState(() => _saving = false);
+      _formError('Could not save the record. Please try again.');
     }
   }
 
-  Widget _field({
+  void _formError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(msg, style: const TextStyle(fontFamily: 'Orbitron')),
+          backgroundColor: AppDialog.destructive),
+    );
+  }
+
+  // Shared UI bits ------------------------------------------------------------
+
+  Widget _navBar(
+      {required String title, VoidCallback? onSave, required bool saving}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border(
+            bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+      ),
+      child: Row(
+        children: [
+          CupertinoButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.white70, fontFamily: 'Orbitron')),
+          ),
+          Expanded(
+            child: Text(title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Orbitron',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
+          ),
+          CupertinoButton(
+            onPressed: onSave,
+            child: saving
+                ? const CupertinoActivityIndicator(color: Colors.white)
+                : Text('Save',
+                    style: TextStyle(
+                        color: onSave == null
+                            ? Colors.white30
+                            : AppTheme.primaryGreen,
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _groupLabel(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(6, 18, 6, 8),
+        child: Text(text,
+            style: const TextStyle(
+                color: AppTheme.primaryGreen,
+                fontFamily: 'Orbitron',
+                fontSize: 12,
+                letterSpacing: 1.1,
+                fontWeight: FontWeight.bold)),
+      );
+
+  Widget _group(List<Widget> children) => Container(
+        decoration: AppTheme.glowCardDecoration(
+            radius: 14, accent: AppTheme.primaryGreen),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: children),
+      );
+
+  Widget _divider() => Divider(
+      height: 1, thickness: 1, color: Colors.white.withOpacity(0.07));
+
+  Widget _footnoteError(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+        child: Text(text,
+            style: const TextStyle(
+                color: AppDialog.destructive,
+                fontFamily: 'Orbitron',
+                fontSize: 11)),
+      );
+
+  Widget _textRow({
     required String label,
     required TextEditingController controller,
     TextInputType? keyboard,
+    bool optional = false,
     int maxLines = 1,
-    String? Function(String?)? customValidator,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Orbitron',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.lightBackground,
-          ),
-        ),
-        const SizedBox(height: 6),
-        // Shadow sits on a wrapper because the field paints its own fill.
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: AppTheme.glowShadow(),
-          ),
-          child: TextFormField(
-          controller: controller,
-          keyboardType: keyboard,
-          maxLines: maxLines,
-          style: const TextStyle(
-            fontFamily: 'Orbitron',
-            color: AppTheme.lightBackground,
-          ),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppTheme.backgroundGreen,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppTheme.secondaryGreen, width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.red, width: 2),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.red, width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          validator: customValidator ?? (label.contains('*')
-            ? (value) => value?.isEmpty == true ? 'This field is required' : null
-            : null),
-        ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReminderDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Related Reminder*',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.lightBackground,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.darkAccentGreen,
-                AppTheme.backgroundGreen,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryGreen.withOpacity(0.2),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => _showReminderSelectionDialog(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryGreen.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.notifications_active,
-                        color: AppTheme.lightBackground,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedReminder != null
-                                ? _selectedReminder!.title
-                                : 'Without a Reminder',
-                            style: const TextStyle(
-                              color: AppTheme.lightBackground,
-                              fontFamily: 'Orbitron',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _selectedReminder != null
-                                ? 'Tap to change'
-                                : 'Standalone maintenance',
-                            style: TextStyle(
-                              color: AppTheme.lightBackground.withOpacity(0.7),
-                              fontFamily: 'Orbitron',
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Icon(
-                        Icons.arrow_drop_down,
-                        color: AppTheme.lightBackground,
-                        size: 20,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showReminderSelectionDialog() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (BuildContext context) {
-        return Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.backgroundGreen,
-                AppTheme.darkAccentGreen,
-              ],
-            ),
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(30),
-              topRight: Radius.circular(30),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              
-              // Title
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryGreen.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.notifications_active,
-                        color: AppTheme.primaryGreen,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Select Related Reminder',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.lightBackground,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              // "Without a Reminder" option
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedReminder = null;
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: _selectedReminder == null
-                          ? const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                AppTheme.primaryGreen,
-                                AppTheme.darkAccentGreen,
-                              ],
-                            )
-                          : LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                AppTheme.darkAccentGreen.withOpacity(0.5),
-                                AppTheme.backgroundGreen.withOpacity(0.5),
-                              ],
-                            ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: _selectedReminder == null
-                          ? Border.all(color: AppTheme.primaryGreen, width: 2)
-                          : Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 45,
-                          height: 45,
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.block,
-                            color: Colors.orange,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Without a Reminder',
-                                style: TextStyle(
-                                  color: AppTheme.lightBackground,
-                                  fontFamily: 'Orbitron',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'Standalone maintenance record',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontFamily: 'Orbitron',
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (_selectedReminder == null)
-                          const Icon(
-                            Icons.check_circle,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              
-              // Reminder list
-              Container(
-                constraints: const BoxConstraints(maxHeight: 400),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: Column(
-                    children: _availableReminders.map((reminder) {
-                      final isSelected = _selectedReminder?.id == reminder.id;
-                      
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedReminder = reminder;
-                          });
-                          Navigator.pop(context);
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            gradient: isSelected
-                                ? const LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      AppTheme.primaryGreen,
-                                      AppTheme.darkAccentGreen,
-                                    ],
-                                  )
-                                : LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      AppTheme.darkAccentGreen.withOpacity(0.5),
-                                      AppTheme.backgroundGreen.withOpacity(0.5),
-                                    ],
-                                  ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: isSelected
-                                ? Border.all(color: AppTheme.primaryGreen, width: 2)
-                                : Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 45,
-                                height: 45,
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryGreen.withOpacity(0.3),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(
-                                  Icons.notifications_active,
-                                  color: AppTheme.lightBackground,
-                                  size: 22,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      reminder.title,
-                                      style: const TextStyle(
-                                        color: AppTheme.lightBackground,
-                                        fontFamily: 'Orbitron',
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      reminder.description.isNotEmpty
-                                          ? reminder.description
-                                          : 'No description',
-                                      style: TextStyle(
-                                        color: AppTheme.lightBackground.withOpacity(0.7),
-                                        fontFamily: 'Orbitron',
-                                        fontSize: 11,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (isSelected)
-                                const Icon(
-                                  Icons.check_circle,
-                                  color: AppTheme.lightBackground,
-                                  size: 24,
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTypeDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Type*',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.lightBackground,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.darkAccentGreen,
-                AppTheme.backgroundGreen,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryGreen.withOpacity(0.2),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => _showTypeSelectionDialog(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryGreen.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        _getTypeIcon(_selectedType),
-                        color: AppTheme.lightBackground,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedType.displayName,
-                            style: const TextStyle(
-                              color: AppTheme.lightBackground,
-                              fontFamily: 'Orbitron',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Icon(
-                        Icons.arrow_drop_down,
-                        color: AppTheme.lightBackground,
-                        size: 20,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  IconData _getTypeIcon(MaintenanceType type) {
-    switch (type) {
-      case MaintenanceType.mechanics:
-        return Icons.build;
-      case MaintenanceType.electrical:
-        return Icons.electrical_services;
-      case MaintenanceType.suspension:
-        return Icons.settings;
-      case MaintenanceType.others:
-        return Icons.more_horiz;
-    }
-  }
-
-  String _getTypeDescription(MaintenanceType type) {
-    switch (type) {
-      case MaintenanceType.mechanics:
-        return 'Engine, transmission, etc.';
-      case MaintenanceType.electrical:
-        return 'Battery, wiring, etc.';
-      case MaintenanceType.suspension:
-        return 'Shocks, struts, etc.';
-      case MaintenanceType.others:
-        return 'Other maintenance';
-    }
-  }
-
-  void _showTypeSelectionDialog() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.backgroundGreen,
-                AppTheme.darkAccentGreen,
-              ],
-            ),
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(30),
-              topRight: Radius.circular(30),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              // Title
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.category,
-                      color: AppTheme.lightBackground,
-                      size: 24,
-                    ),
-                    SizedBox(width: 12),
-                    Text(
-                      'Select Type',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.lightBackground,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Type list
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Column(
-                  children: MaintenanceType.values.map((type) {
-                    final isSelected = _selectedType == type;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedType = type;
-                        });
-                        Navigator.pop(context);
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: isSelected
-                              ? const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    AppTheme.primaryGreen,
-                                    AppTheme.darkAccentGreen,
-                                  ],
-                                )
-                              : LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    AppTheme.darkAccentGreen.withOpacity(0.5),
-                                    AppTheme.backgroundGreen.withOpacity(0.5),
-                                  ],
-                                ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: isSelected
-                              ? Border.all(color: AppTheme.primaryGreen, width: 2)
-                              : Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 45,
-                              height: 45,
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryGreen.withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                _getTypeIcon(type),
-                                color: AppTheme.lightBackground,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    type.displayName,
-                                    style: const TextStyle(
-                                      color: AppTheme.lightBackground,
-                                      fontFamily: 'Orbitron',
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _getTypeDescription(type),
-                                    style: TextStyle(
-                                      color: AppTheme.lightBackground.withOpacity(0.7),
-                                      fontFamily: 'Orbitron',
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (isSelected)
-                              const Icon(
-                                Icons.check_circle,
-                                color: AppTheme.lightBackground,
-                                size: 24,
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  String? _dateError;
-
-  Widget _buildDatePicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Maintenance Date*',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.lightBackground,
-          ),
-        ),
-        const SizedBox(height: 4),
-        InkWell(
-          onTap: () async {
-            final date = await showDatePicker(
-              context: context,
-              initialDate: _selectedDate,
-              firstDate: DateTime(2000),
-              lastDate: DateTime.now(),
-            );
-            if (date != null) {
-              setState(() {
-                _selectedDate = date;
-                _dateError = null; // Clear error when date is selected
-              });
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: _dateError != null ? Colors.red : AppTheme.primaryGreen,
-                width: _dateError != null ? 2 : 1,
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  DateFormat('MMM dd, yyyy').format(_selectedDate),
-                  style: const TextStyle(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                optional ? label : '$label *',
+                style: const TextStyle(
+                    color: AppTheme.primaryGreen,
                     fontFamily: 'Orbitron',
-                    color: AppTheme.lightBackground,
-                  ),
-                ),
-                Icon(
-                  Icons.calendar_today,
-                  color: _dateError != null ? Colors.red : AppTheme.primaryGreen,
-                  size: 20,
-                ),
-              ],
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600),
+              ),
             ),
           ),
-        ),
-        if (_dateError != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            _dateError!,
-            style: const TextStyle(
-              color: Colors.red,
-              fontSize: 12,
-              fontFamily: 'Orbitron',
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: keyboard,
+              maxLines: maxLines,
+              style:
+                  const TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
+              cursorColor: AppTheme.primaryGreen,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: optional ? 'Optional' : 'Required',
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+              ),
             ),
           ),
         ],
-      ],
+      ),
+    );
+  }
+
+  Widget _pickerRow({
+    required String label,
+    required String value,
+    required IconData icon,
+    required VoidCallback onTap,
+    bool muted = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: AppTheme.lightBackground),
+              const SizedBox(width: 12),
+              Text(label,
+                  style: const TextStyle(
+                      color: AppTheme.primaryGreen,
+                      fontFamily: 'Orbitron',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      color: muted ? Colors.white38 : Colors.white,
+                      fontFamily: 'Orbitron',
+                      fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(CupertinoIcons.chevron_forward,
+                  size: 14, color: Colors.white.withOpacity(0.4)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dateRow() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _pickDate,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              const Icon(CupertinoIcons.calendar,
+                  size: 18, color: AppTheme.lightBackground),
+              const SizedBox(width: 12),
+              const Text('Date *',
+                  style: TextStyle(
+                      color: AppTheme.primaryGreen,
+                      fontFamily: 'Orbitron',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Text(DateFormat('MMM dd, yyyy').format(_selectedDate),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Orbitron',
+                      fontSize: 13)),
+              const SizedBox(width: 6),
+              Icon(CupertinoIcons.chevron_forward,
+                  size: 14, color: Colors.white.withOpacity(0.4)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Generic dark picker sheet with checkmarks. Returns a `_Picked<T>` wrapper
+  /// on selection (so a selected `null` is distinguishable from dismissal).
+  Future<_Picked<T>?> _showPicker<T>({
+    required String title,
+    required List<T> options,
+    required T? selected,
+    required String Function(T) labelOf,
+    required IconData Function(T) iconOf,
+    String Function(T)? subtitleOf,
+    bool allowNull = false,
+  }) {
+    return showModalBottomSheet<_Picked<T>>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.6),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppTheme.backgroundGreen, AppTheme.darkAccentGreen],
+          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2))),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(title,
+                  style: const TextStyle(
+                      color: AppTheme.lightBackground,
+                      fontFamily: 'Orbitron',
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold)),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                children: options.map((opt) {
+                  final isSel = opt == selected;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: isSel
+                          ? AppTheme.primaryGreen.withOpacity(0.25)
+                          : Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: isSel
+                              ? AppTheme.primaryGreen
+                              : Colors.white.withOpacity(0.12),
+                          width: 1),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () =>
+                            Navigator.pop(ctx, _Picked<T>(opt)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Icon(iconOf(opt),
+                                  color: AppTheme.lightBackground, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(labelOf(opt),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            color: AppTheme.lightBackground,
+                                            fontFamily: 'Orbitron',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600)),
+                                    if (subtitleOf != null &&
+                                        subtitleOf(opt).isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(subtitleOf(opt),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                              color: AppTheme.lightBackground
+                                                  .withOpacity(0.6),
+                                              fontFamily: 'Orbitron',
+                                              fontSize: 11)),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              if (isSel)
+                                const Icon(CupertinoIcons.checkmark_alt,
+                                    color: AppTheme.primaryGreen, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-// Placeholder classes for other forms and dialogs
+/// Wrapper so a picker can return a selected value of `null` distinctly from
+/// the sheet being dismissed (which returns `null` from showModalBottomSheet).
+class _Picked<T> {
+  final T value;
+  const _Picked(this.value);
+}
+
+// =============================================================================
+// Edit Maintenance form — keeps the existing reminder/car link unchanged.
+// =============================================================================
 class EditMaintenanceForm extends StatefulWidget {
   final BackupMaintenance maintenance;
-  final VoidCallback onMaintenanceUpdated;
-
-  const EditMaintenanceForm({
-    super.key,
-    required this.maintenance,
-    required this.onMaintenanceUpdated,
-  });
+  const EditMaintenanceForm({super.key, required this.maintenance});
 
   @override
   State<EditMaintenanceForm> createState() => _EditMaintenanceFormState();
 }
 
 class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
-  final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _costController = TextEditingController();
   final _mechanicController = TextEditingController();
   final _invoiceController = TextEditingController();
-
   final MaintenanceService _maintenanceService = MaintenanceService();
 
   late DateTime _selectedDate;
   late MaintenanceType _selectedType;
-  bool _isLoading = false;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -2002,6 +1495,8 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
     _invoiceController.text = m.invoiceNumber ?? '';
     _selectedDate = m.maintenanceDate;
     _selectedType = m.type;
+    _titleController.addListener(_refresh);
+    _costController.addListener(_refresh);
   }
 
   @override
@@ -2014,141 +1509,296 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
     super.dispose();
   }
 
+  void _refresh() => setState(() {});
+
+  bool get _isValid {
+    if (_titleController.text.trim().isEmpty) return false;
+    final c = double.tryParse(_costController.text.trim());
+    return c != null && c >= 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        bottom: media.viewInsets.bottom + 16,
-        top: 16,
+    return Container(
+      margin: EdgeInsets.only(top: media.padding.top + 40),
+      decoration: const BoxDecoration(
+        color: AppTheme.backgroundGreen,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              border: Border(
+                  bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+            ),
+            child: Row(
+              children: [
+                CupertinoButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel',
+                      style: TextStyle(
+                          color: Colors.white70, fontFamily: 'Orbitron')),
+                ),
+                const Expanded(
+                  child: Text('Edit Record',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Orbitron',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
+                ),
+                CupertinoButton(
+                  onPressed: _isValid && !_saving ? _save : null,
+                  child: _saving
+                      ? const CupertinoActivityIndicator(color: Colors.white)
+                      : Text('Save',
+                          style: TextStyle(
+                              color: _isValid
+                                  ? AppTheme.primaryGreen
+                                  : Colors.white30,
+                              fontFamily: 'Orbitron',
+                              fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                  16, 12, 16, media.viewInsets.bottom + 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _group([
+                    _textRow(label: 'Title', controller: _titleController),
+                    _divider(),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _pickType,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 14),
+                          child: Row(
+                            children: [
+                              Icon(_selectedType.icon,
+                                  size: 18, color: AppTheme.lightBackground),
+                              const SizedBox(width: 12),
+                              const Text('Category',
+                                  style: TextStyle(
+                                      color: AppTheme.primaryGreen,
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
+                              const Spacer(),
+                              Text(_selectedType.displayName,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: 'Orbitron',
+                                      fontSize: 13)),
+                              const SizedBox(width: 6),
+                              Icon(CupertinoIcons.chevron_forward,
+                                  size: 14,
+                                  color: Colors.white.withOpacity(0.4)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  _group([
+                    _dateRow(),
+                    _divider(),
+                    _textRow(
+                        label: 'Cost (EGP)',
+                        controller: _costController,
+                        keyboard: const TextInputType.numberWithOptions(
+                            decimal: true)),
+                    _divider(),
+                    _textRow(
+                        label: 'Workshop',
+                        controller: _mechanicController,
+                        optional: true),
+                    _divider(),
+                    _textRow(
+                        label: 'Invoice #',
+                        controller: _invoiceController,
+                        optional: true),
+                  ]),
+                  const SizedBox(height: 16),
+                  _group([
+                    _textRow(
+                        label: 'Description',
+                        controller: _descriptionController,
+                        optional: true,
+                        maxLines: 3),
+                  ]),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickType() async {
+    final picked = await showModalBottomSheet<MaintenanceType>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppTheme.backgroundGreen, AppTheme.darkAccentGreen],
+          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            const Text('Category',
+                style: TextStyle(
+                    color: AppTheme.lightBackground,
+                    fontFamily: 'Orbitron',
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            ...MaintenanceType.values.map((t) {
+              final sel = t == _selectedType;
+              return ListTile(
+                leading: Icon(t.icon, color: AppTheme.lightBackground),
+                title: Text(t.displayName,
+                    style: const TextStyle(
+                        color: AppTheme.lightBackground,
+                        fontFamily: 'Orbitron')),
+                trailing: sel
+                    ? const Icon(CupertinoIcons.checkmark_alt,
+                        color: AppTheme.primaryGreen)
+                    : null,
+                onTap: () => Navigator.pop(ctx, t),
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) setState(() => _selectedType = picked);
+  }
+
+  Future<void> _pickDate() async {
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 300,
+        color: AppTheme.darkAccentGreen,
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: CupertinoButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Done',
+                    style: TextStyle(color: AppTheme.primaryGreen)),
+              ),
+            ),
+            Expanded(
+              child: CupertinoTheme(
+                data: const CupertinoThemeData(brightness: Brightness.dark),
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: _selectedDate,
+                  maximumDate: DateTime.now(),
+                  onDateTimeChanged: (d) => setState(() => _selectedDate = d),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    HapticFeedback.lightImpact();
+    try {
+      final result = await _maintenanceService.updateMaintenance(
+        maintenanceId: widget.maintenance.id!.toString(),
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        cost: double.parse(_costController.text.trim()),
+        maintenanceDate: _selectedDate,
+        type: _selectedType,
+        mechanicName: _mechanicController.text.trim().isEmpty
+            ? null
+            : _mechanicController.text.trim(),
+        invoiceNumber: _invoiceController.text.trim().isEmpty
+            ? null
+            : _invoiceController.text.trim(),
+      );
+      if (!mounted) return;
+      if (result.success) {
+        Navigator.pop(context, true);
+      } else {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message),
+            backgroundColor: AppDialog.destructive));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not update the record.'),
+          backgroundColor: AppDialog.destructive));
+    }
+  }
+
+  Widget _group(List<Widget> children) => Container(
+        decoration: AppTheme.glowCardDecoration(
+            radius: 14, accent: AppTheme.primaryGreen),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: children),
+      );
+
+  Widget _divider() => Divider(
+      height: 1, thickness: 1, color: Colors.white.withOpacity(0.07));
+
+  Widget _dateRow() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _pickDate,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
             children: [
-              Center(
-                child: Container(
-                  width: 48,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-              ),
-                const SizedBox(height: 16),
-              const Text('Edit Maintenance Record', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w700, fontSize: 18)),
-              const SizedBox(height: 16),
-
-              // Title and Type row
-              Row(
-                children: [
-                  Expanded(child: _field(label: 'Title*', controller: _titleController)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _buildTypeDropdown()),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Description
-              _field(
-                label: 'Description (optional)',
-                controller: _descriptionController,
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-
-              // Cost and Date row
-              Row(
-                children: [
-                  Expanded(child: _field(
-                    label: 'Cost (EGP)*',
-                    controller: _costController,
-                    keyboard: const TextInputType.numberWithOptions(decimal: true),
-                    customValidator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'This field is required';
-                      }
-                      final cost = double.tryParse(value.trim());
-                      if (cost == null) {
-                        return 'Please enter a valid number';
-                      }
-                      if (cost < 0) {
-                        return 'Cost cannot be negative';
-                      }
-                      return null;
-                    },
-                  )),
-                  const SizedBox(width: 10),
-                  Expanded(child: _buildDatePicker()),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Optional fields row
-              Row(
-                children: [
-                  Expanded(child: _field(
-                    label: 'Mechanic/Service Center (optional)',
-                    controller: _mechanicController,
-                  )),
-                  const SizedBox(width: 10),
-                  Expanded(child: _field(
-                    label: 'Invoice Number (optional)',
-                    controller: _invoiceController,
-                  )),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // Save button with gradient
-              SizedBox(
-                width: double.infinity,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.darkAccentGreen,
-                        AppTheme.backgroundGreen,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppTheme.secondaryGreen.withOpacity(0.6),
-                      width: 1,
-                    ),
-                    boxShadow: AppTheme.glowShadow(elevated: true),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text('Update Maintenance', style: TextStyle(fontFamily: 'Orbitron', fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ),
-                const SizedBox(height: 8),
+              const Icon(CupertinoIcons.calendar,
+                  size: 18, color: AppTheme.lightBackground),
+              const SizedBox(width: 12),
+              const Text('Date *',
+                  style: TextStyle(
+                      color: AppTheme.primaryGreen,
+                      fontFamily: 'Orbitron',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Text(DateFormat('MMM dd, yyyy').format(_selectedDate),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Orbitron',
+                      fontSize: 13)),
             ],
           ),
         ),
@@ -2156,214 +1806,55 @@ class _EditMaintenanceFormState extends State<EditMaintenanceForm> {
     );
   }
 
-  Future<void> _save() async {
-    // Validate form fields
-    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
-      return; // Form validation will show red borders
-    }
-
-    // Validate cost is a valid number
-    final costText = _costController.text.trim();
-    final cost = double.tryParse(costText);
-    if (cost == null) {
-      // This should be caught by form validation, but double-check
-      return;
-    }
-    if (cost < 0) {
-      // This should be caught by form validation, but double-check
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final result = await _maintenanceService.updateMaintenance(
-        maintenanceId: widget.maintenance.id!.toString(),
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        cost: cost, // Use validated cost, not tryParse with fallback
-        maintenanceDate: _selectedDate,
-        type: _selectedType,
-        mechanicName: _mechanicController.text.trim().isEmpty ? null : _mechanicController.text.trim(),
-        invoiceNumber: _invoiceController.text.trim().isEmpty ? null : _invoiceController.text.trim(),
-      );
-
-      if (!mounted) return;
-
-      if (result.success) {
-        Navigator.pop(context, true);
-      } else {
-        AppSnackbar.show(context, 
-          SnackBar(content: Text(result.message), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      AppSnackbar.show(context, 
-        SnackBar(content: Text('Error updating maintenance: $e'), backgroundColor: Colors.red),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Widget _field({
+  Widget _textRow({
     required String label,
     required TextEditingController controller,
     TextInputType? keyboard,
+    bool optional = false,
     int maxLines = 1,
-    String? Function(String?)? customValidator,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Orbitron',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.lightBackground,
-          ),
-        ),
-        const SizedBox(height: 6),
-        // Shadow sits on a wrapper because the field paints its own fill.
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: AppTheme.glowShadow(),
-          ),
-          child: TextFormField(
-          controller: controller,
-          keyboardType: keyboard,
-          maxLines: maxLines,
-          style: const TextStyle(
-            fontFamily: 'Orbitron',
-            color: AppTheme.lightBackground,
-          ),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppTheme.backgroundGreen,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppTheme.secondaryGreen, width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.red, width: 2),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.red, width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          validator: customValidator ?? (label.contains('*')
-              ? (value) => value?.isEmpty == true ? 'This field is required' : null
-              : null),
-        ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTypeDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Type*',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        DropdownButtonFormField<MaintenanceType>(
-          value: _selectedType,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppTheme.backgroundGreen,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppTheme.secondaryGreen.withOpacity(0.4), width: 1),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppTheme.secondaryGreen, width: 1.5),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          items: MaintenanceType.values.map((type) {
-            return DropdownMenuItem(
-              value: type,
-              child: Text(type.displayName, style: const TextStyle(fontFamily: 'Orbitron')),
-            );
-          }).toList(),
-          onChanged: (value) {
-            if (value != null) setState(() => _selectedType = value);
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDatePicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Maintenance Date*',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        InkWell(
-          onTap: () async {
-            final date = await showDatePicker(
-              context: context,
-              initialDate: _selectedDate,
-              firstDate: DateTime(2000),
-              lastDate: DateTime.now(),
-            );
-            if (date != null) setState(() => _selectedDate = date);
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppTheme.primaryGreen),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  DateFormat('MMM dd, yyyy').format(_selectedDate),
-                  style: const TextStyle(fontFamily: 'Orbitron'),
-                ),
-                const Icon(Icons.calendar_today, color: AppTheme.primaryGreen, size: 20),
-              ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(optional ? label : '$label *',
+                  style: const TextStyle(
+                      color: AppTheme.primaryGreen,
+                      fontFamily: 'Orbitron',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
             ),
           ),
-        ),
-      ],
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: keyboard,
+              maxLines: maxLines,
+              style:
+                  const TextStyle(color: Colors.white, fontFamily: 'Orbitron'),
+              cursorColor: AppTheme.primaryGreen,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: optional ? 'Optional' : 'Required',
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
+// =============================================================================
+// Details dialog — monochrome (single accent), reuses the app dialog language.
+// =============================================================================
 class MaintenanceDetailsDialog extends StatelessWidget {
   final MaintenanceWithInfo maintenanceWithInfo;
   final VoidCallback onEdit;
@@ -2378,9 +1869,7 @@ class MaintenanceDetailsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maintenance = maintenanceWithInfo.maintenance;
-    final typeColor = _getMaintenanceTypeColor(maintenance.type);
-    
+    final m = maintenanceWithInfo.maintenance;
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -2388,206 +1877,108 @@ class MaintenanceDetailsDialog extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(24),
         constraints: const BoxConstraints(maxWidth: 420, maxHeight: 800),
-        // Matches AppDialogPanel so the details card reads as the same
-        // component family as every other pop-up.
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              AppTheme.backgroundGreen,
-              AppTheme.darkAccentGreen,
-            ],
+            colors: [AppTheme.backgroundGreen, AppTheme.darkAccentGreen],
           ),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: AppTheme.secondaryGreen.withOpacity(0.6),
-            width: 1,
-          ),
-          boxShadow: AppTheme.glowShadow(elevated: true),
+              color: AppTheme.primaryGreen.withOpacity(0.6), width: 1),
+          boxShadow: AppTheme.glowShadow(
+              accent: AppTheme.primaryGreen, elevated: true),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header — same anatomy as the car details card: glowing icon
-            // chip, title + subtitle stack, raised close button.
             Row(
               children: [
                 Container(
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: AppTheme.secondaryGreen.withOpacity(0.15),
+                    color: Colors.white.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: AppTheme.secondaryGreen.withOpacity(0.5),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.secondaryGreen.withOpacity(0.25),
-                        blurRadius: 12,
-                        spreadRadius: -2,
-                      ),
-                    ],
+                        color: Colors.white.withOpacity(0.15), width: 1),
                   ),
-                  child: Icon(
-                    _getMaintenanceTypeIcon(maintenance.type),
-                    color: AppTheme.secondaryGreen,
-                    size: 24,
-                  ),
+                  child: Icon(m.type.icon,
+                      color: AppTheme.lightBackground, size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        maintenance.title,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Orbitron',
-                          color: AppTheme.lightBackground,
-                          letterSpacing: 0.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Text(m.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Orbitron',
+                              color: AppTheme.lightBackground)),
                       const SizedBox(height: 3),
                       Text(
-                        '${maintenance.type.displayName} · ${DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.lightBackground.withOpacity(0.7),
-                          fontFamily: 'Orbitron',
-                        ),
+                        '${m.type.displayName} · ${DateFormat('MMM dd, yyyy').format(m.maintenanceDate)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.lightBackground.withOpacity(0.7),
+                            fontFamily: 'Orbitron'),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.backgroundGreen.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.secondaryGreen.withOpacity(0.35),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: IconButton(
-                    onPressed: () {
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                      }
-                    },
-                    icon: const Icon(
-                      Icons.close,
-                      color: AppTheme.lightBackground,
-                      size: 20,
-                    ),
-                    padding: const EdgeInsets.all(8),
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
-                    ),
-                  ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(CupertinoIcons.xmark,
+                      color: AppTheme.lightBackground, size: 20),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-
-            // Hairline divider under the header
-            Container(
-              height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.secondaryGreen.withOpacity(0.5),
-                    AppTheme.secondaryGreen.withOpacity(0.0),
-                  ],
-                ),
-              ),
-            ),
             const SizedBox(height: 16),
-
-            // Details section with modern styling
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppTheme.backgroundGreen.withOpacity(0.55),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: AppTheme.secondaryGreen.withOpacity(0.3),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                    spreadRadius: -2,
-                  ),
-                ],
+                    color: Colors.white.withOpacity(0.1), width: 1),
               ),
               child: Column(
                 children: [
-                  _buildModernDetailRow('Type', maintenance.type.displayName, Icons.category, typeColor),
-                  // Amber, matching the cost chip on the maintenance list card.
-                  _buildModernDetailRow('Cost', 'EGP ${maintenance.cost.toStringAsFixed(2)}', Icons.attach_money, AppTheme.costHighlight),
-                  _buildModernDetailRow('Date', DateFormat('MMM dd, yyyy').format(maintenance.maintenanceDate), Icons.calendar_today, Colors.blue),
-                  _buildModernDetailRow('Car', maintenanceWithInfo.carDisplayName, Icons.directions_car, Colors.orange),
-                  _buildModernDetailRow('Reminder', maintenanceWithInfo.reminderDisplayName, Icons.notification_important, Colors.purple),
-                  if (maintenance.description.isNotEmpty)
-                    _buildModernDetailRow('Description', maintenance.description, Icons.description, Colors.grey),
-                  if (maintenance.mechanicName != null)
-                    _buildModernDetailRow('Mechanic', maintenance.mechanicName!, Icons.person, Colors.cyan),
-                  if (maintenance.invoiceNumber != null)
-                    _buildModernDetailRow('Invoice', maintenance.invoiceNumber!, Icons.receipt, Colors.teal),
+                  _row('Cost', 'EGP ${m.cost.toStringAsFixed(2)}',
+                      CupertinoIcons.money_dollar),
+                  _row('Car', maintenanceWithInfo.carDisplayName,
+                      CupertinoIcons.car_detailed),
+                  _row('Reminder', maintenanceWithInfo.reminderDisplayName,
+                      CupertinoIcons.bell),
+                  if (m.description.isNotEmpty)
+                    _row('Description', m.description,
+                        CupertinoIcons.doc_text),
+                  if (m.mechanicName != null && m.mechanicName!.isNotEmpty)
+                    _row('Workshop', m.mechanicName!, CupertinoIcons.person),
+                  if (m.invoiceNumber != null && m.invoiceNumber!.isNotEmpty)
+                    _row('Invoice', m.invoiceNumber!,
+                        CupertinoIcons.doc_plaintext),
                 ],
               ),
             ),
-            
-            const SizedBox(height: 24),
-            
-            // Modern action buttons
-            Column(
+            const SizedBox(height: 20),
+            Row(
               children: [
-                // Top row - Edit and Delete
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildModernButton(
-                        icon: Icons.edit_rounded,
-                        label: 'Edit',
-                        color: AppTheme.infoBlue,
-                        onPressed: onEdit,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildModernButton(
-                        icon: Icons.delete_rounded,
-                        label: 'Delete',
-                        color: AppDialog.destructive,
-                        onPressed: onDelete,
-                      ),
-                    ),
-                  ],
-                ),
-                  const SizedBox(height: 12),
-                
-               
+                Expanded(
+                    child: _button(
+                        CupertinoIcons.pencil, 'Edit', AppTheme.primaryGreen,
+                        onEdit)),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: _button(CupertinoIcons.trash, 'Delete',
+                        AppDialog.destructive, onDelete)),
               ],
             ),
           ],
@@ -2596,52 +1987,31 @@ class MaintenanceDetailsDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildModernDetailRow(String label, String value, IconData icon, Color color) {
+  Widget _row(String label, String value, IconData icon) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: color.withOpacity(0.4),
-                width: 1,
-              ),
-            ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 16,
-            ),
-          ),
+          Icon(icon, size: 18, color: AppTheme.lightBackground),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.lightBackground.withOpacity(0.6),
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.lightBackground.withOpacity(0.6),
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'Orbitron')),
                 const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.lightBackground,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
+                Text(value.isEmpty ? '—' : value,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.lightBackground,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Orbitron')),
               ],
             ),
           ),
@@ -2650,22 +2020,14 @@ class MaintenanceDetailsDialog extends StatelessWidget {
     );
   }
 
-  /// Pill action matching the car details card — tinted "faded" fill with a
-  /// glowing rim and an accent-coloured label, instead of a solid block.
-  Widget _buildModernButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onPressed,
-  }) {
+  Widget _button(IconData icon, String label, Color color, VoidCallback onTap) {
     return Container(
       decoration: AppTheme.glowButtonDecoration(accent: color),
+      clipBehavior: Clip.antiAlias,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: onPressed,
+          onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
             child: Row(
@@ -2673,50 +2035,17 @@ class MaintenanceDetailsDialog extends StatelessWidget {
               children: [
                 Icon(icon, color: color, size: 17),
                 const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
+                Text(label,
                     style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      fontFamily: 'Orbitron',
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
+                        color: color,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        fontFamily: 'Orbitron')),
               ],
             ),
           ),
         ),
       ),
     );
-  }
-
-  Color _getMaintenanceTypeColor(MaintenanceType type) {
-    switch (type) {
-      case MaintenanceType.mechanics:
-        return Colors.orange;
-      case MaintenanceType.electrical:
-        return Colors.red;
-      case MaintenanceType.suspension:
-        return Colors.purple;
-      case MaintenanceType.others:
-        return Colors.green;
-    }
-  }
-
-  IconData _getMaintenanceTypeIcon(MaintenanceType type) {
-    switch (type) {
-      case MaintenanceType.mechanics:
-        return Icons.build_circle;
-      case MaintenanceType.electrical:
-        return Icons.electrical_services;
-      case MaintenanceType.suspension:
-        return Icons.car_repair;
-      case MaintenanceType.others:
-        return Icons.miscellaneous_services;
-    }
   }
 }

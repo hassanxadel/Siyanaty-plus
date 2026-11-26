@@ -1,15 +1,13 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/utils/responsive_utils.dart';
 import '../../../services/security/local_unlock_service.dart';
 import '../../../services/security/authentication_manager.dart';
-import '../../../services/security/otp_service.dart';
 import '../auth/login_screen.dart';
 import '../../widgets/app_dialog.dart';
-import 'otp_verification_screen.dart';
+import '../../widgets/pin_pad_body.dart';
 
 class UnlockScreen extends StatefulWidget {
   final VoidCallback? onUnlockSuccess;
@@ -161,214 +159,101 @@ class _UnlockScreenState extends State<UnlockScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
+      backgroundColor: AppTheme.backgroundGreen,
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnimation,
-          child: Padding(
-            padding: context.responsivePadding(horizontal: 16, vertical: 12),
-            child: Column(
-              children: [
-                SizedBox(height: context.responsiveSpacing(24)),
-                _buildHeader(),
-                SizedBox(height: context.responsiveSpacing(16)),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (_showBiometricPrompt)
-                        _buildBiometricPrompt()
-                      else
-                        _buildNumericKeypad(),
-                      if (_errorMessage != null) ...[
-                        SizedBox(height: context.r(10)),
-                        _buildErrorMessage(),
-                      ],
-                    ],
-                  ),
+          child: _showBiometricPrompt
+              ? _buildBiometricPrompt()
+              : PinPadBody(
+                  icon: CupertinoIcons.lock_fill,
+                  title: 'Enter your PIN',
+                  subtitle: 'Your PIN keeps your car data private',
+                  pinLength: _storedPinLength ?? 6,
+                  filledCount: _pin.length,
+                  shake: _shakeAnimation,
+                  errorText: _errorMessage,
+                  keypadEnabled: !_isLoading,
+                  showBackspace: _pin.isNotEmpty,
+                  onDigit: _onKeypadTap,
+                  onBackspace: () => _onKeypadTap('backspace'),
+                  onBiometric: () {
+                    setState(() => _showBiometricPrompt = true);
+                    _attemptBiometricAuth();
+                  },
+                  aboveKeypad: (_storedPinLength == null &&
+                          _pin.length >= 4 &&
+                          _pin.length < 6)
+                      ? _buildVerifyButton()
+                      : null,
+                  footer: _footer(),
                 ),
-                _buildFooter(),
-              ],
-            ),
-          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      children: [
-        Container(
-          width: context.r(90),
-          height: context.r(90),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.primaryGreen,
-                AppTheme.darkAccentGreen,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(45)),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryGreen.withOpacity(0.3),
-                blurRadius: context.r(15),
-                offset: Offset(0, context.r(8)),
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.lock_outline,
-            color: Colors.white,
-            size: context.responsiveIconSize(44),
-          ),
-        ),
-        SizedBox(height: context.r(16)),
-        Text(
-          'Enter PIN',
-          style: context.responsiveTextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Orbitron',
-            color: AppTheme.getThemeAwareTextColor(context),
-          ),
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: context.r(16)),
-        // PIN dots directly under the title
-        _buildPinDisplay(),
-      ],
-    );
-  }
-
   Widget _buildBiometricPrompt() {
-    return Column(
-      children: [
-        Container(
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.primaryGreen.withOpacity(0.1),
-                AppTheme.darkAccentGreen.withOpacity(0.1),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(60),
-            border: Border.all(
-              color: AppTheme.primaryGreen.withOpacity(0.3),
-              width: 2,
-            ),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _attemptBiometricAuth,
-              borderRadius: BorderRadius.circular(60),
-              child: const Center(
-                child: Icon(
-                  Icons.fingerprint,
-                  color: AppTheme.primaryGreen,
-                  size: 60,
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: AppTheme.lightBackground.withOpacity(0.12),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppTheme.lightBackground.withOpacity(0.3),
+                  width: 2,
                 ),
               ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        const Text(
-          'Touch the fingerprint sensor',
-          style: TextStyle(
-            fontSize: 16,
-            fontFamily: 'Orbitron',
-            color: AppTheme.primaryGreen,
-          ),
-        ),
-        const SizedBox(height: 40),
-        TextButton(
-          onPressed: () {
-            setState(() {
-              _showBiometricPrompt = false;
-            });
-          },
-          child: const Text(
-            'Use PIN instead',
-            style: TextStyle(
-              color: AppTheme.primaryGreen,
-              fontFamily: 'Orbitron',
-              fontSize: 14,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPinDisplay() {
-    return AnimatedBuilder(
-      animation: _shakeAnimation,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(_shakeAnimation.value, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(_storedPinLength ?? 6, (index) {
-              bool isFilled = index < _pin.length;
-              bool isActive = index == _pin.length;
-              
-              return Container(
-                margin: EdgeInsets.symmetric(horizontal: context.r(6)),
-                width: context.r(16),
-                height: context.r(16),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isFilled 
-                      ? AppTheme.primaryGreen 
-                      : Colors.transparent,
-                  border: Border.all(
-                    color: isActive 
-                        ? AppTheme.primaryGreen 
-                        : AppTheme.primaryGreen.withOpacity(0.3),
-                    width: 2,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _attemptBiometricAuth,
+                  customBorder: const CircleBorder(),
+                  child: const Center(
+                    child: Icon(
+                      Icons.fingerprint,
+                      color: AppTheme.lightBackground,
+                      size: 56,
+                    ),
                   ),
                 ),
-                child: isFilled
-                    ? Icon(
-                        Icons.circle,
-                        color: Colors.white,
-                        size: context.responsiveIconSize(10),
-                      )
-                    : null,
-              );
-            }),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildNumericKeypad() {
-    return Column(
-      children: [
-        _buildKeypadRow(['1', '2', '3']),
-        SizedBox(height: context.r(14)),
-        _buildKeypadRow(['4', '5', '6']),
-        SizedBox(height: context.r(14)),
-        _buildKeypadRow(['7', '8', '9']),
-        SizedBox(height: context.r(14)),
-        _buildKeypadRow(['biometric', '0', 'backspace']),
-        SizedBox(height: context.r(12)),
-        // Legacy fallback only: PINs saved before length tracking may be
-        // 4-5 digits, so manual verification is needed until the length
-        // is learned on the first successful unlock
-        if (_storedPinLength == null && _pin.length >= 4 && _pin.length < 6)
-          _buildVerifyButton(),
-      ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Unlock with biometrics',
+              style: TextStyle(
+                fontSize: 16,
+                fontFamily: 'Orbitron',
+                color: AppTheme.lightBackground,
+              ),
+            ),
+            const SizedBox(height: 40),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _showBiometricPrompt = false;
+                });
+              },
+              child: Text(
+                'Use PIN instead',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.8),
+                  fontFamily: 'Orbitron',
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -424,189 +309,51 @@ class _UnlockScreenState extends State<UnlockScreen>
     );
   }
 
-  Widget _buildKeypadRow(List<String> keys) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: keys.map((key) => _buildKeypadButton(key)).toList(),
-    );
-  }
 
-  Widget _buildKeypadButton(String key) {
-    final buttonSize = context.r(78);
-    final borderRadius = context.responsiveBorderRadius(39);
-    
-    if (key == 'biometric') {
-      return Container(
-        width: buttonSize,
-        height: buttonSize,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              setState(() {
-                _showBiometricPrompt = true;
-              });
-              _attemptBiometricAuth();
-            },
-            borderRadius: BorderRadius.circular(borderRadius),
-            child: Center(
-              child: Icon(
-                Icons.fingerprint,
-                color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.7),
-                size: context.responsiveIconSize(28),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      width: buttonSize,
-      height: buttonSize,
-      decoration: BoxDecoration(
-        gradient: key == 'backspace'
-            ? null
-            : const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-        borderRadius: BorderRadius.circular(borderRadius),
-        boxShadow: key == 'backspace'
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: context.r(10),
-                  offset: Offset(0, context.r(5)),
-                ),
-                BoxShadow(
-                  color: AppTheme.secondaryGreen.withOpacity(0.3),
-                  blurRadius: context.r(18),
-                ),
-              ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _onKeypadTap(key),
-          borderRadius: BorderRadius.circular(borderRadius),
-          child: Center(
-            child: key == 'backspace'
-                ? Icon(
-                    Icons.backspace_outlined,
-                    color: AppTheme.getThemeAwareTextColor(context),
-                    size: context.responsiveIconSize(22),
-                  )
-                : Text(
-                    key,
-                    style: context.responsiveTextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorMessage() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.error_outline,
-            color: Colors.red,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              _errorMessage!,
-              style: const TextStyle(
-                color: Colors.red,
-                fontSize: 14,
-                fontFamily: 'Orbitron',
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFooter() {
+  Widget _footer() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_remainingAttempts < 5)
+        if (_remainingAttempts < LocalUnlockService.maxFailedAttempts)
           Padding(
-            padding: EdgeInsets.only(bottom: context.r(12)),
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: context.r(16), vertical: context.r(8)),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(context.responsiveBorderRadius(8)),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              '$_remainingAttempts ${_remainingAttempts == 1 ? 'attempt' : 'attempts'} remaining',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.lightBackground.withOpacity(0.8),
+                fontFamily: 'Orbitron',
               ),
-              child: Text(
-                '$_remainingAttempts attempts remaining',
-                style: context.responsiveTextStyle(
-                  fontSize: 12,
-                  color: Colors.orange,
+            ),
+          ),
+        // Bottom links, iPhone passcode style: Forgot PIN in the app yellow,
+        // Sign Out in red.
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            TextButton(
+              onPressed: _showForgotPinDialog,
+              child: const Text(
+                'Forgot PIN?',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.lightBackground,
                   fontFamily: 'Orbitron',
                 ),
               ),
             ),
-          ),
-        // Bottom links placed at the screen corners, iPhone passcode style
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: context.r(20)),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: _showForgotPinDialog,
-                child: Text(
-                  'Forgot PIN?',
-                  style: context.responsiveTextStyle(
-                    fontSize: 14,
-                    color: AppTheme.getThemeAwareTextColor(context),
-                    fontFamily: 'Orbitron',
-                  ),
+            TextButton(
+              onPressed: _showSignOutDialog,
+              child: const Text(
+                'Sign Out',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.errorColor,
+                  fontFamily: 'Orbitron',
                 ),
               ),
-              TextButton(
-                onPressed: _showSignOutDialog,
-                child: Text(
-                  'Sign Out',
-                  style: context.responsiveTextStyle(
-                    fontSize: 14,
-                    color: AppTheme.getThemeAwareTextColor(context),
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
@@ -665,7 +412,9 @@ class _UnlockScreenState extends State<UnlockScreen>
         break;
       case PinAuthResult.failed:
         _remainingAttempts = await _localUnlockService.getRemainingAttempts();
-        _showError('Incorrect PIN. $_remainingAttempts attempts remaining.');
+        HapticFeedback.heavyImpact();
+        _showError(
+            'Wrong PIN · $_remainingAttempts ${_remainingAttempts == 1 ? 'attempt' : 'attempts'} left');
         _performShakeAnimation();
         setState(() {
           _pin = '';
@@ -698,7 +447,9 @@ class _UnlockScreenState extends State<UnlockScreen>
   }
 
   void _performShakeAnimation() {
-    _shakeController.forward().then((_) {
+    // Respect the OS "reduce motion" accessibility setting.
+    if (MediaQuery.of(context).disableAnimations) return;
+    _shakeController.forward(from: 0).then((_) {
       _shakeController.reverse();
     });
   }
@@ -744,101 +495,14 @@ class _UnlockScreenState extends State<UnlockScreen>
       context,
       title: 'Forgot PIN?',
       message:
-          'We will email a verification code to your registered address so you can set a new PIN.',
+          'You will be signed out. Sign in again with your email, Google or Apple account to set a new PIN.',
       icon: Icons.lock_reset_rounded,
-      confirmLabel: 'Send Code',
+      confirmLabel: 'Sign Out',
+      isDestructive: true,
     );
 
     if (confirmed == true && mounted) {
-      _initiateEmailVerificationForPinReset();
-    }
-  }
-
-  Future<void> _initiateEmailVerificationForPinReset() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      // Get current user email from Firebase Auth directly
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null || user.email == null) {
-        _showError('No user found. Please sign in again.');
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final email = user.email!;
-      final otpService = OtpService();
-
-      // Send OTP to email
-      final success = await otpService.sendOtpToEmail(email);
-
-      if (mounted) {
-        if (success) {
-          // Show success message with OTP for development
-          final otp = otpService.currentOtpForTesting;
-          
-          // Navigate to OTP verification screen
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OtpVerificationScreen(email: email),
-            ),
-          );
-
-          // Show development OTP in snackbar (remove in production)
-          AppSnackbar.show(context, 
-            SnackBar(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'OTP sent successfully!',
-                    style: TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Development OTP: $otp',
-                    style: const TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Sent to: $email',
-                    style: const TextStyle(
-                      fontFamily: 'Orbitron',
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: AppTheme.primaryGreen,
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        } else {
-          _showError('Failed to send verification code. Please try again.');
-        }
-
-        setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      if (mounted) {
-        _showError('An error occurred: ${e.toString()}');
-        setState(() => _isLoading = false);
-      }
+      _signOutAndNavigateToLogin();
     }
   }
 

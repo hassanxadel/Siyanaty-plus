@@ -1,9 +1,12 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../shared/utils/responsive_utils.dart';
 import '../../../services/security/local_unlock_service.dart';
+import '../../widgets/gradient_button.dart';
+import '../../widgets/pin_pad_body.dart';
 
 class PinSetupScreen extends StatefulWidget {
   final bool isChangingPin;
@@ -81,129 +84,85 @@ class _PinSetupScreenState extends State<PinSetupScreen>
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.canPop(context);
     return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
+      backgroundColor: AppTheme.backgroundGreen,
       resizeToAvoidBottomInset: false, // Don't resize when keyboard appears
       body: SafeArea(
-        child: Padding(
-          padding: context.responsivePadding(horizontal: 16, vertical: 12),
-          child: Column(
-            children: [
-              _buildHeader(),
-              SizedBox(height: context.r(12)),   
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (!_isConfirmingPin && !_isEnteringOldPin) ...[
-                      _buildLengthSelector(),
-                      SizedBox(height: context.r(16)),
-                    ],
-                    _buildNumericKeypad(),
-                    if (_errorMessage != null) ...[
-                      SizedBox(height: context.r(10)),
-                      _buildErrorMessage(),
-                    ],
-                  ],
-                ),
-              ),
-              _buildFooter(),
-              SizedBox(height: context.r(12)),
-            ],
-          ),
+        child: PinPadBody(
+          icon: _modeIcon,
+          title: _modeTitle,
+          subtitle: _modeSubtitle,
+          pinLength: _targetLength,
+          filledCount: _getCurrentPin().length,
+          shake: _shakeAnimation,
+          errorText: _errorMessage,
+          keypadEnabled: !_isLoading,
+          showBackspace: _getCurrentPin().isNotEmpty,
+          onDigit: _onKeypadTap,
+          onBackspace: () => _onKeypadTap('backspace'),
+          topLeft: canPop
+              ? IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(CupertinoIcons.back,
+                      color: AppTheme.lightBackground),
+                )
+              : null,
+          topRight: (_isChangingPin && _oldPin.isNotEmpty)
+              ? CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: _resetPinSetup,
+                  child: const Text(
+                    'Reset',
+                    style: TextStyle(
+                      color: AppTheme.lightBackground,
+                      fontFamily: 'Orbitron',
+                      fontSize: 14,
+                    ),
+                  ),
+                )
+              : null,
+          aboveKeypad: _aboveKeypad(),
+          footer: _footer(),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    String title;
+  IconData get _modeIcon {
+    if (_isEnteringOldPin) return CupertinoIcons.lock_fill;
+    if (_isConfirmingPin) return CupertinoIcons.checkmark_shield;
+    return (_isChangingPin || widget.isResettingPin)
+        ? CupertinoIcons.lock_rotation
+        : CupertinoIcons.lock_shield;
+  }
 
-    // Check if we're in reset mode (forgot PIN flow) - skip current PIN entry
-    final isResetMode = widget.isResettingPin;
+  String get _modeTitle {
+    if (_isEnteringOldPin) return 'Enter current PIN';
+    if (_isConfirmingPin) return 'Confirm your PIN';
+    return (_isChangingPin || widget.isResettingPin)
+        ? 'Set a new PIN'
+        : 'Create your PIN';
+  }
 
-    if (_isChangingPin && !_isConfirmingPin && _oldPin.isEmpty && !isResetMode) {
-      title = 'Enter Current PIN';
-    } else if (_isConfirmingPin) {
-      title = 'Confirm Your PIN';
-    } else {
-      title = (_isChangingPin || isResetMode) ? 'Set New PIN' : 'Set Up PIN';
+  String get _modeSubtitle {
+    if (_isEnteringOldPin) return 'Confirm it’s you before changing your PIN';
+    if (_isConfirmingPin) return 'Re-enter the same digits to confirm';
+    return 'Your PIN keeps your car data private';
+  }
+
+  /// Widget shown directly above the keypad for the current step.
+  Widget? _aboveKeypad() {
+    // First step of create/new PIN: let the user pick a 4- or 6-digit PIN.
+    if (!_isConfirmingPin && !_isEnteringOldPin) return _buildLengthSelector();
+    // Legacy only: an old PIN of unknown length can't auto-submit, so a
+    // button is offered once at least 4 digits are entered.
+    if (_isEnteringOldPin &&
+        _storedPinLength == null &&
+        _getCurrentPin().length >= 4) {
+      return _buildLegacyContinueButton();
     }
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            if (Navigator.canPop(context))
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: Icon(
-                  Icons.arrow_back_ios,
-                  color: AppTheme.primaryGreen,
-                  size: context.responsiveIconSize(20),
-                ),
-              ),
-            const Spacer(),
-            if (_isChangingPin && _oldPin.isNotEmpty)
-              TextButton(
-                onPressed: _resetPinSetup,
-                child: Text(
-                  'Reset',
-                  style: context.responsiveTextStyle(
-                    fontSize: 14,
-                    color: AppTheme.primaryGreen,
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-              ),
-          ],
-        ),
-        SizedBox(height: context.r(24)),
-        Container(
-          width: context.r(90),
-          height: context.r(90),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.primaryGreen,
-                AppTheme.darkAccentGreen,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(context.responsiveBorderRadius(45)),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryGreen.withOpacity(0.3),
-                blurRadius: context.r(15),
-                offset: Offset(0, context.r(8)),
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.lock_outline,
-            color: Colors.white,
-            size: context.responsiveIconSize(44),
-          ),
-        ),
-        SizedBox(height: context.r(16)),
-        Text(
-          title,
-          style: context.responsiveTextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Orbitron',
-            color: AppTheme.getThemeAwareTextColor(context),
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        SizedBox(height: context.r(16)),
-        // PIN dots directly under the title
-        _buildPinDisplay(),
-      ],
-    );
+    return null;
   }
 
   /// Whether the user is on the "Enter Current PIN" step of the change flow
@@ -215,9 +174,12 @@ class _PinSetupScreenState extends State<PinSetupScreen>
       _isEnteringOldPin ? (_storedPinLength ?? 6) : _pinLength;
 
   Widget _buildLengthSelector() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [4, 6].map((length) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [4, 6].map((length) {
         final isSelected = _pinLength == length;
         return GestureDetector(
           onTap: () {
@@ -271,247 +233,31 @@ class _PinSetupScreenState extends State<PinSetupScreen>
                 fontWeight: FontWeight.w600,
                 color: isSelected
                     ? AppTheme.lightBackground
-                    : AppTheme.getThemeAwareTextColor(context).withOpacity(0.6),
+                    : Colors.white.withOpacity(0.6),
                 fontFamily: 'Orbitron',
               ),
             ),
           ),
         );
-      }).toList(),
-    );
-  }
-
-  Widget _buildPinDisplay() {
-    final currentPinLength = _getCurrentPin().length;
-
-    return AnimatedBuilder(
-      animation: _shakeAnimation,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(_shakeAnimation.value, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(_targetLength, (index) {
-              bool isFilled = index < currentPinLength;
-              bool isActive = index == currentPinLength;
-              
-              return Container(
-                margin: EdgeInsets.symmetric(horizontal: context.r(6)),
-                width: context.r(16),
-                height: context.r(16),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isFilled 
-                      ? AppTheme.primaryGreen 
-                      : Colors.transparent,
-                  border: Border.all(
-                    color: isActive 
-                        ? AppTheme.primaryGreen 
-                        : AppTheme.primaryGreen.withOpacity(0.3),
-                    width: 2,
-                  ),
-                ),
-                child: isFilled
-                    ? Icon(
-                        Icons.circle,
-                        color: Colors.white,
-                        size: context.responsiveIconSize(10),
-                      )
-                    : null,
-              );
-            }),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildNumericKeypad() {
-    return Column(
-      children: [
-        _buildKeypadRow(['1', '2', '3']),
-        SizedBox(height: context.r(14)),
-        _buildKeypadRow(['4', '5', '6']),
-        SizedBox(height: context.r(14)),
-        _buildKeypadRow(['7', '8', '9']),
-        SizedBox(height: context.r(14)),
-        _buildKeypadRow(['', '0', 'backspace']),
-      ],
-    );
-  }
-
-  Widget _buildKeypadRow(List<String> keys) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: keys.map((key) => _buildKeypadButton(key)).toList(),
-    );
-  }
-
-  Widget _buildKeypadButton(String key) {
-    final buttonSize = context.r(78);
-    final borderRadius = context.responsiveBorderRadius(39);
-    
-    if (key.isEmpty) {
-      return SizedBox(width: buttonSize, height: buttonSize);
-    }
-
-    return Container(
-      width: buttonSize,
-      height: buttonSize,
-      decoration: BoxDecoration(
-        gradient: key == 'backspace'
-            ? null
-            : const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.darkAccentGreen,
-                  AppTheme.backgroundGreen,
-                ],
-              ),
-        borderRadius: BorderRadius.circular(borderRadius),
-        boxShadow: key == 'backspace'
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: context.r(10),
-                  offset: Offset(0, context.r(5)),
-                ),
-                BoxShadow(
-                  color: AppTheme.secondaryGreen.withOpacity(0.3),
-                  blurRadius: context.r(18),
-                ),
-              ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _onKeypadTap(key),
-          borderRadius: BorderRadius.circular(borderRadius),
-          child: Center(
-            child: key == 'backspace'
-                ? Icon(
-                    Icons.backspace_outlined,
-                    color: AppTheme.getThemeAwareTextColor(context),
-                    size: context.responsiveIconSize(22),
-                  )
-                : Text(
-                    key,
-                    style: context.responsiveTextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-          ),
-        ),
+        }).toList(),
       ),
     );
   }
 
-  Widget _buildErrorMessage() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.error_outline,
-            color: Colors.red,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              _errorMessage!,
-              style: const TextStyle(
-                color: Colors.red,
-                fontSize: 14,
-                fontFamily: 'Orbitron',
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFooter() {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          color: AppTheme.primaryGreen,
-        ),
+  Widget _buildLegacyContinueButton() => GradientButton(
+        label: _getButtonText(),
+        onPressed: _onContinue,
       );
-    }
 
-    return Column(
-      children: [
-        // Only needed for legacy PINs whose length is unknown — every other
-        // step auto-advances when the expected digit count is reached
-        if (_isEnteringOldPin &&
-            _storedPinLength == null &&
-            _getCurrentPin().length >= 4)
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.primaryGreen,
-                  AppTheme.darkAccentGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primaryGreen.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ElevatedButton(
-              onPressed: _onContinue,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: Text(
-                _getButtonText(),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ),
-          ),
-        const SizedBox(height: 16),
-        Text(
-          'Your PIN will be stored securely on this device',
-          style: TextStyle(
-            fontSize: 12,
-            color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.5),
-            fontFamily: 'Orbitron',
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
+  Widget _footer() {
+    return Text(
+      'Your PIN is stored securely on this device',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 12,
+        color: Colors.white.withOpacity(0.5),
+        fontFamily: 'Orbitron',
+      ),
     );
   }
 
@@ -622,7 +368,6 @@ class _PinSetupScreenState extends State<PinSetupScreen>
           });
         } else {
           _showError('Incorrect current PIN');
-          _performShakeAnimation();
           setState(() {
             _currentPin = '';
             _isLoading = false;
@@ -652,14 +397,31 @@ class _PinSetupScreenState extends State<PinSetupScreen>
           }
         } else {
           _showError('PINs do not match. Please try again.');
-          _performShakeAnimation();
           setState(() {
             _confirmPin = '';
             _isLoading = false;
           });
         }
       } else {
-        // First PIN entry, move to confirmation
+        // First PIN entry — reject obviously guessable PINs before confirm.
+        if (_isTrivialPin(_currentPin)) {
+          _showError('Choose a less predictable PIN — avoid 1234, 0000 or repeated digits.');
+          setState(() {
+            _currentPin = '';
+            _isLoading = false;
+          });
+          return;
+        }
+        // When changing an existing PIN, the new one must be different.
+        if (_isChangingPin && !isResetMode && _currentPin == _oldPin) {
+          _showError('New PIN must be different from your current PIN.');
+          setState(() {
+            _currentPin = '';
+            _isLoading = false;
+          });
+          return;
+        }
+        // Move to confirmation
         setState(() {
           _isConfirmingPin = true;
           _isLoading = false;
@@ -673,17 +435,32 @@ class _PinSetupScreenState extends State<PinSetupScreen>
     }
   }
 
+  /// Rejects obviously guessable PINs: all-same-digit (0000, 1111…) and
+  /// ascending/descending runs (1234, 4321). Length-agnostic, so it covers
+  /// both 4- and 6-digit PINs.
+  bool _isTrivialPin(String pin) {
+    if (pin.length < 4) return true;
+    if (pin.split('').toSet().length == 1) return true; // all identical
+    bool asc = true, desc = true;
+    for (var i = 1; i < pin.length; i++) {
+      final diff = pin.codeUnitAt(i) - pin.codeUnitAt(i - 1);
+      if (diff != 1) asc = false;
+      if (diff != -1) desc = false;
+    }
+    return asc || desc;
+  }
+
   void _showError(String message) {
     setState(() {
       _errorMessage = message;
     });
-    _shakeController.forward().then((_) {
-      _shakeController.reverse();
-    });
+    _performShakeAnimation();
   }
 
   void _performShakeAnimation() {
-    _shakeController.forward().then((_) {
+    // Respect the OS "reduce motion" accessibility setting.
+    if (MediaQuery.of(context).disableAnimations) return;
+    _shakeController.forward(from: 0).then((_) {
       _shakeController.reverse();
     });
   }

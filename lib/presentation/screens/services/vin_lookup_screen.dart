@@ -1,11 +1,48 @@
 import 'package:flutter/material.dart';
-import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import '../../../services/vin_decoder_service.dart';
 import '../../../services/car_service.dart' as car_logic;
 import '../../../shared/constants/app_theme.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
+
+/// Page-level flow state. Each state has its own designed view — no missing
+/// loading / error / empty states.
+enum _VinState { idle, loading, success, error }
+
+/// Human-friendly error buckets mapped from the decoder's exception strings.
+enum _VinError { notFound, noInternet, timeout, rateLimit, server }
+
+/// A single decoded field, rendered as an inset-grouped list row.
+class _VinField {
+  final String label;
+  final String value;
+  final IconData icon;
+  const _VinField(this.label, this.value, this.icon);
+}
+
+/// Uppercases, strips the three letters a VIN never contains (I, O, Q) and any
+/// other non-alphanumeric, and caps length at 17 — so typing *and* pasting a
+/// lowercase/spaced VIN both clean up correctly. Pure and testable.
+String cleanVin(String input) {
+  final cleaned =
+      input.toUpperCase().replaceAll(RegExp(r'[^A-HJ-NPR-Z0-9]'), '');
+  return cleaned.length > 17 ? cleaned.substring(0, 17) : cleaned;
+}
+
+class _VinInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final cleaned = cleanVin(newValue.text);
+    return TextEditingValue(
+      text: cleaned,
+      selection: TextSelection.collapsed(offset: cleaned.length),
+    );
+  }
+}
 
 class VinLookupScreen extends StatefulWidget {
   const VinLookupScreen({super.key});
@@ -16,15 +53,23 @@ class VinLookupScreen extends StatefulWidget {
 
 class _VinLookupScreenState extends State<VinLookupScreen> {
   final TextEditingController _vinController = TextEditingController();
-  bool _isLoading = false;
-  Map<String, dynamic>? _vehicleInfo;
-  String _loadingMessage = 'Looking up VIN...';
+  final FocusNode _vinFocus = FocusNode();
   final VinDecoderService _vinService = VinDecoderService();
   final car_logic.CarService _carService = car_logic.CarService();
+
+  _VinState _state = _VinState.idle;
+  _VinError _errorKind = _VinError.server;
+  Map<String, dynamic>? _vehicleInfo;
+  bool _isSaving = false;
+
+  static const int _vinLength = 17;
+
+  bool get _isValid => _vinController.text.length == _vinLength;
 
   @override
   void dispose() {
     _vinController.dispose();
+    _vinFocus.dispose();
     super.dispose();
   }
 
@@ -32,27 +77,46 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
   Widget build(BuildContext context) {
     return ScreenWithNavBar(
       child: Scaffold(
-      body: Column(
-        children: [
-          _buildHeader(context),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildInstructionsCard(),
-                  const SizedBox(height: 24),
-                  _buildVinInputCard(),
-                ],
+        backgroundColor: AppTheme.backgroundGreen,
+        body: Column(
+          children: [
+            _buildHeader(context),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInputCard(),
+                    const SizedBox(height: 24),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      switchInCurve: Curves.easeInOutCubic,
+                      switchOutCurve: Curves.easeInOutCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SizeTransition(
+                          sizeFactor: animation,
+                          axisAlignment: -1,
+                          child: child,
+                        ),
+                      ),
+                      child: _buildStateBody(),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Header (kept consistent with the app's other screens; title centred)
+  // ---------------------------------------------------------------------------
 
   Widget _buildHeader(BuildContext context) {
     return Container(
@@ -81,14 +145,12 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
-                      Icons.arrow_back_ios,
-                      color: Colors.white,
-                      size: 28,
-                    ),
+                    tooltip: 'Back',
+                    icon: const Icon(CupertinoIcons.back,
+                        color: Colors.white, size: 28),
                   ),
-                  // The trailing SizedBox mirrors the leading IconButton's width
-                  // so the title stays optically centred on the screen.
+                  // Trailing box mirrors the leading IconButton width so the
+                  // title stays optically centred.
                   const Expanded(
                     child: Text(
                       'VIN Lookup',
@@ -115,7 +177,7 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  'Vehicle Information & Maintenance Recommendations',
+                  'Decode your Vehicle Identification Number',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.white70,
@@ -131,260 +193,405 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
     );
   }
 
-  Widget _buildInstructionsCard() {
+  // ---------------------------------------------------------------------------
+  // Input card
+  // ---------------------------------------------------------------------------
+
+  BoxDecoration _cardDecoration() => BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppTheme.darkAccentGreen, AppTheme.backgroundGreen],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: AppTheme.glowShadow(),
+      );
+
+  Widget _buildInputCard() {
+    final count = _vinController.text.length;
+    final showLengthHint = count > 0 && count < _vinLength;
+    final loading = _state == _VinState.loading;
+
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
+      decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.info_outline,
-                color: AppTheme.primaryGreen,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'How to Use VIN Lookup',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildInstructionStep(
-            '1',
-            'Locate your VIN',
-            'Find the 17-character VIN on your vehicle\'s dashboard, driver\'s door jamb, or registration documents.',
-            Icons.search,
-          ),
-            const SizedBox(height: 12),
-          _buildInstructionStep(
-            '2',
-            'Enter the VIN',
-            'Type or paste the complete VIN into the input field below. Ensure all characters are correct.',
-            Icons.edit,
-          ),
-          const SizedBox(height: 12),
-          _buildInstructionStep(
-            '3',
-            'Get vehicle details',
-            'Receive comprehensive information about your vehicle including specifications, maintenance history, and recommendations.',
-            Icons.directions_car
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInstructionStep(String number, String title, String description, IconData icon) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: AppTheme.primaryGreen,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Text(
-              number,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
+          const Text(
+            'Enter your VIN',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontFamily: 'Orbitron',
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    icon,
-                    color: AppTheme.secondaryGreen,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground.withOpacity(0.8) : Colors.black54,
-                  fontFamily: 'Orbitron',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVinInputCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.darkAccentGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+          const SizedBox(height: 6),
           Text(
-            'Enter Vehicle Identification Number (VIN)',
+            'Enter your 17-character Vehicle Identification Number.',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
+              fontSize: 13,
+              height: 1.4,
+              color: AppTheme.lightBackground.withOpacity(0.7),
               fontFamily: 'Orbitron',
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _vinController,
-            style: TextStyle(
-              color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
-              fontFamily: 'Orbitron',
-              fontSize: 16,
+            focusNode: _vinFocus,
+            autocorrect: false,
+            enableSuggestions: false,
+            textCapitalization: TextCapitalization.characters,
+            textInputAction: TextInputAction.search,
+            keyboardType: TextInputType.visiblePassword, // uppercase, no autofill
+            onChanged: (_) => setState(() {
+              // Editing the VIN invalidates any shown result/error.
+              if (_state != _VinState.loading) {
+                _state = _VinState.idle;
+                _vehicleInfo = null;
+              }
+            }),
+            onSubmitted: (_) {
+              if (_isValid && !loading) _lookupVin();
+            },
+            inputFormatters: [_VinInputFormatter()],
+            style: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'monospace',
+              fontSize: 18,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w600,
             ),
             decoration: InputDecoration(
-              hintText: 'Enter 17-character VIN',
+              hintText: 'e.g. 1HGCM82633A004352',
               hintStyle: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground.withOpacity(0.6) : Colors.black45,
-                fontFamily: 'Orbitron',
+                color: AppTheme.lightBackground.withOpacity(0.4),
+                fontFamily: 'monospace',
+                letterSpacing: 1,
+                fontWeight: FontWeight.w500,
               ),
               filled: true,
-              fillColor: Theme.of(context).brightness == Brightness.dark ? AppTheme.backgroundGreen.withOpacity(0.3) : Colors.white,
+              fillColor: AppTheme.backgroundGreen.withOpacity(0.4),
+              counterText: '',
+              prefixIcon: const Icon(CupertinoIcons.barcode,
+                  color: AppTheme.secondaryGreen),
+              suffixIcon: _vinController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear',
+                      onPressed: () => setState(() {
+                        _vinController.clear();
+                        _state = _VinState.idle;
+                        _vehicleInfo = null;
+                      }),
+                      icon: const Icon(CupertinoIcons.clear_circled_solid,
+                          color: Colors.white54, size: 20),
+                    ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: AppTheme.primaryGreen.withOpacity(0.5)),
+                borderRadius: BorderRadius.circular(14),
+                borderSide:
+                    BorderSide(color: AppTheme.primaryGreen.withOpacity(0.5)),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: AppTheme.primaryGreen.withOpacity(0.5),
-                ),
+                borderRadius: BorderRadius.circular(14),
+                borderSide:
+                    BorderSide(color: AppTheme.primaryGreen.withOpacity(0.5)),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: AppTheme.primaryGreen,
-                  width: 2,
-                ),
+                borderRadius: BorderRadius.circular(14),
+                borderSide:
+                    const BorderSide(color: AppTheme.secondaryGreen, width: 2),
               ),
             ),
-            textCapitalization: TextCapitalization.characters,
-            maxLength: 17,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]')),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  showLengthHint ? 'Keep going — VINs are 17 characters' : '',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.costHighlight.withOpacity(0.9),
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+              ),
+              Text(
+                '$count/$_vinLength',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontFamily: 'Orbitron',
+                  color: _isValid
+                      ? AppTheme.secondaryGreen
+                      : AppTheme.lightBackground.withOpacity(0.6),
+                ),
+              ),
             ],
+          ),
+          const SizedBox(height: 16),
+          _buildLookupButton(loading),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLookupButton(bool loading) {
+    final enabled = _isValid && !loading;
+    return SizedBox(
+      width: double.infinity,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: 'Look up VIN',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: enabled ? _lookupVin : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: enabled
+                    ? const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+                      )
+                    : null,
+                color: enabled ? null : AppTheme.darkAccentGreen.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: enabled
+                    ? [
+                        BoxShadow(
+                          color: AppTheme.primaryGreen.withOpacity(0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: loading
+                  ? const Center(
+                      child: CupertinoActivityIndicator(color: Colors.white),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          CupertinoIcons.search,
+                          color: enabled
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.5),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Lookup VIN',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Orbitron',
+                            color: enabled
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // State body: idle / loading / success / error
+  // ---------------------------------------------------------------------------
+
+  Widget _buildStateBody() {
+    switch (_state) {
+      case _VinState.idle:
+        return _buildIdle();
+      case _VinState.loading:
+        return _buildLoading();
+      case _VinState.success:
+        return _buildResults();
+      case _VinState.error:
+        return _buildError();
+    }
+  }
+
+  Widget _buildIdle() {
+    return Container(
+      key: const ValueKey('idle'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Icon(
+              CupertinoIcons.doc_text_viewfinder,
+              size: 56,
+              color: AppTheme.secondaryGreen.withOpacity(0.9),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Center(
+            child: Text(
+              'Where to find your VIN',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildHintRow(CupertinoIcons.car_detailed,
+              'Lower corner of the windshield, driver\'s side'),
+          const SizedBox(height: 12),
+          _buildHintRow(
+              CupertinoIcons.doc_plaintext, 'Driver\'s door jamb sticker'),
+          const SizedBox(height: 12),
+          _buildHintRow(CupertinoIcons.doc_text,
+              'Vehicle registration or insurance papers'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHintRow(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppTheme.secondaryGreen, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: AppTheme.lightBackground.withOpacity(0.85),
+              fontFamily: 'Orbitron',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoading() {
+    return Container(
+      key: const ValueKey('loading'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          const CupertinoActivityIndicator(color: Colors.white, radius: 16),
+          const SizedBox(height: 14),
+          Text(
+            'Looking up your VIN…',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppTheme.lightBackground.withOpacity(0.85),
+              fontFamily: 'Orbitron',
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Skeleton rows to hint at the shape of the result.
+          ...List.generate(4, (_) => _buildSkeletonRow()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkeletonRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: AppTheme.secondaryGreen.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              height: 12,
+              decoration: BoxDecoration(
+                color: AppTheme.lightBackground.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+          ),
+          const SizedBox(width: 40),
+          Container(
+            width: 60,
+            height: 12,
+            decoration: BoxDecoration(
+              color: AppTheme.lightBackground.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    final (icon, title, message) = _errorContent(_errorKind);
+    return Container(
+      key: const ValueKey('error'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          Icon(icon, size: 48, color: AppDialog.destructive),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontFamily: 'Orbitron',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: AppTheme.lightBackground.withOpacity(0.8),
+              fontFamily: 'Orbitron',
+            ),
           ),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: _isLoading
-                    ? null
-                    : const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppTheme.darkAccentGreen,
-                          AppTheme.backgroundGreen,
-                        ],
-                      ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: _isLoading
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: AppTheme.primaryGreen.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-              ),
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _lookupVin,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isLoading
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _loadingMessage,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                        ],
-                      )
-                    : const Text(
-                        'Lookup VIN',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Orbitron',
-                        ),
-                      ),
-              ),
+            child: _buildPillButton(
+              label: 'Retry',
+              icon: CupertinoIcons.arrow_clockwise,
+              accent: AppTheme.secondaryGreen,
+              onTap: _isValid ? _lookupVin : null,
             ),
           ),
         ],
@@ -392,34 +599,128 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
     );
   }
 
+  (IconData, String, String) _errorContent(_VinError kind) {
+    switch (kind) {
+      case _VinError.noInternet:
+        return (
+          CupertinoIcons.wifi_slash,
+          'No internet connection',
+          'Check your connection and try again.'
+        );
+      case _VinError.timeout:
+        return (
+          CupertinoIcons.clock,
+          'Request timed out',
+          'The lookup took too long. Please try again.'
+        );
+      case _VinError.notFound:
+        return (
+          CupertinoIcons.search,
+          'VIN not found',
+          'We couldn\'t find a vehicle for this VIN. Double-check the number and try again.'
+        );
+      case _VinError.rateLimit:
+        return (
+          CupertinoIcons.hourglass,
+          'Too many requests',
+          'Please wait a few minutes before looking up another VIN.'
+        );
+      case _VinError.server:
+        return (
+          CupertinoIcons.exclamationmark_triangle,
+          'Lookup unavailable',
+          'The VIN service is temporarily unavailable. Please try again shortly.'
+        );
+    }
+  }
 
+  // ---------------------------------------------------------------------------
+  // Success — inset grouped results
+  // ---------------------------------------------------------------------------
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildResults() {
+    final info = _vehicleInfo!;
+    String v(String key) => (info[key] ?? '').toString().trim();
+
+    final vehicle = <_VinField>[
+      _VinField('Make', v('make'), CupertinoIcons.car_detailed),
+      _VinField('Model', v('model'), CupertinoIcons.car_fill),
+      _VinField('Year', v('year'), CupertinoIcons.calendar),
+      _VinField('Body Style', v('bodyStyle'), CupertinoIcons.cube_box),
+    ];
+    final engine = <_VinField>[
+      _VinField('Engine', v('engine'), CupertinoIcons.gauge),
+      _VinField('Fuel Type', v('fuelType'), CupertinoIcons.flame),
+      _VinField('Transmission', v('transmission'), CupertinoIcons.gear_alt),
+    ];
+    final identifier = <_VinField>[
+      _VinField('VIN', v('vin'), CupertinoIcons.barcode),
+    ];
+
+    return Column(
+      key: const ValueKey('success'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildGroup('Vehicle', vehicle),
+        _buildGroup('Engine & Drivetrain', engine),
+        _buildGroup('Identifier', identifier, alwaysShow: true),
+        const SizedBox(height: 8),
+        _buildSaveButton(),
+      ],
+    );
+  }
+
+  Widget _buildGroup(String title, List<_VinField> fields,
+      {bool alwaysShow = false}) {
+    final visible =
+        fields.where((f) => alwaysShow || f.value.isNotEmpty).toList();
+    if (visible.isEmpty) return const SizedBox.shrink();
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 100,
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 8),
             child: Text(
-              label,
-              style: TextStyle(
+              title.toUpperCase(),
+              style: const TextStyle(
                 fontSize: 12,
+                letterSpacing: 1.2,
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).brightness == Brightness.dark ? AppTheme.secondaryGreen : Colors.black,
+                color: AppTheme.secondaryGreen,
                 fontFamily: 'Orbitron',
               ),
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground : Colors.black,
-                fontFamily: 'Orbitron',
+          Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppTheme.darkAccentGreen, AppTheme.backgroundGreen],
               ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppTheme.secondaryGreen.withOpacity(0.25),
+                width: 1,
+              ),
+              boxShadow: AppTheme.glowShadow(),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < visible.length; i++) ...[
+                  _buildResultRow(visible[i]),
+                  if (i != visible.length - 1)
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      indent: 52,
+                      color: AppTheme.secondaryGreen.withOpacity(0.15),
+                    ),
+                ],
+              ],
             ),
           ),
         ],
@@ -427,316 +728,257 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
     );
   }
 
-  void _lookupVin() async {
-    final vin = _vinController.text.trim();
-    if (vin.length != 17) {
-      _showMessage('Please enter a valid 17-character VIN');
-      return;
-    }
+  Widget _buildResultRow(_VinField field) {
+    final display = field.value.isEmpty ? '—' : field.value;
+    return Semantics(
+      label: '${field.label}: $display',
+      child: InkWell(
+        onLongPress: field.value.isEmpty ? null : () => _copy(field.value),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(field.icon, size: 20, color: AppTheme.secondaryGreen),
+              const SizedBox(width: 16),
+              Text(
+                field.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.lightBackground.withOpacity(0.7),
+                  fontFamily: 'Orbitron',
+                ),
+              ),
+              const Spacer(),
+              Flexible(
+                child: Text(
+                  display,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    fontFamily: field.label == 'VIN' ? 'monospace' : 'Orbitron',
+                  ),
+                ),
+              ),
+              if (field.label == 'VIN' && field.value.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => _copy(field.value),
+                  child: const Icon(CupertinoIcons.doc_on_doc,
+                      size: 18, color: AppTheme.secondaryGreen),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-    setState(() {
-      _isLoading = true;
-      _loadingMessage = 'Looking up VIN...';
-    });
+  Widget _buildSaveButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: _buildPillButton(
+        label: _isSaving ? 'Saving…' : 'Save as My Car',
+        icon: CupertinoIcons.car_fill,
+        accent: AppTheme.primaryGreen,
+        filled: true,
+        busy: _isSaving,
+        onTap: _isSaving ? null : _saveVehicleToCars,
+      ),
+    );
+  }
+
+  Widget _buildPillButton({
+    required String label,
+    required IconData icon,
+    required Color accent,
+    required VoidCallback? onTap,
+    bool filled = false,
+    bool busy = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          decoration: BoxDecoration(
+            gradient: filled && onTap != null
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppTheme.primaryGreen, AppTheme.darkAccentGreen],
+                  )
+                : null,
+            color: filled
+                ? (onTap == null ? AppTheme.darkAccentGreen.withOpacity(0.4) : null)
+                : accent.withOpacity(0.16),
+            border: filled
+                ? null
+                : Border.all(color: accent.withOpacity(0.5), width: 1),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (busy)
+                const CupertinoActivityIndicator(color: Colors.white)
+              else
+                Icon(icon, color: filled ? Colors.white : accent, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Orbitron',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  color: filled ? Colors.white : accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lookup / save logic
+  // ---------------------------------------------------------------------------
+
+  Future<void> _lookupVin() async {
+    if (!_isValid || _state == _VinState.loading) return;
+    _vinFocus.unfocus();
+    final vin = _vinController.text.trim();
+
+    setState(() => _state = _VinState.loading);
+    HapticFeedback.lightImpact();
 
     try {
       final decoded = await _vinService.decodeVin(vin);
+      if (!mounted) return;
       setState(() {
         _vehicleInfo = {
           'vin': decoded.vin.isNotEmpty ? decoded.vin : vin,
           'make': decoded.make,
           'model': decoded.model,
-          'year': int.tryParse(decoded.year) ?? DateTime.now().year,
+          'year': int.tryParse(decoded.year) ?? decoded.year,
           'engine': decoded.engine,
           'transmission': decoded.transmission,
           'bodyStyle': decoded.bodyStyle,
           'fuelType': decoded.fuelType,
         };
-        _isLoading = false;
+        _state = _VinState.success;
       });
-      _showVehicleInfoDialog();
-      HapticFeedback.lightImpact();
+      HapticFeedback.mediumImpact();
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _isLoading = false;
+        _errorKind = _classifyError(e.toString());
+        _state = _VinState.error;
       });
-      
-      String errorMessage = e.toString();
-      if (errorMessage.contains('429') || errorMessage.contains('Rate limit')) {
-        errorMessage = 'Rate limit exceeded. Please wait 5-10 minutes before trying again.';
-      } else if (errorMessage.contains('403')) {
-        errorMessage = 'API access denied. Please check your API configuration.';
-      } else if (errorMessage.contains('404')) {
-        errorMessage = 'VIN not found. Please verify the VIN number is correct.';
-      } else if (errorMessage.contains('TimeoutException') || errorMessage.contains('timeout')) {
-        errorMessage = 'Request timed out. Please check your internet connection and try again.';
-      } else if (errorMessage.contains('failed after')) {
-        errorMessage = 'VIN lookup service is temporarily unavailable. Please try again in a few minutes.';
-      } else if (errorMessage.contains('Invalid response format')) {
-        errorMessage = 'Unable to decode VIN information. Please verify the VIN is correct and try again.';
-      }
-      
-      _showMessage(errorMessage);
+      HapticFeedback.heavyImpact();
     }
   }
 
-  void _showVehicleInfoDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
-          // Matches AppDialogPanel so this card belongs to the same family as
-          // every other pop-up in the app.
-          child: Container(
-            clipBehavior: Clip.antiAlias,
-            constraints: const BoxConstraints(maxHeight: 600, maxWidth: 420),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppTheme.backgroundGreen,
-                  AppTheme.darkAccentGreen,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: AppTheme.secondaryGreen.withOpacity(0.6),
-                width: 1,
-              ),
-              boxShadow: AppTheme.glowShadow(elevated: true),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header with close button
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: AppTheme.secondaryGreen.withOpacity(0.4),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.directions_car,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Vehicle Information',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontFamily: 'Orbitron',
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Vehicle info content
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildInfoRow('Make', _vehicleInfo!['make'] ?? 'N/A'),
-                        _buildInfoRow('Model', _vehicleInfo!['model'] ?? 'N/A'),
-                        _buildInfoRow('Year', _vehicleInfo!['year']?.toString() ?? 'N/A'),
-                        _buildInfoRow('Engine', _vehicleInfo!['engine'] ?? 'N/A'),
-                        _buildInfoRow('Transmission', _vehicleInfo!['transmission'] ?? 'N/A'),
-                        _buildInfoRow('Body Style', _vehicleInfo!['bodyStyle'] ?? 'N/A'),
-                        _buildInfoRow('Fuel Type', _vehicleInfo!['fuelType'] ?? 'N/A'),
-                        const SizedBox(height: 20),
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryGreen.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Maintenance Recommendations',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primaryGreen,
-                                  fontFamily: 'Orbitron',
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _vehicleInfo!['maintenanceTips'] ?? 'Based on your vehicle\'s specifications, we recommend regular maintenance checks every 6 months or 5,000 km.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(context).brightness == Brightness.dark ? AppTheme.lightBackground.withOpacity(0.9) : Colors.black,
-                                  fontFamily: 'Orbitron',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                // Action buttons
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                AppTheme.darkAccentGreen,
-                                AppTheme.backgroundGreen,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primaryGreen.withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ElevatedButton(
-                            onPressed: () {
-                              _saveVehicleToCars();
-                              Navigator.of(context).pop();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              'Save to My Cars',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Orbitron',
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  _VinError _classifyError(String error) {
+    final e = error.toLowerCase();
+    if (e.contains('429') || e.contains('rate limit')) return _VinError.rateLimit;
+    if (e.contains('404') || e.contains('no vin data')) return _VinError.notFound;
+    if (e.contains('timeout') || e.contains('timed out')) return _VinError.timeout;
+    if (e.contains('network') || e.contains('connectivity') ||
+        e.contains('socket')) {
+      return _VinError.noInternet;
+    }
+    return _VinError.server;
   }
 
-  void _saveVehicleToCars() async {
+  Future<void> _copy(String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    HapticFeedback.selectionClick();
+    _showMessage('Copied');
+  }
+
+  Future<void> _saveVehicleToCars() async {
     final info = _vehicleInfo;
     if (info == null) {
       _showMessage('No vehicle info to save');
       return;
     }
 
-    // Show loading
-    setState(() {
-      _isLoading = true;
-      _loadingMessage = 'Saving vehicle...';
-    });
+    setState(() => _isSaving = true);
 
     try {
       final vin = (info['vin'] ?? '').toString();
-      
-      // Check if car with this VIN already exists
+
       if (vin.isNotEmpty && vin != 'Not specified') {
         final existingCar = await _carService.getCarByVin(vin);
         if (existingCar != null) {
-          setState(() => _isLoading = false);
+          if (!mounted) return;
+          setState(() => _isSaving = false);
           _showConfirmUpdateDialog(info, existingCar);
           return;
         }
       }
 
-      // Generate a unique license plate placeholder if VIN exists
-      String licensePlate = 'Not specified';
+      String licensePlate;
       if (vin.isNotEmpty && vin != 'Not specified') {
-        // Use last 6 chars of VIN for unique placeholder
         licensePlate = 'VIN-${vin.substring(vin.length - 6)}';
       } else {
-        // Use timestamp for unique placeholder
-        licensePlate = 'VIN-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+        licensePlate =
+            'VIN-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
       }
 
-      // Add the car
       final result = await _carService.addCar(
-        brand: (info['make'] ?? 'Unknown').toString(),
-        model: (info['model'] ?? 'Unknown').toString(),
-        year: (info['year'] as int?) ?? DateTime.now().year,
+        brand: (info['make'] ?? 'Unknown').toString().isEmpty
+            ? 'Unknown'
+            : (info['make']).toString(),
+        model: (info['model'] ?? 'Unknown').toString().isEmpty
+            ? 'Unknown'
+            : (info['model']).toString(),
+        year: (info['year'] is int) ? info['year'] as int : DateTime.now().year,
         mileage: 0,
         color: 'Not specified',
-        fuelType: (info['fuelType'] ?? 'Not specified').toString(),
-        engineCC: (info['engine'] ?? 'Not specified').toString(),
+        fuelType: (info['fuelType'] ?? 'Not specified').toString().isEmpty
+            ? 'Not specified'
+            : (info['fuelType']).toString(),
+        engineCC: (info['engine'] ?? 'Not specified').toString().isEmpty
+            ? 'Not specified'
+            : (info['engine']).toString(),
         turbo: false,
         licensePlate: licensePlate,
-        vin: vin.isNotEmpty ? vin : 'VIN-${DateTime.now().millisecondsSinceEpoch}',
+        vin: vin.isNotEmpty
+            ? vin
+            : 'VIN-${DateTime.now().millisecondsSinceEpoch}',
       );
 
-      setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() => _isSaving = false);
 
       if (result.isSuccess) {
         _showSuccessDialog();
       } else {
-        // Check if it's a duplicate error
         if (result.message.toLowerCase().contains('already exists') ||
             result.message.toLowerCase().contains('duplicate')) {
-          _showMessage('This vehicle is already in your garage. Check "My Cars" to view it.');
+          _showMessage(
+              'This vehicle is already in your garage. Check "My Cars" to view it.');
         } else {
           _showMessage(result.message);
         }
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-      
-      String errorMsg = e.toString();
-      if (errorMsg.toLowerCase().contains('already exists') ||
-          errorMsg.toLowerCase().contains('duplicate')) {
-        _showMessage('This vehicle is already in your garage. You can update it from "My Cars".');
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      final errorMsg = e.toString().toLowerCase();
+      if (errorMsg.contains('already exists') || errorMsg.contains('duplicate')) {
+        _showMessage(
+            'This vehicle is already in your garage. You can update it from "My Cars".');
       } else {
-        _showMessage('Failed to save car: ${e.toString()}');
+        _showMessage('Failed to save car. Please try again.');
       }
     }
   }
@@ -797,6 +1039,7 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
   }
 
   void _showSuccessDialog() {
+    HapticFeedback.mediumImpact();
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -811,12 +1054,11 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
             label: 'Got it!',
             filled: true,
             onTap: () {
-              // Close the dialog only — stay on the VIN Lookup screen, then
-              // reset the field so another lookup can start immediately.
               Navigator.of(dialogContext).pop();
               _vinController.clear();
               setState(() {
                 _vehicleInfo = null;
+                _state = _VinState.idle;
               });
             },
           ),
@@ -826,14 +1068,15 @@ class _VinLookupScreenState extends State<VinLookupScreen> {
   }
 
   void _showMessage(String message) {
-    AppSnackbar.show(context, 
+    AppSnackbar.show(
+      context,
       SnackBar(
         content: Text(
           message,
           style: const TextStyle(fontFamily: 'Orbitron'),
         ),
         backgroundColor: AppTheme.primaryGreen,
-        duration: const Duration(seconds: 4),
+        duration: const Duration(seconds: 3),
       ),
     );
   }

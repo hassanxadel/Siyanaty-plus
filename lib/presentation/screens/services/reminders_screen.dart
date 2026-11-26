@@ -1,12 +1,16 @@
 import 'dart:io';
 import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/reminder_service.dart';
 import '../../../models/backup_reminder.dart';
 import '../../../models/backup_car.dart';
 import '../../widgets/app_dialog.dart';
 import '../../widgets/screen_with_nav_bar.dart';
+import '../../widgets/reminder_done_button.dart';
+import '../../../shared/utils/reminder_urgency.dart';
 
 class SmartRemindersScreen extends StatefulWidget {
   const SmartRemindersScreen({super.key});
@@ -25,6 +29,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
   bool _isSearching = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final Set<int> _completingIds = {};
 
   @override
   void initState() {
@@ -122,25 +127,27 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
     return ScreenWithNavBar(
       currentIndex: 1, // Reminders is index 1 in nav bar
       child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        backgroundColor: AppTheme.backgroundGreen,
         body: Column(
-        children: [
-          _buildHeaderWithBackground(),
-          if (_isSearching) _buildSearchBar(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _buildCurrentRemindersList(),
-          ),
-        ],
+          children: [
+            _buildHeaderWithBackground(),
+            if (_isSearching) _buildSearchBar(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CupertinoActivityIndicator(color: Colors.white))
+                  : _buildCurrentRemindersList(),
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 
   Widget _buildHeaderWithBackground() {
     return Container(
-      height: 320,
+      // minHeight (not a fixed height) so large text grows instead of overflowing.
+      constraints: const BoxConstraints(minHeight: 200),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -160,6 +167,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
@@ -179,17 +187,20 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
                   ),
                   const SizedBox(width: 8),
                   const Expanded(
-                    child: Text(
-                      'Smart Reminders',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontFamily: 'Orbitron',
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Smart Reminders',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.lightBackground,
+                          fontFamily: 'Orbitron',
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                                     ),
+                  ),
                    IconButton(
                      icon: Icon(_isSearching ? Icons.close : Icons.search, color: Colors.white, size: 24),
                      onPressed: _toggleSearch,
@@ -265,15 +276,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
                  ),
                ),
                const SizedBox(height: 16),
-               Row(
-                 children: [
-                   _buildClickableStatCard('Upcoming', _upcomingReminders.length, Colors.blue, 0),
-                   const SizedBox(width: 8),
-                   _buildClickableStatCard('Overdue', _overdueReminders.length, Colors.red, 1),
-                   const SizedBox(width: 8),
-                   _buildClickableStatCard('Completed', _completedReminders.length, Colors.green, 2),
-                 ],
-               ),
+               _buildFilterSegment(),
             ],
           ),
         ),
@@ -281,84 +284,54 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
     );
   }
 
-  Widget _buildClickableStatCard(String title, int count, Color color, int index) {
-    final isSelected = _selectedIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedIndex = index;
-          });
+  /// Upcoming · Overdue · Done, with counts. Yellow thumb; selected label reads
+  /// dark (backgroundGreen) on it, unselected white.
+  Widget _buildFilterSegment() {
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoSlidingSegmentedControl<int>(
+        groupValue: _selectedIndex,
+        backgroundColor: Colors.white.withOpacity(0.12),
+        thumbColor: AppTheme.lightBackground,
+        padding: const EdgeInsets.all(4),
+        onValueChanged: (v) {
+          if (v == null) return;
+          HapticFeedback.selectionClick();
+          setState(() => _selectedIndex = v);
         },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isSelected
-                  ? [
-                      AppTheme.primaryGreen.withOpacity(0.4),
-                      AppTheme.darkAccentGreen.withOpacity(0.4),
-                    ]
-                  : [
-                      AppTheme.darkAccentGreen.withOpacity(0.3),
-                      AppTheme.backgroundGreen.withOpacity(0.3),
-                    ],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected 
-                  ? Colors.white.withOpacity(0.4) 
-                  : Colors.white.withOpacity(0.2),
-              width: isSelected ? 2 : 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isSelected ? 0.2 : 0.1),
-                blurRadius: isSelected ? 8 : 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-                  children: [
-              Container(
-                width: 32,
-                height: 32,
-                        decoration: BoxDecoration(
-                  color: isSelected 
-                      ? color.withOpacity(0.3) 
-                      : color.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Text(
-                    count.toString(),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                ),
-              ),
-                const SizedBox(height: 6),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected ? Colors.white : Colors.white70,
-                  fontFamily: 'Orbitron',
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+        children: {
+          0: _segment('Upcoming', _upcomingReminders.length, 0),
+          1: _segment('Overdue', _overdueReminders.length, 1),
+          2: _segment('Done', _completedReminders.length, 2),
+        },
+      ),
+    );
+  }
+
+  Widget _segment(String label, int count, int index) {
+    final color =
+        _selectedIndex == index ? AppTheme.backgroundGreen : Colors.white;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                  fontFamily: 'Orbitron')),
+          const SizedBox(height: 2),
+          Text('$count',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                  fontFamily: 'Orbitron')),
+        ],
       ),
     );
   }
@@ -397,7 +370,8 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
             color: Colors.grey[500],
             fontFamily: 'Orbitron',
           ),
-          prefixIcon: const Icon(Icons.search, color: AppTheme.primaryGreen),
+          prefixIcon: Icon(Icons.search,
+              color: AppTheme.lightBackground.withOpacity(0.7)),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.clear),
@@ -410,7 +384,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
-        style: const TextStyle(fontFamily: 'Orbitron'),
+        style: const TextStyle(fontFamily: 'Orbitron', color: Colors.white),
       ),
     );
   }
@@ -447,7 +421,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadReminders,
-      color: AppTheme.primaryGreen,
+      color: AppTheme.lightBackground,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: reminders.length,
@@ -483,7 +457,7 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadReminders,
-      color: AppTheme.primaryGreen,
+      color: AppTheme.lightBackground,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: SizedBox(
@@ -500,9 +474,9 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
                 Text(
                   message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey,
+                    color: Colors.white.withOpacity(0.75),
                     fontFamily: 'Orbitron',
                   ),
                 ),
@@ -516,244 +490,321 @@ class _SmartRemindersScreenState extends State<SmartRemindersScreen> {
 
   Widget _buildReminderCard(ReminderWithCarInfo reminderWithCar) {
     final reminder = reminderWithCar.reminder;
-    Color priorityColor = _getPriorityColor(reminder.priority);
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-          BoxShadow(
-            color: AppTheme.secondaryGreen.withOpacity(0.3),
-            blurRadius: 18,
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: () => _showReminderDetails(reminder, reminderWithCar.carDisplayName),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-            Row(
+    final completed = reminder.status == ReminderStatus.completed;
+    final priorityColor = _getPriorityColor(reminder.priority);
+    final days = reminder.targetDate?.difference(DateTime.now()).inDays ?? 0;
+    final urgency = daysLeftColor(days);
+    final busy = reminder.id != null && _completingIds.contains(reminder.id);
+
+    final card = Container(
+      decoration: AppTheme.carCardDecoration(radius: 16),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () =>
+              _showReminderDetails(reminder, reminderWithCar.carDisplayName),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                   decoration: BoxDecoration(
-                      color: priorityColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                  child: Text(
-                        reminder.type.icon,
-                        style: const TextStyle(fontSize: 24),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: urgency.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Text(reminder.type.icon,
+                            style: const TextStyle(fontSize: 22)),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                        Text(
-                          reminder.title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                    color: priorityColor,
+                                    shape: BoxShape.circle),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  reminder.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.lightBackground, // yellow
+                                    fontFamily: 'Orbitron',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${reminderWithCar.carDisplayName} · ${reminder.type.displayName}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.7),
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!completed) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          daysLeftText(days),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: urgency,
                             fontFamily: 'Orbitron',
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.directions_car,
-                              size: 14,
-                              color: Colors.grey[600],
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              reminderWithCar.carDisplayName,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                                fontFamily: 'Orbitron',
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          reminder.type.displayName,
-                    style: TextStyle(
-                      fontSize: 12,
-                            color: Colors.grey[600],
-                            fontFamily: 'Orbitron',
-                  ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ),
-                  ),
-                ],
-              ),
-                    const SizedBox(height: 12),
-              Text(
-                reminder.description,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[700],
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                    ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(Icons.schedule, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
+                if (reminder.description.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
                   Text(
-                    reminder.displayText,
+                    reminder.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+                      fontSize: 13,
+                      height: 1.3,
+                      color: Colors.white.withOpacity(0.75),
                       fontFamily: 'Orbitron',
                     ),
                   ),
                 ],
-              ),
-                const SizedBox(height: 8),
-              Row(
-                children: [
-                  if (reminder.status != ReminderStatus.completed)
-                    // Glowing pill so the primary action on the card pops.
-                    Container(
-                      decoration: AppTheme.glowButtonDecoration(radius: 18),
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(18),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () => _markReminderCompleted(reminder),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.check_circle_outline,
-                                  size: 13,
-                                  color: AppTheme.secondaryGreen,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Mark as Completed',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontFamily: 'Orbitron',
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.secondaryGreen,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(CupertinoIcons.calendar,
+                        size: 14, color: Colors.white.withOpacity(0.6)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        reminder.displayText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.85),
+                          fontFamily: 'Orbitron',
                         ),
                       ),
-                    )
-                  else
-                    // Completed badge — same pill language, but static.
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.secondaryGreen.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: AppTheme.secondaryGreen.withOpacity(0.7),
-                          width: 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.secondaryGreen.withOpacity(0.3),
-                            blurRadius: 14,
-                            spreadRadius: -2,
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                            spreadRadius: -2,
-                          ),
-                        ],
-                      ),
-                      child: const Row(
+                    ),
+                    const SizedBox(width: 8),
+                    if (!completed)
+                      ReminderDoneButton(
+                        busy: busy,
+                        semanticLabel: 'Mark ${reminder.title} as done',
+                        onPressed: busy
+                            ? null
+                            : () => _completeReminderWithUndo(reminderWithCar),
+                      )
+                    else
+                      Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.check_circle,
-                            size: 13,
-                            color: AppTheme.secondaryGreen,
-                          ),
-                          SizedBox(width: 6),
-                          Text(
-                            'Completed',
-                            style: TextStyle(
-                              color: AppTheme.secondaryGreen,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 10,
-                              fontFamily: 'Orbitron',
-                              letterSpacing: 0.3,
-                            ),
-                          ),
+                          const Icon(CupertinoIcons.checkmark_seal_fill,
+                              size: 15, color: AppTheme.lightBackground),
+                          const SizedBox(width: 5),
+                          Text('Done',
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.65),
+                                  fontFamily: 'Orbitron',
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12)),
                         ],
                       ),
-                    ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: priorityColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      reminder.priority.displayName,
-                      style: TextStyle(
-                        color: priorityColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
+                  ],
                 ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
+
+    return Opacity(
+      opacity: completed ? 0.6 : 1.0,
+      child: Dismissible(
+        key: ValueKey(reminder.id ?? reminder.hashCode),
+        background: _swipeBg(Alignment.centerLeft, AppTheme.infoBlue,
+            CupertinoIcons.pencil, 'Edit'),
+        secondaryBackground: _swipeBg(Alignment.centerRight,
+            AppTheme.errorColor, CupertinoIcons.delete, 'Delete'),
+        confirmDismiss: (dir) async {
+          if (dir == DismissDirection.startToEnd) {
+            _showEditReminderDialog(reminder);
+            return false;
+          }
+          return _confirmDeleteReminder(reminder);
+        },
+        onDismissed: (_) => _deleteSwiped(reminder),
+        child: card,
+      ),
+    );
+  }
+
+  Widget _swipeBg(Alignment align, Color color, IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      alignment: align,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 22),
+          const SizedBox(width: 8),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Orbitron',
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+
+  /// Completes via the shared service (recurring logic lives there), reloads,
+  /// and offers Undo — the same behavior as the Home card.
+  Future<void> _completeReminderWithUndo(ReminderWithCarInfo rc) async {
+    final id = rc.reminder.id;
+    if (id == null || _completingIds.contains(id)) return;
+    HapticFeedback.lightImpact();
+    setState(() => _completingIds.add(id));
+    final result = await _reminderService.markReminderCompleted(id);
+    if (!mounted) return;
+    setState(() => _completingIds.remove(id));
+    if (!result.isSuccess) {
+      AppSnackbar.show(context,
+          SnackBar(content: Text(result.message), backgroundColor: Colors.red));
+      return;
+    }
+    await _loadReminders();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.darkAccentGreen,
+        duration: const Duration(seconds: 4),
+        content: const Text('Reminder completed',
+            style: TextStyle(fontFamily: 'Orbitron', color: Colors.white)),
+        action: SnackBarAction(
+          label: 'Undo',
+          textColor: AppTheme.lightBackground,
+          onPressed: () => _undoComplete(rc.reminder),
+        ),
+      ));
+  }
+
+  Future<void> _undoComplete(BackupReminder reminder) async {
+    final id = reminder.id;
+    if (id == null) return;
+    final result = await _reminderService.markReminderUncompleted(id);
+    if (!mounted) return;
+    if (result.isSuccess) {
+      await _loadReminders();
+    } else {
+      AppSnackbar.show(context,
+          SnackBar(content: Text(result.message), backgroundColor: Colors.red));
+    }
+  }
+
+  Future<bool> _confirmDeleteReminder(BackupReminder reminder) async {
+    final res = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('Delete "${reminder.title}"?'),
+        content: const Text(
+            '\nThis reminder and its scheduled notifications will be removed. '
+            'This can’t be undone.'),
+        actions: [
+          CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    return res ?? false;
+  }
+
+  /// Swipe-delete: removes the row synchronously (required by [Dismissible]),
+  /// deletes via the existing service (which cancels its notifications), and
+  /// restores on failure.
+  Future<void> _deleteSwiped(BackupReminder reminder) async {
+    setState(() {
+      _allReminders.removeWhere((e) => e.reminder.id == reminder.id);
+      _filteredReminders.removeWhere((e) => e.reminder.id == reminder.id);
+    });
+    try {
+      final result = await _reminderService.deleteReminder(reminder.id!);
+      if (!mounted) return;
+      if (result.isSuccess) {
+        AppSnackbar.show(
+          context,
+          SnackBar(
+              content: Text(result.message),
+              backgroundColor: AppTheme.primaryGreen),
+        );
+      } else {
+        await _loadReminders();
+        if (mounted) {
+          AppSnackbar.show(
+              context,
+              SnackBar(
+                  content: Text(result.message),
+                  backgroundColor: Colors.red));
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      await _loadReminders();
+      if (mounted) {
+        AppSnackbar.show(
+            context,
+            SnackBar(
+                content: Text('Error deleting reminder: $e'),
+                backgroundColor: Colors.red));
+      }
+    }
   }
 
   Color _getPriorityColor(ReminderPriority priority) {

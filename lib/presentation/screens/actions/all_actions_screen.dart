@@ -1,77 +1,135 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
 import 'package:flutter/services.dart';
+
 import '../../../shared/constants/app_theme.dart';
-import '../services/vin_lookup_screen.dart';
-import '../services/ocr_scanner_screen.dart';
-import '../health/car_health_dashboard_screen.dart';
-import '../services/voice_notes_screen.dart';
-import '../services/mileage_track_screen.dart';
-import '../services/reminders_screen.dart';
-import '../services/services_screen.dart';
-import '../services/cars_screen.dart';
-import '../services/maintenance_screen.dart';
-import '../services/obd_screen.dart';
+import '../../actions/app_action.dart';
 import '../../widgets/screen_with_nav_bar.dart';
 
-class AllActionsScreen extends StatelessWidget {
+/// All Actions — every tool in the app as one flat grid, 3 cards per row.
+///
+/// Reads from the shared [kAppActions] registry (the same source as the Home
+/// Actions tiles) in a fixed display order, under the app's standard page
+/// header. The grid uses a fixed main-axis extent (not an aspect ratio) so it
+/// can never overflow on small screens.
+class AllActionsScreen extends StatefulWidget {
   const AllActionsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final actions = [
-      {'label': 'VIN Lookup', 'subtitle': 'Maintenance Recommendations', 'icon': Icons.search, 'color': AppTheme.primaryGreen},
-      {'label': 'OCR Scanner', 'subtitle': 'Extract Data from Service Reports', 'icon': Icons.document_scanner, 'color': const Color(0xFF8E44AD)},
-      {'label': 'Car Health Dashboard', 'subtitle': 'Health Score, Analytics & Insights', 'icon': Icons.health_and_safety, 'color': AppTheme.darkAccentGreen},
-      {'label': 'Voice Notes', 'subtitle': 'Quick Maintenance Notes', 'icon': Icons.mic, 'color': const Color(0xFF7B2CBF)},
-      {'label': 'Mileage Track', 'subtitle': 'Tracking & Predictive Alerts', 'icon': Icons.track_changes, 'color': const Color(0xFFFF6B35)},
-      {'label': 'Maintenance', 'subtitle': 'Service History & Records', 'icon': Icons.home_repair_service_rounded, 'color': const Color(0xFF8B5CF6)},
-      {'label': 'OBD-II Diagnostics', 'subtitle': 'Real-time Vehicle Diagnostics', 'icon': Icons.cable, 'color': AppTheme.primaryGreen},
-      {'label': 'Service Centers', 'subtitle': 'Nearby Service Centers & Last Parked Location', 'icon': Icons.location_on, 'color': const Color(0xFF10B981)},
-      {'label': 'Service Reminders', 'subtitle': 'Maintenance Logs & Reminders', 'icon': Icons.schedule, 'color': const Color(0xFFF59E0B)},
+  State<AllActionsScreen> createState() => _AllActionsScreenState();
+}
+
+/// Display order on this screen (ids from [kAppActions]). Home has its own
+/// order via `homeActions`, so changing this list does not affect Home.
+const List<String> _displayOrder = <String>[
+  'vin_lookup', 'car_health', 'maintenance', // row 1
+  'mileage_track', 'service_centers', 'voice_notes', // row 2
+  'ocr_scanner', 'obd', 'service_reminders', // row 3
+];
+
+class _AllActionsScreenState extends State<AllActionsScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _introController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 550),
+  )..forward();
+
+  @override
+  void dispose() {
+    _introController.dispose();
+    super.dispose();
+  }
+
+  /// Actions in display order; any registry action not listed is appended so a
+  /// newly added tool can't silently disappear from this screen.
+  List<AppAction> get _ordered {
+    final byId = {for (final a in kAppActions) a.id: a};
+    final ordered = <AppAction>[
+      for (final id in _displayOrder)
+        if (byId[id] != null) byId[id]!,
     ];
+    final listed = _displayOrder.toSet();
+    ordered.addAll(kAppActions.where((a) => !listed.contains(a.id)));
+    return ordered;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final actions = _ordered;
 
     return ScreenWithNavBar(
       child: Scaffold(
+        backgroundColor: AppTheme.backgroundGreen,
         body: Column(
-        children: [
-          // Header with gradient background
-          _buildHeader(context),
-          
-          // Actions grid
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+          children: [
+            const _Header(),
+            Expanded(
               child: GridView.builder(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  childAspectRatio: 0.7,
+                  crossAxisCount: 3, // 3 cards per row
+                  mainAxisExtent: 150, // fixed height → no overflow, text ellipsizes
                   crossAxisSpacing: 12,
-                  mainAxisSpacing: 16,
+                  mainAxisSpacing: 12,
                 ),
                 itemCount: actions.length,
-                itemBuilder: (context, index) {
-                  final action = actions[index];
-                  return _buildActionCard(
-                    context,
-                    action['label'] as String,
-                    action['subtitle'] as String,
-                    action['icon'] as IconData,
-                    action['color'] as Color,
-                  );
-                },
+                itemBuilder: (context, i) => _introWrap(
+                  i,
+                  reduceMotion,
+                  _ActionTile(
+                    action: actions[i],
+                    reduceMotion: reduceMotion,
+                    onTap: () => _open(actions[i]),
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  /// Staggered fade/slide-in on first load; a no-op when reduce-motion is on.
+  Widget _introWrap(int index, bool reduceMotion, Widget child) {
+    if (reduceMotion) return child;
+    return AnimatedBuilder(
+      animation: _introController,
+      builder: (context, c) {
+        final start = (index * 0.05).clamp(0.0, 0.6);
+        final t = Curves.easeOut.transform(
+          ((_introController.value - start) / (1 - start)).clamp(0.0, 1.0),
+        );
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(offset: Offset(0, (1 - t) * 12), child: c),
+        );
+      },
+      child: child,
+    );
+  }
+
+  void _open(AppAction action) {
+    Navigator.of(context).push(MaterialPageRoute(builder: action.builder));
+  }
+}
+
+/// The app's standard page header — rounded-bottom green gradient, back arrow,
+/// centered title, subtitle. Title is app-yellow ([AppTheme.lightBackground]).
+/// Keep this header style consistent across screens; do not restyle it.
+class _Header extends StatelessWidget {
+  const _Header();
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      height: 200,
+      // 200 is a minimum, not a fixed height, so the header keeps its look at
+      // normal text size but grows (instead of overflowing) at large scales.
+      constraints: const BoxConstraints(minHeight: 200),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -88,49 +146,48 @@ class AllActionsScreen extends StatelessWidget {
         ),
       ),
       child: SafeArea(
+        bottom: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Top row with back button and title.
-              // The trailing SizedBox mirrors the leading IconButton's width so
-              // the title stays optically centred on the screen.
+              // Expanded title between two equal-width controls keeps the
+              // title optically centred on the screen.
               Row(
                 children: [
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
-                      Icons.arrow_back_ios,
-                      color: Colors.white,
-                      size: 28,
-                    ),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    tooltip: 'Back',
+                    icon: const Icon(CupertinoIcons.back,
+                        color: Colors.white, size: 28),
                   ),
                   const Expanded(
-                    child: Text(
-                      'All Actions',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontFamily: 'Orbitron',
-                        shadows: [
-                          Shadow(
-                            color: Colors.black45,
-                            blurRadius: 8,
-                            offset: Offset(0, 3),
-                          ),
-                        ],
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'All Actions',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.lightBackground, // app-yellow title
+                          fontFamily: 'Orbitron',
+                          shadows: [
+                            Shadow(
+                              color: Colors.black45,
+                              blurRadius: 8,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 48),
                 ],
               ),
-              
               const SizedBox(height: 16),
-              
-              // Subtitle
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
@@ -149,159 +206,93 @@ class AllActionsScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildActionCard(BuildContext context, String label, String subtitle, IconData icon, Color color) {
-    return InkWell(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        _navigateToService(context, label);
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.darkAccentGreen,
-              AppTheme.backgroundGreen,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.darkAccentGreen.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 24,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontFamily: 'Orbitron',
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 2),
-            Flexible(
-              child: Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 8,
-                  color: Colors.white70,
-                  fontFamily: 'Orbitron',
+/// A single action card: shared yellow-bordered surface, colored icon badge,
+/// yellow name, white description, with an iOS press-scale and haptic.
+class _ActionTile extends StatefulWidget {
+  final AppAction action;
+  final VoidCallback onTap;
+  final bool reduceMotion;
+
+  const _ActionTile({
+    required this.action,
+    required this.onTap,
+    required this.reduceMotion,
+  });
+
+  @override
+  State<_ActionTile> createState() => _ActionTileState();
+}
+
+class _ActionTileState extends State<_ActionTile> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.action;
+    return Semantics(
+      button: true,
+      label: '${a.title}. ${a.subtitle}',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          widget.onTap();
+        },
+        child: AnimatedScale(
+          scale: (_pressed && !widget.reduceMotion) ? 0.97 : 1.0,
+          duration: const Duration(milliseconds: 90),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: AppTheme.carCardDecoration(radius: 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: a.iconColor.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(a.icon, color: a.iconColor, size: 21),
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: Text(
+                    a.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.lightBackground, // name is yellow
+                      fontFamily: 'Orbitron',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Flexible(
+                  child: Text(
+                    a.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7), // description white
+                      fontFamily: 'Orbitron',
+                      fontSize: 10,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-
-  void _navigateToService(BuildContext context, String serviceName) {
-    // Navigate to specific screens for fully implemented features
-    switch (serviceName.toLowerCase()) {
-      case 'vin lookup':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const VinLookupScreen()),
-        );
-        break;
-      case 'ocr scanner':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const OcrScannerScreen()),
-        );
-        break;
-      case 'car health dashboard':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const CarHealthDashboardScreen()),
-        );
-        break;
-      case 'voice notes':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const VoiceNotesScreen()),
-        );
-        break;
-      case 'mileage track':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const MileageTrackScreen()),
-        );
-        break;
-      case 'maintenance':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const MaintenanceRecordsScreen()),
-        );
-        break;
-      case 'service reminders':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const SmartRemindersScreen()),
-        );
-        break;
-      case 'obd-ii diagnostics':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const OBDDashboardScreen()),
-        );
-        break;
-      case 'service centers':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const ServiceCentersScreen()),
-        );
-        break;
-      case 'multi-car':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const MyCarsScreen()),
-        );
-        break;
-      default:
-        _showMessage(context, 'Service coming soon!');
-    }
-  }
-
-  void _showMessage(BuildContext context, String message) {
-    AppSnackbar.show(context, 
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'Orbitron'),
-        ),
-        backgroundColor: AppTheme.primaryGreen,
       ),
     );
   }

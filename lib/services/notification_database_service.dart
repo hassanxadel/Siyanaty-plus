@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../database/database_helper.dart';
 import '../models/backup_reminder.dart';
 import '../models/backup_car.dart';
+import '../shared/utils/app_logger.dart';
 
 /// Service for managing notification history and overdue reminders
 class NotificationDatabaseService {
@@ -50,10 +51,11 @@ class NotificationDatabaseService {
           priority: _getNotificationPriority(reminder),
           reminderId: reminder.id,
           carId: reminder.carId,
+          carName: '${car.brand} ${car.model}'.trim(),
         );
       }).toList();
     } catch (e) {
-      print('Error getting overdue reminders as notifications: $e');
+      AppLogger.debug('Error getting overdue reminders as notifications: $e');
       return [];
     }
   }
@@ -97,10 +99,11 @@ class NotificationDatabaseService {
           priority: NotificationPriority.medium,
           reminderId: reminder.id,
           carId: reminder.carId,
+          carName: '${car.brand} ${car.model}'.trim(),
         );
       }).toList();
     } catch (e) {
-      print('Error getting upcoming reminders as notifications: $e');
+      AppLogger.debug('Error getting upcoming reminders as notifications: $e');
       return [];
     }
   }
@@ -109,12 +112,58 @@ class NotificationDatabaseService {
   Future<List<NotificationItem>> getAllNotifications() async {
     final overdueNotifications = await getOverdueRemindersAsNotifications();
     final upcomingNotifications = await getUpcomingRemindersAsNotifications();
-    
-    // Combine and sort by timestamp (newest first)
-    final allNotifications = [...overdueNotifications, ...upcomingNotifications];
+    final dismissed = await getDismissedNotificationIds();
+
+    // Combine, drop dismissed, sort newest first.
+    final allNotifications = [...overdueNotifications, ...upcomingNotifications]
+        .where((n) => !dismissed.contains(n.id))
+        .toList();
     allNotifications.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    
     return allNotifications;
+  }
+
+  /// Unread count — the Home bell badge uses this so it stays in sync.
+  Future<int> getUnreadCount() async {
+    final all = await getAllNotifications();
+    return all.where((n) => !n.isRead).length;
+  }
+
+  /// Mark every currently-shown notification as read.
+  Future<void> markAllAsRead() async {
+    final all = await getAllNotifications();
+    final prefs = await SharedPreferences.getInstance();
+    final read = prefs.getStringList('read_notifications') ?? [];
+    for (final n in all) {
+      if (!read.contains(n.id)) read.add(n.id);
+    }
+    await prefs.setStringList('read_notifications', read);
+  }
+
+  /// Reversible "delete": hides a notification without completing its reminder.
+  Future<Set<String>> getDismissedNotificationIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return (prefs.getStringList('dismissed_notifications') ?? []).toSet();
+    } catch (e) {
+      AppLogger.warning('Error reading dismissed notifications', error: e);
+      return {};
+    }
+  }
+
+  Future<void> dismissNotification(String notificationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final dismissed = prefs.getStringList('dismissed_notifications') ?? [];
+    if (!dismissed.contains(notificationId)) {
+      dismissed.add(notificationId);
+      await prefs.setStringList('dismissed_notifications', dismissed);
+    }
+  }
+
+  Future<void> restoreNotification(String notificationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final dismissed = prefs.getStringList('dismissed_notifications') ?? [];
+    dismissed.remove(notificationId);
+    await prefs.setStringList('dismissed_notifications', dismissed);
   }
 
   /// Mark a notification as read
@@ -128,9 +177,9 @@ class NotificationDatabaseService {
         await prefs.setStringList('read_notifications', readNotifications);
       }
       
-      print('Marked notification as read: $notificationId');
+      AppLogger.debug('Marked notification as read: $notificationId');
     } catch (e) {
-      print('Error marking notification as read: $e');
+      AppLogger.debug('Error marking notification as read: $e');
     }
   }
   
@@ -141,7 +190,7 @@ class NotificationDatabaseService {
       final readNotifications = prefs.getStringList('read_notifications') ?? [];
       return readNotifications.contains(notificationId);
     } catch (e) {
-      print('Error checking notification read status: $e');
+      AppLogger.debug('Error checking notification read status: $e');
       return false;
     }
   }
@@ -153,7 +202,7 @@ class NotificationDatabaseService {
       final readNotifications = prefs.getStringList('read_notifications') ?? [];
       return readNotifications.toSet();
     } catch (e) {
-      print('Error getting read notification IDs: $e');
+      AppLogger.debug('Error getting read notification IDs: $e');
       return {};
     }
   }
@@ -167,7 +216,7 @@ class NotificationDatabaseService {
       readNotifications.remove(notificationId);
       await prefs.setStringList('read_notifications', readNotifications);
     } catch (e) {
-      print('Error marking notification as unread: $e');
+      AppLogger.debug('Error marking notification as unread: $e');
     }
   }
 
@@ -188,7 +237,7 @@ class NotificationDatabaseService {
         // For upcoming notifications, we don't mark as completed - just remove from notifications
       }
     } catch (e) {
-      print('Error deleting notification: $e');
+      AppLogger.debug('Error deleting notification: $e');
     }
   }
 
@@ -330,6 +379,7 @@ class NotificationItem {
   final NotificationPriority priority;
   final int? reminderId;
   final int? carId;
+  final String? carName;
 
   NotificationItem({
     required this.id,
@@ -341,6 +391,7 @@ class NotificationItem {
     required this.priority,
     this.reminderId,
     this.carId,
+    this.carName,
   });
 }
 

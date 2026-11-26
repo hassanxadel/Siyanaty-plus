@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:siyanaty_plus/shared/utils/custom_snackbar.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -9,6 +10,7 @@ import '../../../services/car_service.dart';
 import '../../../models/license_image.dart';
 import '../../../models/backup_car.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/gradient_button.dart';
 
 class LicenseScreen extends StatefulWidget {
   const LicenseScreen({super.key});
@@ -92,19 +94,18 @@ class _LicenseScreenState extends State<LicenseScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
-        backgroundColor: AppTheme.getThemeAwareBackground(context),
-        body: const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
-          ),
+      return const Scaffold(
+        backgroundColor: AppTheme.backgroundGreen,
+        body: Center(
+          child: CupertinoActivityIndicator(color: Colors.white),
         ),
       );
     }
     
     return Scaffold(
-      backgroundColor: AppTheme.getThemeAwareBackground(context),
+      backgroundColor: AppTheme.backgroundGreen,
       body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -165,22 +166,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
 
   Widget _buildCarSelectionCard() {
     return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: AppTheme.secondaryGreen.withOpacity(0.45),
-          width: 1,
-        ),
-        boxShadow: AppTheme.glowShadow(),
-      ),
+      decoration: AppTheme.carCardDecoration(radius: 15),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -233,6 +219,8 @@ class _LicenseScreenState extends State<LicenseScreen> {
                         _selectedCar != null
                             ? '${_selectedCar!.brand} ${_selectedCar!.model}'
                             : 'Select Car',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
                           fontFamily: 'Orbitron',
@@ -262,9 +250,9 @@ class _LicenseScreenState extends State<LicenseScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
-                    Icons.arrow_drop_down,
+                    CupertinoIcons.chevron_down,
                     color: Colors.white,
-                    size: 24,
+                    size: 16,
                   ),
                 ),
               ],
@@ -490,18 +478,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
   Widget _buildInfoCard() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: AppTheme.glowShadow(),
-      ),
+      decoration: AppTheme.carCardDecoration(radius: 14),
       child: const Row(
         children: [
           Icon(
@@ -528,18 +505,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
   Widget _buildNoCarsMessage() {
     return Container(
       padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.glowShadow(),
-      ),
+      decoration: AppTheme.carCardDecoration(radius: 16),
       child: const Column(
         children: [
           Icon(
@@ -553,7 +519,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: AppTheme.lightBackground,
               fontFamily: 'Orbitron',
             ),
           ),
@@ -573,9 +539,11 @@ class _LicenseScreenState extends State<LicenseScreen> {
   }
 
   // Header with gradient background design matching the app
+  // Standard app page header — kept per the app-wide header rule. minHeight
+  // (not a fixed height) so large text grows instead of overflowing.
   Widget _buildHeaderWithBackground() {
     return Container(
-      height: 200,
+      constraints: const BoxConstraints(minHeight: 200),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -592,9 +560,11 @@ class _LicenseScreenState extends State<LicenseScreen> {
         ),
       ),
       child: SafeArea(
+        bottom: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
@@ -603,43 +573,43 @@ class _LicenseScreenState extends State<LicenseScreen> {
                       if (Navigator.canPop(context)) {
                         Navigator.pop(context);
                       } else {
-                        // If no previous route, try to navigate to root
-                        Navigator.of(context).popUntil((route) => route.isFirst);
+                        Navigator.of(context)
+                            .popUntil((route) => route.isFirst);
                       }
                     },
-                    icon: const Icon(
-                      Icons.arrow_back_ios,
-                      color: Colors.white,
-                      size: 28,
-                    ),
+                    tooltip: 'Back',
+                    icon: const Icon(CupertinoIcons.back,
+                        color: Colors.white, size: 28),
                   ),
-                  const SizedBox(width: 16),
                   const Expanded(
-                    child: Text(
-                      'License Management',
-                      style: TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontFamily: 'Orbitron',
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'License',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.lightBackground,
+                          fontFamily: 'Orbitron',
+                          shadows: [
+                            Shadow(
+                                color: Colors.black45,
+                                blurRadius: 8,
+                                offset: Offset(0, 3)),
+                          ],
+                        ),
                       ),
-                      textAlign: TextAlign.center,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.credit_card),
-                    onPressed: () {
-                      // TODO: Add license management options
-                    },
-                    color: Colors.white70,
-                  ),
+                  const SizedBox(width: 48),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  'Store and manage your personal and vehicle licenses',
+                  'Store and manage your license photos',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.white70,
@@ -663,57 +633,47 @@ class _LicenseScreenState extends State<LicenseScreen> {
     String? imagePath,
     String licenseType,
   ) {
+    final hasImage = imagePath != null;
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.darkAccentGreen,
-            AppTheme.backgroundGreen,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.glowShadow(),
-      ),
+      padding: const EdgeInsets.all(16),
+      decoration: AppTheme.carCardDecoration(radius: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: 24,
-                ),
+                child: Icon(icon, color: AppTheme.lightBackground, size: 22),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: AppTheme.lightBackground, // yellow label
                         fontFamily: 'Orbitron',
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       subtitle,
-                      style: const TextStyle(
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Colors.white70,
+                        color: Colors.white.withOpacity(0.7),
                         fontFamily: 'Orbitron',
                       ),
                     ),
@@ -722,167 +682,108 @@ class _LicenseScreenState extends State<LicenseScreen> {
               ),
             ],
           ),
-          
-          const SizedBox(height: 16),
-          
-          // Image Preview
-          if (imagePath != null) ...[
-            Container(
-              width: double.infinity,
-              height: 200,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1,
+          const SizedBox(height: 14),
+          // ID-card ratio (~1.586:1), sized from the card width — never a fixed
+          // height, so it can't overflow on a small screen.
+          AspectRatio(
+            aspectRatio: 1.586,
+            child: GestureDetector(
+              onTap: hasImage
+                  ? () => _viewImage(context, imagePath, title)
+                  : () => _requestPermissionsAndShowOptions(context,
+                      licenseType: licenseType),
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: Colors.white.withOpacity(0.18), width: 1),
+                  color: Colors.white.withOpacity(0.05),
                 ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(
-                  File(imagePath),
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.white.withOpacity(0.1),
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.image_not_supported,
-                            color: Colors.white70,
-                            size: 48,
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Image not found',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                child: hasImage
+                    ? Image.file(
+                        File(imagePath),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _previewFallback(
+                                CupertinoIcons.photo, 'Image not found'),
+                      )
+                    : _previewFallback(
+                        CupertinoIcons.add, 'Tap to add a photo'),
               ),
             ),
-            const SizedBox(height: 16),
-          ] else ...[
-            Container(
-              width: double.infinity,
-              height: 200,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1,
-                ),
-                color: Colors.white.withOpacity(0.1),
-              ),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.add_photo_alternate,
-                    color: Colors.white70,
-                    size: 48,
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'No image added',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-              const SizedBox(height: 16),
-          ],
-          
-          // Action Buttons
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.darkAccentGreen,
-                        AppTheme.backgroundGreen,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppTheme.secondaryGreen.withOpacity(0.6),
-                      width: 1,
-                    ),
-                    boxShadow: AppTheme.glowShadow(),
-                  ),
-                  child: ElevatedButton.icon(
-                    onPressed: () => _requestPermissionsAndShowOptions(context, licenseType: licenseType),
-                    icon: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
-                    label: Text(
-                      imagePath != null ? 'Update Image' : 'Add Image',
-                      style: const TextStyle(
-                        fontFamily: 'Orbitron', 
-                        fontSize: 14,
-                        color: Colors.white,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+                child: GradientButton(
+                  label: hasImage ? 'Update photo' : 'Add photo',
+                  icon: CupertinoIcons.camera,
+                  onPressed: () => _requestPermissionsAndShowOptions(context,
+                      licenseType: licenseType),
                 ),
               ),
-              if (imagePath != null) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: AppTheme.secondaryGreen.withOpacity(0.7),
-                        width: 1,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: AppTheme.glowShadow(),
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: () => _viewImage(context, imagePath, title),
-                      icon: const Icon(Icons.visibility, size: 18, color: Colors.white),
-                      label: const Text(
-                        'View',
-                        style: TextStyle(
-                          fontFamily: 'Orbitron',
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              if (hasImage) ...[
+                const SizedBox(width: 10),
+                _secondaryLink('View', CupertinoIcons.eye,
+                    () => _viewImage(context, imagePath, title)),
               ],
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _previewFallback(IconData icon, String label) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white.withOpacity(0.5), size: 38),
+          const SizedBox(height: 8),
+          Text(label,
+              style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontFamily: 'Orbitron',
+                  fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  /// Clean yellow text button with an icon — no pill background.
+  Widget _secondaryLink(String label, IconData icon, VoidCallback onTap) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: AppTheme.lightBackground),
+                const SizedBox(width: 5),
+                Text(label,
+                    style: const TextStyle(
+                        color: AppTheme.lightBackground,
+                        fontFamily: 'Orbitron',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -987,7 +888,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
           color: isDarkMode ? AppTheme.darkModeCardBackground : AppTheme.lightModeCardBackground,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: AppTheme.primaryGreen.withOpacity(0.2),
+            color: AppTheme.lightBackground.withOpacity(0.25),
             width: 1,
           ),
         ),
@@ -995,7 +896,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
           children: [
             Icon(
               icon,
-              color: AppTheme.primaryGreen,
+              color: AppTheme.lightBackground,
               size: 32,
             ),
             const SizedBox(height: 8),

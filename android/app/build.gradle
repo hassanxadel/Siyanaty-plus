@@ -10,7 +10,7 @@ apply plugin: 'com.google.gms.google-services'
 android {
     namespace = "com.example.siyanaty"
     compileSdk = 35
-    ndkVersion = "25.1.8937393"
+    ndkVersion = "26.1.10909125"
 
     compileOptions {
         coreLibraryDesugaringEnabled true
@@ -47,6 +47,16 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// Disable INCREMENTAL Java compilation. Same root cause as kotlin.incremental
+// being off: when the Pub cache (plugin jars) is on C: and the project is on
+// D:, the incremental compiler mishandles the cross-drive classpath and drops
+// classes such as image_picker's Pigeon-generated `Messages`, producing
+// "class file for io.flutter.plugins.imagepicker.Messages not found" even
+// though the plugin module itself compiles fine.
+tasks.withType(JavaCompile).configureEach {
+    options.incremental = false
 }
 
 dependencies {

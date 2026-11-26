@@ -302,93 +302,13 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
         Text(
           value,
           style: const TextStyle(
-            color: AppTheme.secondaryGreen,
+            color: AppTheme.costHighlight,
             fontFamily: 'Orbitron',
             fontSize: 12,
             fontWeight: FontWeight.bold,
           ),
         ),
       ],
-    );
-  }
-
-  /// Show partial success dialog
-  void _showPartialSuccessDialog(BackupResult result) {
-    _showPartialResultDialog(
-      title: 'Backup Partially Completed',
-      message: result.message,
-      errors: result.errors,
-    );
-  }
-
-  /// Shared amber "finished, but with problems" pop-up for both backup and
-  /// restore, so the two report failures identically.
-  void _showPartialResultDialog({
-    required String title,
-    required String message,
-    List<String>? errors,
-  }) {
-    AppDialog.custom<void>(
-      context,
-      title: title,
-      message: message,
-      icon: Icons.warning_amber_rounded,
-      accent: AppDialog.warning,
-      closeLabel: 'OK',
-      content: (errors == null || errors.isEmpty)
-          ? const SizedBox.shrink()
-          : Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: AppTheme.glowFieldDecoration(
-                accent: AppDialog.destructive,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Errors:',
-                    style: TextStyle(
-                      color: AppDialog.destructive,
-                      fontFamily: 'Orbitron',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...errors.take(3).map((error) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          '• $error',
-                          style: TextStyle(
-                            color: AppTheme.lightBackground.withOpacity(0.85),
-                            fontFamily: 'Orbitron',
-                            fontSize: 11,
-                            height: 1.4,
-                          ),
-                        ),
-                      )),
-                  if (errors.length > 3)
-                    Text(
-                      '... and ${errors.length - 3} more errors',
-                      style: TextStyle(
-                        color: AppTheme.lightBackground.withOpacity(0.6),
-                        fontFamily: 'Orbitron',
-                        fontSize: 10,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-    );
-  }
-
-  /// Show partial restore dialog
-  void _showPartialRestoreDialog(RestoreResult result) {
-    _showPartialResultDialog(
-      title: 'Restore Partially Completed',
-      message: result.message,
-      errors: result.errors,
     );
   }
 
@@ -405,7 +325,7 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
             color: Colors.white,
           ),
         ),
-        backgroundColor: isError ? Colors.red : AppTheme.primaryGreen,
+        backgroundColor: isError ? Colors.red : AppTheme.backgroundGreen,
         duration: Duration(seconds: isError ? 4 : 3),
       ),
     );
@@ -418,7 +338,8 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
     // than the surrounding sections, which use radius 16 unelevated.
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: AppTheme.glowCardDecoration(radius: 20, elevated: true),
+      decoration: AppTheme.glowCardDecoration(
+          radius: 20, elevated: true, accent: AppTheme.costHighlight),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -428,15 +349,15 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
               Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: AppTheme.secondaryGreen.withOpacity(0.15),
+                  color: AppTheme.costHighlight.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: AppTheme.secondaryGreen.withOpacity(0.5),
+                    color: AppTheme.costHighlight.withOpacity(0.5),
                     width: 1,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.secondaryGreen.withOpacity(0.3),
+                      color: AppTheme.costHighlight.withOpacity(0.3),
                       blurRadius: 14,
                       spreadRadius: -2,
                     ),
@@ -444,7 +365,7 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
                 ),
                 child: const Icon(
                   Icons.cloud_sync,
-                  color: AppTheme.secondaryGreen,
+                  color: AppTheme.costHighlight,
                   size: 24,
                 ),
               ),
@@ -479,7 +400,8 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
               Material(
                 color: Colors.transparent,
                 child: Container(
-                  decoration: AppTheme.glowButtonDecoration(radius: 18),
+                  decoration: AppTheme.glowButtonDecoration(
+                      radius: 18, accent: AppTheme.costHighlight),
                   child: Material(
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(18),
@@ -504,7 +426,7 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
                             Text(
                               'View All',
                               style: TextStyle(
-                                color: AppTheme.secondaryGreen,
+                                color: AppTheme.costHighlight,
                                 fontFamily: 'Orbitron',
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -515,7 +437,7 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
                             Icon(
                               Icons.arrow_forward_ios,
                               size: 10,
-                              color: AppTheme.secondaryGreen,
+                              color: AppTheme.costHighlight,
                             ),
                           ],
                         ),
@@ -534,8 +456,8 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  AppTheme.secondaryGreen.withOpacity(0.5),
-                  AppTheme.secondaryGreen.withOpacity(0.0),
+                  AppTheme.costHighlight.withOpacity(0.5),
+                  AppTheme.costHighlight.withOpacity(0.0),
                 ],
               ),
             ),
@@ -644,34 +566,6 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
     );
   }
 
-  Widget _buildStatusRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: AppTheme.getThemeAwareTextColor(context).withOpacity(0.8),
-              fontFamily: 'Orbitron',
-              fontSize: 12,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              color: AppTheme.getThemeAwareTextColor(context),
-              fontFamily: 'Orbitron',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildStatusRowGradient(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -689,7 +583,7 @@ class _BackupButtonWidgetState extends State<BackupButtonWidget> {
           Text(
             value,
             style: const TextStyle(
-              color: AppTheme.secondaryGreen,
+              color: AppTheme.costHighlight,
               fontFamily: 'Orbitron',
               fontSize: 12,
               fontWeight: FontWeight.w700,

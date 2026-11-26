@@ -25,7 +25,6 @@ import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/auth/email_verification_screen.dart';
 import 'presentation/screens/security/unlock_screen.dart';
 import 'presentation/screens/security/pin_setup_screen.dart';
-import 'presentation/screens/security/mfa_verification_screen.dart';
 import 'database/database_helper.dart';
 
 /// Main entry point for the Siyanaty+ car maintenance application
@@ -218,11 +217,7 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
   bool _needsPinSetup = false;
   bool _needsEmailVerification = false;
   bool _isReinitializing = false; // Prevent multiple simultaneous reinitializations
-  bool _justCompletedMFA = false; // Track if user just completed MFA to skip duplicate email
   bool _showLoadingScreen = true; // Show loading screen until initialization completes
-  bool _needsMfaVerification = false; // Untrusted device must pass OTP before anything else
-  String? _mfaUserId;
-  String? _mfaDeviceId;
 
   /// When the app was last sent to the background. Used on resume to decide
   /// whether enough time passed to require a re-unlock — see
@@ -246,24 +241,24 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
           AppLogger.info('Auth state changed: user=${user?.uid}, _isAuthenticated=$_isAuthenticated, _needsLogin=$_needsLogin');
           
           if (user != null && !_isAuthenticated && !_isReinitializing) {
-            // User signed in - check if they have tokens (MFA completed)
-            // If no tokens, they're in the middle of MFA flow, so don't reinitialize yet
+            // User signed in - only reinitialize once auth tokens are stored
+            // (sign-in writes them a beat after the Firebase user appears).
             final hasTokens = await _authManager.isAuthenticated();
             if (hasTokens) {
               AppLogger.info('User signed in with tokens, re-initializing security');
               _reinitializeSecurity();
             } else {
-              AppLogger.info('User signed in but no tokens yet (MFA in progress), skipping reinitialize');
+              AppLogger.info('User signed in but no tokens yet, skipping reinitialize');
             }
           } else if (user != null && _needsLogin && !_isReinitializing) {
-            // User is signed in but we're showing login screen (e.g., after MFA success)
-            // Check if they have tokens now before reinitializing
+            // Signed in while the login screen is still showing — reinitialize
+            // once tokens are present.
             final hasTokens = await _authManager.isAuthenticated();
             if (hasTokens) {
               AppLogger.info('User signed in with tokens and needsLogin=true, re-initializing security');
               _reinitializeSecurity();
             } else {
-              AppLogger.info('User signed in but no tokens yet (MFA in progress), skipping reinitialize');
+              AppLogger.info('User signed in but no tokens yet, skipping reinitialize');
             }
           } else if (user == null && _isAuthenticated) {
             // User signed out
@@ -479,43 +474,6 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
       // verification in the auth flow. Firebase's emailVerified flag is
       // intentionally not checked here.
 
-      // Reset MFA flag
-      if (_justCompletedMFA) {
-        if (mounted) {
-          setState(() {
-            _justCompletedMFA = false;
-          });
-        }
-      }
-
-      // Require OTP verification on devices this account hasn't trusted yet.
-      // This is what routes a freshly created account through the OTP email:
-      // registration signs the user in without passing the login MFA gate.
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        final deviceId = await _authManager.getCurrentDeviceId();
-        final mfaRequired =
-            await _authManager.isMfaRequiredForCurrentDevice(currentUser.uid);
-        if (!mounted) return;
-
-        if (mfaRequired) {
-          AppLogger.info('Device not trusted yet, showing OTP verification');
-          setState(() {
-            _isInitializing = false;
-            _showLoadingScreen = false;
-            _needsLogin = false;
-            _needsPinSetup = false;
-            _needsMfaVerification = true;
-            _mfaUserId = currentUser.uid;
-            _mfaDeviceId = deviceId;
-          });
-          return;
-        }
-      }
-      if (_needsMfaVerification && mounted) {
-        setState(() => _needsMfaVerification = false);
-      }
-
       // Validate session
       final sessionResult = await _authManager.validateSession();
       if (!mounted) return;
@@ -661,56 +619,19 @@ class _SecurityWrapperState extends State<SecurityWrapper> with WidgetsBindingOb
       if (_needsLogin) {
         return LoginScreen(
           onAuthenticationComplete: () {
-            // Re-check authentication after MFA completion
+            // Re-check auth after sign-in. The login screen notifies us
+            // explicitly because authStateChanges is unreliable on this plugin.
             AppLogger.info('Authentication completed, re-checking security state');
-            // Use a post-frame callback to ensure state updates happen after build
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _justCompletedMFA = true; // Mark that user just completed MFA
-                });
-                _initializeSecurity();
-              }
+              if (mounted) _initializeSecurity();
             });
-          },
-        );
-      }
-
-      if (_needsMfaVerification && _mfaUserId != null && _mfaDeviceId != null) {
-        return MfaVerificationScreen(
-          userId: _mfaUserId!,
-          deviceId: _mfaDeviceId!,
-          onVerificationSuccess: () {
-            if (mounted) {
-              setState(() {
-                _needsMfaVerification = false;
-                _justCompletedMFA = true;
-              });
-              _initializeSecurity();
-            }
-          },
-          onSignOut: () {
-            // The MFA screen is the root route here, so it cannot pop itself.
-            // Leave the MFA gate and hand control back to the login screen.
-            if (mounted) {
-              setState(() {
-                _needsMfaVerification = false;
-                _mfaUserId = null;
-                _mfaDeviceId = null;
-                _isAuthenticated = false;
-                _needsPinSetup = false;
-                _needsLocalUnlock = false;
-                _showLoadingScreen = false;
-                _needsLogin = true;
-              });
-            }
           },
         );
       }
 
       if (_needsEmailVerification) {
         return EmailVerificationScreen(
-          skipInitialEmail: _justCompletedMFA,
+          skipInitialEmail: false,
           onVerificationComplete: _onEmailVerificationComplete,
         );
       }

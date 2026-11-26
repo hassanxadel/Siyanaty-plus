@@ -17,19 +17,13 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -54,9 +48,31 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCWj3NOyMtuxTlGiNKIH8mt9iMq8f0OdxU',
-    appId: '1:157060583440:android:82af4c67bc75b775b43a95',
+    appId: '1:157060583440:android:9f53e948c3142961b43a95',
     messagingSenderId: '157060583440',
     projectId: 'siyana-plus-87080',
     storageBucket: 'siyana-plus-87080.firebasestorage.app',
   );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyBxmDOXKs1dhKXX2RohiInHIo3s7lQWZko',
+    appId: '1:157060583440:web:478061620e740573b43a95',
+    messagingSenderId: '157060583440',
+    projectId: 'siyana-plus-87080',
+    authDomain: 'siyana-plus-87080.firebaseapp.com',
+    storageBucket: 'siyana-plus-87080.firebasestorage.app',
+    measurementId: 'G-94CGBMD32L',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyArfxBsv1wLGohFigJI75LtAoPxGzSoTIg',
+    appId: '1:157060583440:ios:a5527505587ac6a2b43a95',
+    messagingSenderId: '157060583440',
+    projectId: 'siyana-plus-87080',
+    storageBucket: 'siyana-plus-87080.firebasestorage.app',
+    androidClientId: '157060583440-87vh2mgn3lottamtn61bpsaahh78o4nv.apps.googleusercontent.com',
+    iosClientId: '157060583440-ff8d6puv95u6ijsigloeflhk4fktv8d7.apps.googleusercontent.com',
+    iosBundleId: 'com.example.syanatak',
+  );
+
 }

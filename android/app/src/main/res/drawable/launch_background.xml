@@ -8,13 +8,14 @@
         </shape>
     </item>
 
-    <!-- Logo, enlarged (artwork square matches the background color) -->
+    <!-- Box-free logo (square background keyed out) centred on the green, so
+         only the logo shows and the hand-off to the Dart splash is seamless. -->
     <item
-        android:width="220dp"
-        android:height="220dp"
+        android:width="240dp"
+        android:height="150dp"
         android:gravity="center">
         <bitmap
             android:gravity="fill"
-            android:src="@mipmap/ic_launcher_foreground" />
+            android:src="@drawable/splash_logo" />
     </item>
 </layer-list>

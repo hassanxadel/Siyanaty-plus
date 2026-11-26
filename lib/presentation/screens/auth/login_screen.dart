@@ -1,13 +1,57 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../../shared/constants/app_theme.dart';
 import '../../../services/security/authentication_manager.dart';
-import '../security/mfa_verification_screen.dart';
 import '../../providers/auth_provider.dart';
 import 'forgot_password_screen.dart';
 import 'create_account_screen.dart';
 import '../../../shared/utils/responsive_utils.dart';
+
+/// Whether to show the Apple sign-in button (Apple platforms only).
+bool get showAppleSignIn => !kIsWeb && (Platform.isIOS || Platform.isMacOS);
+
+/// Maps raw auth error codes/messages to friendly, iOS-style copy.
+/// Returns an empty string when the user cancelled (caller shows nothing).
+String friendlyAuthError(String? raw) {
+  final r = (raw ?? '').toLowerCase();
+  if (r.isEmpty) return 'Something went wrong. Please try again.';
+  if (r.contains('cancel')) return '';
+  if (r.contains('network') ||
+      r.contains('connection') ||
+      r.contains('offline') ||
+      r.contains('internet')) {
+    return 'No internet connection. Check your network and try again.';
+  }
+  if (r.contains('too many') || r.contains('too-many-requests')) {
+    return 'Too many attempts. Please try again later.';
+  }
+  if (r.contains('wrong-password') ||
+      r.contains('invalid-credential') ||
+      r.contains('user-not-found') ||
+      r.contains('invalid-email') ||
+      r.contains('incorrect email')) {
+    return 'Incorrect email or password.';
+  }
+  if (r.contains('user-disabled') || r.contains('disabled')) {
+    return 'This account has been disabled.';
+  }
+  if (r.contains('different sign-in method') ||
+      r.contains('different-credential')) {
+    return 'This email is already registered with a different sign-in method.';
+  }
+  if (r.contains('access denied') || r.contains('not authorized')) {
+    return 'Access denied. You are not authorized to use this app.';
+  }
+  // Already-friendly service messages pass through unchanged.
+  return raw!;
+}
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onAuthenticationComplete;
@@ -25,6 +69,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   final AuthenticationManager _authManager = AuthenticationManager();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -68,6 +114,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     _fadeController.dispose();
     _slideController.dispose();
     super.dispose();
@@ -76,13 +124,20 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.backgroundGreen,
-      body: SafeArea(
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(context).unfocus(), // tap outside = dismiss keyboard
+        child: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnimation,
           child: SlideTransition(
             position: _slideAnimation,
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 0),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480), // tablet cap
+                  child: AutofillGroup(
               child: Form(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -118,14 +173,22 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                     _buildOrDivider(),
                     SizedBox(height: ResponsiveUtils.spacing(context, 24)),
                     _buildGoogleSignInButton(),
+                    if (showAppleSignIn) ...[
+                      SizedBox(height: ResponsiveUtils.spacing(context, 12)),
+                      _buildAppleSignInButton(),
+                    ],
                     SizedBox(height: ResponsiveUtils.spacing(context, 32)),
                     _buildNewUserSection(),
                     SizedBox(height: ResponsiveUtils.spacing(context, 24)),
                   ],
                 ),
               ),
+                  ),
+                ),
+              ),
             ),
           ),
+        ),
         ),
       ),
     );
@@ -237,7 +300,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           ),
           child: TextFormField(
         controller: _emailController,
+        focusNode: _emailFocus,
         keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        autofillHints: const [AutofillHints.email],
+        autocorrect: false,
+        textCapitalization: TextCapitalization.none,
+        onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
         style: context.responsiveTextStyle(
           fontSize: 16,
           color: AppTheme.lightBackground,
@@ -288,8 +357,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           ),
           child: TextField(
             controller: _passwordController,
+            focusNode: _passwordFocus,
             obscureText: _obscurePassword,
             keyboardType: TextInputType.visiblePassword,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.password],
+            onSubmitted: (_) => _signIn(),
             style: context.responsiveTextStyle(
               fontSize: 16,
               color: AppTheme.lightBackground,
@@ -310,9 +383,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                   });
                 },
                 icon: Icon(
-                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                  _obscurePassword ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
                   color: AppTheme.lightBackground,
-                  size: context.responsiveIconSize(24),
+                  size: context.responsiveIconSize(22),
                 ),
               ),
               border: InputBorder.none,
@@ -331,14 +404,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     return Align(
       alignment: Alignment.centerRight,
       child: TextButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const ModernForgotPasswordScreen(),
-            ),
-          );
-        },
+        onPressed: _openForgotPassword,
         child: Text(
           'Forgot Password?',
           style: context.responsiveTextStyle(
@@ -415,13 +481,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           onTap: _isLoading ? null : _signIn,
           child: Center(
             child: _isLoading
-                ? SizedBox(
-                    width: context.r(24),
-                    height: context.r(24),
-                    child: const CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.backgroundGreen),
-                    ),
+                ? const CupertinoActivityIndicator(
+                    radius: 12,
+                    color: AppTheme.backgroundGreen,
                   )
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -506,6 +568,20 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
 
+  /// Official Apple button (Apple devices only); white style reads best on the
+  /// dark green background. The logo/label are Apple's — never restyled.
+  Widget _buildAppleSignInButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: SignInWithAppleButton(
+        onPressed: _signInWithApple, // guarded by _isLoading inside
+        style: SignInWithAppleButtonStyle.white,
+        height: context.responsiveButtonHeight(52),
+        borderRadius: BorderRadius.circular(context.responsiveBorderRadius(12)),
+      ),
+    );
+  }
+
   Widget _buildNewUserSection() {
     return Column(
       children: [
@@ -562,16 +638,31 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
 
+  /// Opens Reset Password carrying the typed email, and pre-fills on return.
+  Future<void> _openForgotPassword() async {
+    final returned = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ModernForgotPasswordScreen(
+          initialEmail: _emailController.text.trim(),
+        ),
+      ),
+    );
+    if (returned != null && returned.isNotEmpty && mounted) {
+      _emailController.text = returned;
+    }
+  }
+
   Future<void> _signIn() async {
     if (_isLoading) return;
+    FocusScope.of(context).unfocus();
+    HapticFeedback.lightImpact();
 
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
-      setState(() {
-        _errorMessage = 'Please enter both email and password';
-      });
+      _showAuthError('Please enter both your email and password.');
       return;
     }
 
@@ -581,31 +672,39 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     });
 
     try {
-      // Use the new security system for authentication
       final result = await _authManager.signInWithEmailPassword(email, password);
-
+      if (!mounted) return;
       if (result.success) {
-        // Check if PIN is set up, if not, navigate to PIN setup
+        TextInput.finishAutofillContext(); // let the password manager offer to save
+        HapticFeedback.mediumImpact();
         _navigateToNextScreen();
-      } else if (result.requiresMfa) {
-        // Navigate to MFA verification
-        _navigateToMfaVerification(result.userId!, result.deviceId!);
       } else {
-        setState(() {
-          _errorMessage = result.error ?? 'Sign in failed';
-          _isLoading = false;
-        });
+        _showAuthError(result.error ?? 'Sign in failed');
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'An error occurred during sign in';
-        _isLoading = false;
-      });
+      if (mounted) _showAuthError('An error occurred during sign in');
     }
+  }
+
+  /// Shows a friendly, mapped error inline (or nothing if the user cancelled).
+  void _showAuthError(String? raw) {
+    final msg = friendlyAuthError(raw);
+    if (!mounted) return;
+    if (msg.isEmpty) {
+      setState(() => _isLoading = false); // user cancelled — no error
+      return;
+    }
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _errorMessage = msg;
+      _isLoading = false;
+    });
   }
 
   Future<void> _signInWithGoogle() async {
     if (_isLoading) return;
+    FocusScope.of(context).unfocus();
+    HapticFeedback.lightImpact();
 
     setState(() {
       _isLoading = true;
@@ -613,23 +712,42 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     });
 
     try {
-      // Use AuthProvider for Google sign-in
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final success = await authProvider.signInWithGoogle();
-      
+      if (!mounted) return;
       if (success) {
+        HapticFeedback.mediumImpact();
         _navigateToNextScreen();
       } else {
-        setState(() {
-          _errorMessage = authProvider.errorMessage ?? 'Google sign in failed';
-          _isLoading = false;
-        });
+        _showAuthError(authProvider.lastSocialError ?? 'Google sign in failed');
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'An error occurred during Google sign in';
-        _isLoading = false;
-      });
+      if (mounted) _showAuthError('An error occurred during Google sign in');
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    if (_isLoading) return;
+    FocusScope.of(context).unfocus();
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final success = await authProvider.signInWithApple();
+      if (!mounted) return;
+      if (success) {
+        HapticFeedback.mediumImpact();
+        _navigateToNextScreen();
+      } else {
+        _showAuthError(authProvider.lastSocialError ?? 'Apple sign in failed');
+      }
+    } catch (e) {
+      if (mounted) _showAuthError('An error occurred during Apple sign in');
     }
   }
 
@@ -654,31 +772,4 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
   }
 
-  Future<void> _navigateToMfaVerification(String userId, String deviceId) async {
-    final result = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (context) => MfaVerificationScreen(
-          userId: userId,
-          deviceId: deviceId,
-          // No callback - let MFA screen handle its own navigation
-        ),
-      ),
-    );
-    
-    // If MFA was successful (result == true), notify parent and reset state
-    // The SecurityWrapper will re-check authentication and navigate appropriately
-    if (result == true && mounted) {
-      // MFA completed successfully - notify parent to re-check auth
-      widget.onAuthenticationComplete?.call();
-      // Reset loading state so user can try again if needed
-      setState(() {
-        _isLoading = false;
-      });
-    } else if (mounted) {
-      // MFA was cancelled or failed - reset loading state
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
 }

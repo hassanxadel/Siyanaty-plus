@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../shared/constants/app_constants.dart';
+import '../shared/utils/app_logger.dart';
 
 class VinDecodedBasic {
   final String vin;
@@ -119,29 +120,29 @@ class VinDecodedBasic {
 class VinDecoderService {
   Future<VinDecodedBasic> decodeVin(String vin) async {
     final normalizedVin = vin.trim().toUpperCase();
-    print('VIN Decoder: Starting decode for VIN: $normalizedVin');
+    AppLogger.debug('VIN Decoder: Starting decode for VIN: $normalizedVin');
     
     // Test internet connectivity first
     try {
-      print('VIN Decoder: Testing internet connectivity...');
+      AppLogger.debug('VIN Decoder: Testing internet connectivity...');
       final testResponse = await http.get(
         Uri.parse('https://httpbin.org/ip'),
       ).timeout(const Duration(seconds: 5));
-      print('VIN Decoder: Internet test successful - Status: ${testResponse.statusCode}');
+      AppLogger.debug('VIN Decoder: Internet test successful - Status: ${testResponse.statusCode}');
       
       // Test ZPK domain specifically
-      print('VIN Decoder: Testing ZPK domain connectivity...');
+      AppLogger.debug('VIN Decoder: Testing ZPK domain connectivity...');
       final zpkTestResponse = await http.get(
         Uri.parse('https://zpk.systems'),
       ).timeout(const Duration(seconds: 5));
-      print('VIN Decoder: ZPK domain test successful - Status: ${zpkTestResponse.statusCode}');
+      AppLogger.debug('VIN Decoder: ZPK domain test successful - Status: ${zpkTestResponse.statusCode}');
     } catch (e) {
-      print('VIN Decoder: Connectivity test failed: $e');
+      AppLogger.debug('VIN Decoder: Connectivity test failed: $e');
       throw Exception('Network connectivity issue. Please check your internet connection and try again.');
     }
     
     // Use only ZPK API with retry logic
-    print('VIN Decoder: Using ZPK API...');
+    AppLogger.debug('VIN Decoder: Using ZPK API...');
     return await _tryZpkApiWithRetry(normalizedVin);
   }
 
@@ -156,16 +157,17 @@ class VinDecoderService {
         }
         
         final uri = Uri.parse('${AppConstants.zpkBaseUrl}/vin-analyzer/analyze');
-        print('ZPK API URL: $uri');
+        AppLogger.debug('ZPK API URL: $uri');
 
         final requestBody = {
           'application_id': AppConstants.zpkApplicationId,
           'api_key': AppConstants.zpkApiKey,
           'vins': [vin],
         };
-        print('ZPK API Request Body: ${json.encode(requestBody)}');
+        // Never log the request body — it contains the API key.
+        AppLogger.debug('ZPK API request: analyzing 1 VIN');
 
-        print('ZPK API: Making HTTP request...');
+        AppLogger.debug('ZPK API: Making HTTP request...');
         final response = await http
           .post(
             uri,
@@ -175,10 +177,10 @@ class VinDecoderService {
             body: json.encode(requestBody),
           )
           .timeout(const Duration(seconds: 15));
-        print('ZPK API: HTTP request completed');
+        AppLogger.debug('ZPK API: HTTP request completed');
 
-        print('ZPK API Response Status: ${response.statusCode}');
-        print('ZPK API Response Body: ${response.body}');
+        AppLogger.debug('ZPK API Response Status: ${response.statusCode}');
+        AppLogger.debug('ZPK API Response Body: ${response.body}');
 
         if (response.statusCode == 200) {
           final parsed = json.decode(response.body);
@@ -191,11 +193,11 @@ class VinDecoderService {
               
               if (firstResult.containsKey('vin') && firstResult['vin'] is Map<String, dynamic>) {
                 final vinData = firstResult['vin'] as Map<String, dynamic>;
-                print('ZPK API Success: Found VIN data');
+                AppLogger.debug('ZPK API Success: Found VIN data');
                 return VinDecodedBasic.fromZpkApi(vinData, vin);
               }
             }
-            print('ZPK API Error: No VIN data found in successful response');
+            AppLogger.debug('ZPK API Error: No VIN data found in successful response');
             throw Exception('No VIN data found in API response');
           }
           
@@ -207,7 +209,7 @@ class VinDecoderService {
               final errorId = firstError['id']?.toString() ?? 'UNKNOWN_ERROR';
               final errorMessage = firstError['message']?.toString() ?? 'Unknown error';
               
-              print('ZPK API Error: $errorId - $errorMessage');
+              AppLogger.debug('ZPK API Error: $errorId - $errorMessage');
               
               if (errorId == 'INVALID_API_KEY') {
                 throw Exception('Invalid API key. Please check your ZPK API credentials.');
@@ -217,11 +219,11 @@ class VinDecoderService {
                 throw Exception('API Error: $errorMessage');
               }
             }
-            print('ZPK API Error: Unknown error format - ${response.body}');
+            AppLogger.debug('ZPK API Error: Unknown error format - ${response.body}');
             throw Exception('Unknown API error format');
           }
           
-          print('ZPK API Error: Invalid response format - ${response.body}');
+          AppLogger.debug('ZPK API Error: Invalid response format - ${response.body}');
           throw Exception('Invalid response format from ZPK API');
         }
         
@@ -231,7 +233,7 @@ class VinDecoderService {
         
         throw Exception('ZPK API returned status ${response.statusCode}: ${response.body}');
       } catch (e) {
-        print('ZPK API Attempt ${attempt + 1} failed: $e');
+        AppLogger.debug('ZPK API Attempt ${attempt + 1} failed: $e');
         if (attempt == maxRetries - 1) {
           throw Exception('VIN lookup failed after $maxRetries attempts. Please try again in a few minutes.');
         }
